@@ -3,6 +3,7 @@
 Todo This Week:
   Find substitution lengths of the species tree
   Begin running SimPhy simulations based on the data gathered from the original tree
+  Draft message to ask for help finding substution rates and what species tree would be best to use
 
 #SimPhy Notes
 
@@ -13,20 +14,55 @@ Todo This Week:
 
 Here is the example given by SimPhy so I assume that we will start with this and build off of it
 
--rs 100 //Number of replicates
--rl f:100 //100 locus per replicate
--s (((A:10000,B:10000):30000,C:40000):1000,D:41000); //Fixed species tree
--sg f:0.5 //Generation time
--sp f:10000 //Population size
--gt e:10000 //Genome-wide horizontal gene transfer (sampled once for each species tree, and applied for all locus trees)
--hg f:100 //Heterogeneity sampled for every gene tree branch using the same Gamma distribution with shape = rate =100
--cs 22 //Seed for the random number generator, in order to make the experiment repetible.
--om 1 //Tree mapping output
--od 1 //Database
--op 1 //Output with the general sampled options (describes the simulation run)
--oc 1 //Activates the backup of the original command line and configuration file (we recommend to always activate this option)
+  -rs 100 //Number of replicates
+  -rl f:100 //100 locus per replicate
+  -s (((A:10000,B:10000):30000,C:40000):1000,D:41000); //Fixed species tree
+  -sg f:0.5 //Generation time
+  -sp f:10000 //Population size
+  -gt e:10000 //Genome-wide horizontal gene transfer (sampled once for each species tree, and applied for all locus trees)
+  -hg f:100 //Heterogeneity sampled for every gene tree branch using the same Gamma distribution with shape = rate =100
+  -cs 22 //Seed for the random number generator, in order to make the experiment repetible.
+  -om 1 //Tree mapping output
+  -od 1 //Database
+  -op 1 //Output with the general sampled options (describes the simulation run)
+  -oc 1 //Activates the backup of the original command line and configuration file (we recommend to always activate this option)
+
+
+My start
+
+  -rs 2 //Number of replicates
+  -rl f:5 //1000 locus per replicate - Start here - work up to 1000 when we know that our settings are correct
+  -lb f:0 - duplication rate - 0 duplications
+  -s (outgroup:5.0,((((crocodilia:1.84,testudines:1.844):0.182,bird:2.778):0.405,squamata:3.878):1.442)); //Fixed species tree NEED TO DOUBLE CHECK THIS LINE
+  -sg f:0.00001 //Generation time - look back at this
+  -sp f:10000 //Population size?
+  -gt f:0 //Genome-wide horizontal gene transfer (sampled once for each species tree, and applied for all locus trees) we want no horizontal gene transfer look into what value should go here
+  -hg f:2 //Heterogeneity sampled for every gene tree branch using the same Gamma distribution with shape = rate =100 - can adjust later
+  //Standard Below Here
+  -cs 22 //Seed for the random number generator, in order to make the experiment repetible.
+  -om 1 //Tree mapping output
+  -od 1 //Database
+  -op 1 //Output with the general sampled options (describes the simulation run)
+  -oc 1 //Activates the backup of the original command line and configuration file (we recommend to always activate this option)
+
+
+  -SU  average rate of substitution per coalescent unit - defaults to f:0.00001 - check with group
+
+5 coalescent units = # generations / population size
+t = years; -sg = generation time in years / generations
+number generations = t / sg
+5 coalescent units = (t / sg) / sp
+
+from this we can use coalescent units as the tree branch lengths
 
 With this I also believe we can just use the Loci Tree as out gene data can this be confirmed?
+
+
+Ultrametric tree incase there is an error down the road
+
+(outgroup:5.0,(((crocodilia:1.84,testudines:1.84):0.18,bird:2.02):0.40,squamata:2.42):2.58);
+
+
 
 
 Definitions for quick reference:

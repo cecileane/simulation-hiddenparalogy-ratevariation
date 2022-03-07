@@ -18,7 +18,7 @@ Later, if we have time, add a violation of assumptions
 
 - get a species tree from real data
   * topology
-  * branch lengths in coalescent units, also in substitution units
+  * branch lengths in coalescent units, also in substitution (substitution/unit of time) units
     for this we need to process the gene trees estimated from the real data. 
 
 example to play with:
