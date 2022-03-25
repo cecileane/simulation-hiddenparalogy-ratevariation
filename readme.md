@@ -16,10 +16,20 @@ Later, if we have time, add a violation of assumptions
 
 ## simulation plan
 
-- get a species tree from real data
-  * topology
-  * branch lengths in coalescent units, also in substitution (substitution/unit of time) units
-    for this we need to process the gene trees estimated from the real data. 
+### get a species tree from real data
+
+topology, and
+branch lengths in coalescent units, also in substitution (substitution/unit of time) units
+for this we need to process the gene trees estimated from the real data.
+
+use the ASTRAL tree from the **crawford** data (10 taxa), because it has the most
+accepted topology, and shorter internal edge lengths (then the chiari tree)
+for more incomplete lineage sorting. But:
+subsample taxa to match the taxon sampling from shaffer data (8 taxa),
+to get faster analysis time.
+**Remove**:
+- sphenodon
+- one turtle if need be
 
 example to play with:
 ```julia
@@ -29,21 +39,49 @@ tree = readTopology("(outgroup:5.0,((((crocodilia:1.84,testudines:1.844):0.182,b
 plot(tree, :R, showEdgeLength=true, useEdgeLength=true);
 ```
 
-- simulate gene trees along this species tree, using the coalescent, using
-  [SimPhy](https://github.com/adamallo/SimPhy) and
-  [paper](https://dx.doi.org/10.1093%2Fsysbio%2Fsyv082)
-  * need the rate of evolution of each gene tree:
-    both average rate, also variation of rates across genes (get this from
-    the real data)
+### simulate gene trees along this species tree
 
-- simulate an alignment along each gene tree using
-  [seq-gen](http://tree.bio.ed.ac.uk/software/seqgen/)
-  we'll need to size of each gene: in # of base pairs
+using the coalescent, using
+[SimPhy](https://github.com/adamallo/SimPhy) and
+[paper](https://dx.doi.org/10.1093%2Fsysbio%2Fsyv082)
 
-- analyze the set of alignments using the same methods we used for real data
-  (or a subset?)
-  * to estimate gene trees: IQ-Tree, RAxML, FastTree, MrBayes
-  * to estimate a network from a set of gene trees: SNaQ and Phylonet_MPL.
+To do this, we need the rate of evolution of each gene tree:
+average rate, also variation of rates across genes.
+We should get this from the real data.
 
-- summarize: what is the support for a reticulation? gammas?
+Parameters to get gene tree branch lengths in substitutions per site:
+1. an overall genome-wide substitution rate: in substitutions/site per coalescent unit
+2. a species-specific rate to model rate variation between species:
+   for example if birds evolve faster, or if turtles evolve slower,
+   or if some ancestral lineage evolved faster or slower
+3. a distribution of rate variation across genes: if some genes evolve faster or slower than others
+4. a distribution of gene x lineage rate variation:
+   if lineages evolve at different rates in genes trees,
+   in a way that's independent across genes and lineages.
+
+Parameters for rate variation across sites:
+look at log files from gene trees, to get the substitution parameters
+in real gene trees.
+
+to do:
+- look at the branch lengths of all IQ-Tree gene trees
+- average or median tree length in substitutions / site (#1)
+- distribution of tree length across gene trees (#3)
+- among genes that match the species tree:
+  average or median of their length for each branch (#2)
+
+### simulate an alignment along each gene tree
+
+using [seq-gen](http://tree.bio.ed.ac.uk/software/seqgen/)
+we'll need to size of each gene: in # of base pairs
+
+### analyze the simulated sets of alignments
+
+using the same methods we used for real data (or a subset?)
+* to estimate gene trees: IQ-Tree, RAxML, FastTree, MrBayes
+* to estimate a network from a set of gene trees: SNaQ and Phylonet_MPL.
+
+### summarize
+
+what is the support for a reticulation? gammas?
 
