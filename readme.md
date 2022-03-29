@@ -22,25 +22,32 @@ topology, and
 branch lengths in coalescent units, also in substitution (substitution/unit of time) units
 for this we need to process the gene trees estimated from the real data.
 
-use the ASTRAL tree from the **crawford** data (10 taxa), because it has the most
-accepted topology, and shorter internal edge lengths (then the chiari tree)
+use the tree from the **crawford** data (10 taxa) obtained with ASTRAL + IQTree
+[here](https://github.com/cecileane/reptiles/blob/main/estimatednets_collapsed.csv#L44)
+because it has the most accepted topology, and
+shorter internal edge lengths (than the chiari tree)
 for more incomplete lineage sorting. But:
 subsample taxa to match the taxon sampling from shaffer data (8 taxa),
 to get faster analysis time.
 **Remove**:
 - sphenodon
-- one turtle if need be
+- one turtle (Pelomedusa) if need be
+This was done in file `speciestree.jl`. The final tree is
+copy-pasted below as a string, with code to read it in julia.
+Taxon names could be simplified for the simulation!
 
-example to play with:
 ```julia
 using PhyloNetworks
 using PhyloPlots
-tree = readTopology("(outgroup:5.0,((((crocodilia:1.84,testudines:1.844):0.182,bird:2.778):0.405,squamata:3.878):1.442));")
+treestring = "(Homo:3.44,((((Crocodylus:0.88,alligator_mississippiensis:0.88)100.0:1.71,(Taeniopygia:0.93,Gallus:0.93)93.2:1.66)0.0:0.17,Chrysemys:2.76)0.0:0.18,(Anolis:0.5,Pantherophis:0.5):2.44)0.0:0.5);"
+tree = readTopology(treestring)
 plot(tree, :R, showEdgeLength=true, useEdgeLength=true);
 ```
 
 ### simulate gene trees along this species tree
 
+1000 gene trees in each data set to match the size of our real data
+(chiari: 248 genes, other data: between 1113 and 1955 genes).
 using the coalescent, using
 [SimPhy](https://github.com/adamallo/SimPhy) and
 [paper](https://dx.doi.org/10.1093%2Fsysbio%2Fsyv082)
