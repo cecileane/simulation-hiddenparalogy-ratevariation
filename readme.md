@@ -32,7 +32,7 @@ to get faster analysis time.
 **Remove**:
 - sphenodon
 - one turtle (Pelomedusa) if need be
-This was done in file `speciestree.jl`. The final tree is
+This was done in file `scripts/speciestree.jl`. The final tree is
 copy-pasted below as a string, with code to read it in julia.
 Taxon names could be simplified for the simulation!
 
