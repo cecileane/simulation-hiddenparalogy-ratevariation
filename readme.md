@@ -67,8 +67,19 @@ Parameters to get gene tree branch lengths in substitutions per site:
    in a way that's independent across genes and lineages.
 
 Parameters for rate variation across sites:
-look at log files from gene trees, to get the substitution parameters
-in real gene trees.
+we looked at log files from IQTree (to estimate gene trees),
+to get the substitution parameters in real gene trees:
+see [choice-seqgen-parameters.md](choice-seqgen-parameters.md).
+
+Conclusions:
+- to simulate all genes with the same substitution model, use:
+  * HKY (-m option) with transition/transversion ratio kappa = 4.143 (option -t)
+  * base frequencies 0.316,0.182,0.183,0.319 (-f option)
+  * shape alpha = 0.356 (-a option) for the Gamma distribution of rates across sites
+- to simulate each gene with its own substitution model, use HKY with:
+  * kappa from LogNormal(μ=1.4215, σ=0.2798)
+  * frequencies from Dirichlet(66.59, 38.41, 38.61, 67.12)
+  * alpha from Gamma(α=3.267, θ=0.109).
 
 to do:
 - look at the branch lengths of all IQ-Tree gene trees

@@ -47,3 +47,5 @@ deleteleaf!(tree, "Sphenodon")
 writeTopology(tree, round=true)
 # we get this below, which was copy-pasted into the main readme file
 "(Homo:3.44,((((Crocodylus:0.88,alligator_mississippiensis:0.88)100.0:1.71,(Taeniopygia:0.93,Gallus:0.93)93.2:1.66)0.0:0.17,Chrysemys:2.76)0.0:0.18,(Anolis:0.5,Pantherophis:0.5):2.44)0.0:0.5);"
+# has bootstrap values as node names. Let's remove them: SimPhy doesn't like them
+"(Homo:3.44,((((Crocodylus:0.88,alligator_mississippiensis:0.88):1.71,(Taeniopygia:0.93,Gallus:0.93):1.66):0.17,Chrysemys:2.76):0.18,(Anolis:0.5,Pantherophis:0.5):2.44):0.5);"
