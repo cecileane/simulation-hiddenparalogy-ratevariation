@@ -15,7 +15,7 @@ using PhyloPlots
 using QuartetNetworkGoodnessFit # has a function to ultrametrized a network
 # below: tree from crawford data, ASTRAL on IQTree, copy-pasted from
 # https://github.com/cecileane/reptiles/blob/main/estimatednets_collapsed.csv#L44
-speciestree_string = "(Homo,(((Chrysemys,Pelomedusa)100.0:1.0288670824548658,((Crocodylus,alligator_mississippiensis)100.0:1.7082993293412243,(Taeniopygia,Gallus)93.2:1.6647117465735648)0.0:0.16825214855685644)0.0:0.17931560798411753,(Sphenodon,(Anolis,Pantherophis):2.2370887285658227)100.0:0.20028294826845958)0.0);"
+speciestree_string = "(Homo,(((Chrysemys,Pelomedusa)100.0:1.0288670824548658,((Crocodylus,Alligator)100.0:1.7082993293412243,(Taeniopygia,Gallus)93.2:1.6647117465735648)0.0:0.16825214855685644)0.0:0.17931560798411753,(Sphenodon,(Anolis,Pantherophis):2.2370887285658227)100.0:0.20028294826845958)0.0);"
 tree = readTopology(speciestree_string)
 # round edge lengths to avoid 15 digits: not significant for simulations
 for e in tree.edge
@@ -46,6 +46,17 @@ deleteleaf!(tree, "Sphenodon")
 
 writeTopology(tree, round=true)
 # we get this below, which was copy-pasted into the main readme file
-"(Homo:3.44,((((Crocodylus:0.88,alligator_mississippiensis:0.88)100.0:1.71,(Taeniopygia:0.93,Gallus:0.93)93.2:1.66)0.0:0.17,Chrysemys:2.76)0.0:0.18,(Anolis:0.5,Pantherophis:0.5):2.44)0.0:0.5);"
+"(Homo:3.44,((((Crocodylus:0.88,Alligator:0.88)100.0:1.71,(Taeniopygia:0.93,Gallus:0.93)93.2:1.66)0.0:0.17,Chrysemys:2.76)0.0:0.18,(Anolis:0.5,Pantherophis:0.5):2.44)0.0:0.5);"
 # has bootstrap values as node names. Let's remove them: SimPhy doesn't like them
-"(Homo:3.44,((((Crocodylus:0.88,alligator_mississippiensis:0.88):1.71,(Taeniopygia:0.93,Gallus:0.93):1.66):0.17,Chrysemys:2.76):0.18,(Anolis:0.5,Pantherophis:0.5):2.44):0.5);"
+"(Homo:3.44,((((Crocodylus:0.88,Alligator:0.88):1.71,(Taeniopygia:0.93,Gallus:0.93):1.66):0.17,Chrysemys:2.76):0.18,(Anolis:0.5,Pantherophis:0.5):2.44):0.5);"
+
+# see reptiles repo, analysis in ratevariation.jl: tree with substitutions/site averaged across genes:
+"(Homo:0.03472578056145014,((((Crocodylus:0.003700978635732742,Alligator:0.0032363141626990384):0.013424996872103507,(Taeniopygia:0.0219417335205793,Gallus:0.01858077060211097):0.013265606603973844):0.001170217330315521,Chrysemys:0.018550404584983873):0.0017655989402352748,(Anolis:0.03989844563755188,Pantherophis:0.08984619023323578):0.046478889220648016):0.0347294194947231);"
+#= Overall substitution rate per coalescent unit:
+ tree length in substitutions / tree length in coalescent = 0.019526049565237014
+ same tree again, but with lengths as: substitutions / coalescent units:
+=#
+"(Homo:0.0100947,((((Crocodylus:0.0042057,Alligator:0.0036776):0.0078509,(Taeniopygia:0.0235933,Gallus:0.0199793):0.0079913):0.0068836,Chrysemys:0.0067212):0.0098089,(Anolis:0.0797969,Pantherophis:0.1796924):0.0190487):0.0694588);"
+
+# Now manually combining coalescent units and substitution multiplier in SimPhy's format:
+"(Homo:3.44*0.0100947,((((Crocodylus:0.88*0.0042057,Alligator:0.88*0.0036776):1.71*0.0078509,(Taeniopygia:0.93*0.0235933,Gallus:0.93*0.0199793):1.66*0.0079913):0.17*0.0068836,Chrysemys:2.76*0.0067212):0.18*0.0098089,(Anolis:0.5*0.0797969,Pantherophis:0.5*0.1796924):2.44*0.0190487):0.5*0.0694588);"

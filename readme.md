@@ -66,6 +66,20 @@ Parameters to get gene tree branch lengths in substitutions per site:
    if lineages evolve at different rates in genes trees,
    in a way that's independent across genes and lineages.
 
+For #1 and #2: use the notation from the newick format used by [SimPhy](https://github.com/adamallo/SimPhy/wiki/Manual#521-input-files-newick-tree-format):
+`: branchlength_num_generations * substitution_rate_multiplier ~ generation_time_multiplier # Ne`
+although the spaces are just for readability --there shouldn't be any spaces.
+We get this (same as at the end of `scripts/speciestree.jl`):
+
+    (Homo:3.44*0.0100947,((((Crocodylus:0.88*0.0042057,Alligator:0.88*0.0036776):1.71*0.0078509,(Taeniopygia:0.93*0.0235933,Gallus:0.93*0.0199793):1.66*0.0079913):0.17*0.0068836,Chrysemys:2.76*0.0067212):0.18*0.0098089,(Anolis:0.5*0.0797969,Pantherophis:0.5*0.1796924):2.44*0.0190487):0.5*0.0694588);
+
+For #3: the best fit the to crawford's genes rate was lognormal, so use
+the `HL` option for a log-normal distribution of gene-family-specific rates
+(h for heterogeneity, l for locus): `-hl l:-0.19,0.6164414002968976`
+(or `ln`?) which has mean 1 because `0.6164414002968976 = sqrt(2*0.19)`.
+
+For #4: look at gene trees some more (to do)
+
 Parameters for rate variation across sites:
 we looked at log files from IQTree (to estimate gene trees),
 to get the substitution parameters in real gene trees:
@@ -81,12 +95,6 @@ Conclusions:
   * frequencies from Dirichlet(66.59, 38.41, 38.61, 67.12)
   * alpha from Gamma(α=3.267, θ=0.109).
 
-to do:
-- look at the branch lengths of all IQ-Tree gene trees
-- average or median tree length in substitutions / site (#1)
-- distribution of tree length across gene trees (#3)
-- among genes that match the species tree:
-  average or median of their length for each branch (#2)
 
 ### simulate an alignment along each gene tree
 
