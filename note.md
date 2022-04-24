@@ -1,9 +1,57 @@
 ##Notes
 
 Todo This Week:
-  Find substitution lengths of the species tree
-  Begin running SimPhy simulations based on the data gathered from the original tree
-  Draft message to ask for help finding substution rates and what species tree would be best to use
+
+  *Use tree number two to run simulations. (crawford astral iq line 44 of git spreadsheet)
+  *remove top group (turtle if need be) (Pelomedusa)
+  *play with external branch lengths to make it ultrametric
+  *run simphy with the "fat" tree
+  - write script to run simulation of 1000, 100 times
+  *pass simphy to seqgen to get gene tree data
+  - write script to run this section 100 times
+  *pass seq gen data to our methods to obtain understanding and complete analysis
+
+  - try for one script that can get it done in one go using picture as reference. (100 times)
+  
+
+Seq-Gen params
+
+-n 1000 -l 1000 -m GENERAL <tree from loop of SimPhy data>
+ do we need weights? or is this all that we need
+
+-n 1000 - l 1000 -m HKY -a 0.356 -t 4.143 -f waiting for -z 22 -on
+
+will need to scale branch lengths 
+
+median of distributions
+transition/transversion ratio kappa=4.143 (-t in seq-gen)
+alpha=0.356 for rate variation across sites (-a option in seq-gen)
+
+
+
+SimPhy Params
+
+-rs 2 //Number of replicates
+-rl f:10 //1000 locus per replicate - Start here - work up to 1000 when we know that our settings are correct
+-s (Homo:3.44,((((Crocodylus:0.88,alligator_mississippiensis:0.88):1.71,(Taeniopygia:0.93,Gallus:0.93):1.66):0.17,Chrysemys:2.76):0.18,(Anolis:0.5,Pantherophis:0.5):2.44):0.5);
+-sg f:0.00001 //Generation time - look back at this
+-sp f:10000 //Population size?
+-gt f:0 //Genome-wide horizontal gene transfer (sampled once for each species tree, and applied for all locus trees) we want no horizontal gene transfer look into what value should go here
+-hg f:2 //Heterogeneity sampled for every gene tree branch using the same Gamma distribution with shape = rate =100 - can adjust later
+-cs 22 //Seed for the random number generator, in order to make the experiment repetible.
+-om 1 //Tree mapping output
+-od 1 //Database
+-op 1 //Output with the general sampled options (describes the simulation run)
+-oc 1 //Activates the backup of the original command line and configuration file (we recommend to always activate this option)
+
+Rate lineage in SimPhy
+see if can find way to fix the rate
+add SU l:mean,sd
+
+
+
+
+
 
 #SimPhy Notes
 
