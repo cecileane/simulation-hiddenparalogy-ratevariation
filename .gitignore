@@ -30,3 +30,7 @@ outfiles/
 
 #ignore seqgen
 Seq-Gen-Source
+
+#ignore output files 
+sim-phy-outfiles
+seq-gen-outfiles
