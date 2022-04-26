@@ -1,0 +1,1 @@
+../Seq-Gen-Source/seq-gen -n1000 -l1000 -mHKY -a0.356 -t4.143 -f0.316,0.182,0.183,0.319 < ../sim-phy-outfiles/sim_out/$1/g_trees$2.trees > ../seq-gen-outfiles/simphy$1/tree$2.dat
