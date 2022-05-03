@@ -1,7 +1,9 @@
-
+#on darwin cluster use the /nobackup dir with tmux
 run(`mkdir ../sim-phy-outfiles`)
 run(`mkdir ../seq-gen-outfiles`)
 
+
+#do I need a for loop here or is the simphy config sufficent?
 run(`../Sim-Phy-Source/SimPhy -i ../simphy-configs/simphysim-conf -o ../sim-phy-outfiles/sim_out`)
 
 for simulation_rep in 1:2 #1000 on final
@@ -11,20 +13,14 @@ for simulation_rep in 1:2 #1000 on final
     
     tree_string = string(gene_tree)
     #account for sim phy naming convention
-    if length(tree_string) == 1
-      tree_string = "000" * tree_string
-    elseif length(tree_string) == 2
-      tree_string = "00" * tree_string
-    elseif length(tree_string) == 3
-      tree_string = "0" * tree_string
-    elseif length(tree_string) == 4
-      tree_string = tree_string
-    end
+    tree_string = lpad(tree_string, 2, '0')
 
+    #runs seq gen for each tree in this rep of the simulation
+    #change to a pipeline
     run(`bash seq-gen.sh $repition_string $tree_string`)
   
   end
-  #run IQ alignment for later
+  #raxml and astral to start
 end
 #run astral
 #run snaq
