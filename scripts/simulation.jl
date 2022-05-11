@@ -1,15 +1,17 @@
 #on darwin cluster use the /nobackup dir with tmux
 run(`mkdir ../sim-phy-outfiles`)
 run(`mkdir ../seq-gen-outfiles`)
+run(`mkdir ../raxml-outfiles`)
+run(`mkdir ../astral-outfiles`)
 
 
 #do I need a for loop here or is the simphy config sufficent?
-run(`../Sim-Phy-Source/SimPhy -i ../simphy-configs/simphysim-conf -o ../sim-phy-outfiles/sim_out`)
+run(`../executables/SimPhy -i ../simphy-configs/simphysim-conf-new -o ../sim-phy-outfiles/sim_out`)
 
 for simulation_rep in 1:2 #1000 on final
   repition_string = string(simulation_rep)
   run(`mkdir ../seq-gen-outfiles/simphy$repition_string`)
-  for gene_tree in 1:10 # 1000 on final
+  for gene_tree in 1:2 # 1000 on final
     
     tree_string = string(gene_tree)
     #account for sim phy naming convention
@@ -20,8 +22,9 @@ for simulation_rep in 1:2 #1000 on final
     run(`bash seq-gen.sh $repition_string $tree_string`)
   
   end
-  #raxml and astral to start
 end
-#run astral
-#run snaq
-#run PhylonetMPL
+for simulation_rep in 1:2
+  run(`perl raxml.pl --seqdir=../seq-gen-outfiles/simphy$simulation_rep --raxmldir=raxml-outfiles$simulation_rep --astraldir=astral-outfiles$simulation_rep`)
+  run(`mv raxml-outfiles$simulation_rep ../raxml-outfiles`)
+  run(`mv astral-outfiles$simulation_rep ../astral-outfiles`)
+end

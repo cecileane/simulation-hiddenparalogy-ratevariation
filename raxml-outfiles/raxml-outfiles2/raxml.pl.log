@@ -1,0 +1,9 @@
+Wed May 11 00:24:58 CDT 2022
+Maxs-MacBook-Pro.local
+starting RAxML for gene 0...
+../../executables/raxmlHPC-PTHREADS-AVX  -T 6 -m GTRGAMMA --HKY85  -f a -N 100 -p 264 -x 392 -s ../../seq-gen-outfiles/phylip/tree01.phy -n tree01
+starting RAxML for gene 1...
+../../executables/raxmlHPC-PTHREADS-AVX  -T 6 -m GTRGAMMA --HKY85  -f a -N 100 -p 6478 -x 311 -s ../../seq-gen-outfiles/phylip/tree02.phy -n tree02
+Wed May 11 00:25:18 CDT 2022
+running astral:
+java -jar ../executables/astral.5.7.8.jar -i raxml-outfiles2/besttrees.tre -b astral-outfiles2/BSlistfiles -r 100 -o astral-outfiles2/astral.tre > astral-outfiles2/astral.screenlog 2>&1

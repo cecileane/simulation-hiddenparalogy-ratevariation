@@ -43,8 +43,8 @@ my $raxmldir; # directory for output, including log for this script
 my $astraldir;
 my $convertphylip = 1;
 my $doastral = 1;
-my $raxml = 'raxmlHPC-PTHREADS-AVX'; # executable
-my $astral = '/Users/ane/apps/ASTRAL/Astral/astral.4.10.5.jar';
+my $raxml = '../../executables/raxmlHPC-PTHREADS-AVX'; # executable
+my $astral = '../executables/astral.5.7.8.jar';
 # '/class/molevol-software/astral-5.5.2/astral.5.5.2.jar'; # adapt to your system
 
 # -------------- read arguments from command-line -----------------------
@@ -93,6 +93,7 @@ chdir($seqdir) or die "can't go to sequence directory";
 my $genefiles = `ls`;
 my @genes = split(/\n/, $genefiles);
 my @generoots;
+print(@genes);
 foreach my $gene (@genes){
     my $generoot = $gene;
     $generoot =~ s/\.\w{3}//;
@@ -109,6 +110,7 @@ chdir($currentdir) or die "can't go back to original directory";
 if ($convertphylip) {
   for my $ig (0 .. $#genes){
     my $infn = "$seqdir/${genes[$ig]}";
+    print($infn);
     my $oufn = "$phylipdir/${generoots[$ig]}.phy";
     my $read = 0;
     my $removeNames = 0; my $nReadNames = 0;

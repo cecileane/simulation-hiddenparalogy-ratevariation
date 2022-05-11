@@ -2,16 +2,19 @@
 
 Todo This Week:
 
-  *Use tree number two to run simulations. (crawford astral iq line 44 of git spreadsheet)
-  *remove top group (turtle if need be) (Pelomedusa)
-  *play with external branch lengths to make it ultrametric
-  *run simphy with the "fat" tree
-  - write script to run simulation of 1000, 100 times
-  *pass simphy to seqgen to get gene tree data
-  - write script to run this section 100 times
-  *pass seq gen data to our methods to obtain understanding and complete analysis
+  *use new tree with coalecent unit and substitution unit
+  *work on finalizing script with an explanation of how to run
+  *work on tutorial for installing executables
+  *run simulation
+  *Document Document Document
+  *add raxml to julia script and push to github
+  *make a figure and put in the readme file to help show visual representation with sequence file for adding to resume (show pipeline)
+  *phyloplots coalecent units only
+  *document what you are doing for employers
+  *store astral results
 
-  - try for one script that can get it done in one go using picture as reference. (100 times)
+
+
   
 
 Seq-Gen params
