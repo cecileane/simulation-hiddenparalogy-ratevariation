@@ -25,6 +25,9 @@ for simulation_rep in 1:2 #1000 on final
 end
 for simulation_rep in 1:2
   run(`perl raxml.pl --seqdir=../seq-gen-outfiles/simphy$simulation_rep --raxmldir=raxml-outfiles$simulation_rep --astraldir=astral-outfiles$simulation_rep`)
+end
+for simulation_rep in 1:2
   run(`mv raxml-outfiles$simulation_rep ../raxml-outfiles`)
   run(`mv astral-outfiles$simulation_rep ../astral-outfiles`)
 end
+
