@@ -1,2 +1,0 @@
-Error: Unable to initialize main class phylonet.coalescent.CommandLine
-Caused by: java.lang.NoClassDefFoundError: com/martiansoftware/jsap/StringParser
