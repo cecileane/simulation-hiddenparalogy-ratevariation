@@ -12,7 +12,7 @@ run(`../executables/SimPhy -i ../simphy-configs/simphysim-conf-new -o ../sim-phy
 
 for simulation_rep in 1:n_reps #1000 on final number of replicates is hardcoded in config file
   repition_string = string(simulation_rep)
-  repition_string = lapd(repition_string, ceil(Int, log10(n_reps+1)), '0')
+  repition_string = lpad(repition_string, ceil(Int, log10(n_reps+1)), '0')
   run(`mkdir ../seq-gen-outfiles/simphy$repition_string`)
   for gene_tree in 1:n_genes # 1000 on final
     
