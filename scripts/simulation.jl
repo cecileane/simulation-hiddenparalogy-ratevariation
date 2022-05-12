@@ -1,3 +1,4 @@
+n=2
 #on darwin cluster use the /nobackup dir with tmux
 mkdir("../sim-phy-outfiles")
 mkdir("../seq-gen-outfiles")
@@ -10,13 +11,13 @@ run(`../executables/SimPhy -i ../simphy-configs/simphysim-conf-new -o ../sim-phy
 
 for simulation_rep in 1:n #1000 on final
   repition_string = string(simulation_rep)
-  repition_string = lapd(repition_string, 4, '0')
+  repition_string = lapd(repition_string, ceil(Int, log10(n+1)), '0')
   run(`mkdir ../seq-gen-outfiles/simphy$repition_string`)
   for gene_tree in 1:n # 1000 on final
     
     tree_string = string(gene_tree)
     #account for sim phy naming convention
-    tree_string = lpad(tree_string, 4, '0')
+    tree_string = lpad(tree_string, ceil(Int, log10(n+1)), '0')
 
     #runs seq gen for each tree in this rep of the simulation
     #change to a pipeline
@@ -25,11 +26,11 @@ for simulation_rep in 1:n #1000 on final
   end
 end
 for simulation_rep in 1:n
-  simulation_rep = lpad(simulation_rep, 4, '0')
+  simulation_rep = lpad(simulation_rep, ceil(Int, log10(n+1)), '0')
   run(`perl raxml.pl --seqdir=../seq-gen-outfiles/simphy$simulation_rep --raxmldir=raxml-outfiles$simulation_rep --astraldir=astral-outfiles$simulation_rep`)
 end
 for simulation_rep in 1:n
-  simulation_rep = lpad(simulation_rep, 4, '0')
+  simulation_rep = lpad(simulation_rep, ceil(Int, log10(n+1)), '0')
   run(`mv raxml-outfiles$simulation_rep ../raxml-outfiles`)
   run(`mv astral-outfiles$simulation_rep ../astral-outfiles`)
 end
