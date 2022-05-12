@@ -14,6 +14,25 @@ that is, very low rate of evolution.
 Later, if we have time, add a violation of assumptions
 (hidden paralogy: gene duplications & losses? long branch attraction?)
 
+## How to run this simulation
+
+### Installing software
+
+-Create a new directory where you want to run the simulation the run git clone with this repo
+
+-This simulation needs four executable programs to run. [SimPhy](https://github.com/adamallo/SimPhy), [Seq-Gen](https://github.com/rambaut/Seq-Gen), [RAxML](https://github.com/stamatak/standard-RAxML) and [Astral](https://github.com/smirarab/ASTRAL)
+
+-Download these 4 executable programs and move their respective executable file to the executables folder within simulation-reptiles with the following titles:
+            * SimPhy
+            * seq-gen
+            * raxmlHPC-PTHREADS
+            * astral.5.7.8.jar
+
+-Now the simulation is ready to be run. Navigate to the simulation-reptiles/scripts directory. There are two commands for this simulation. The first is <u>julia clean.jl</u> this will remove all old output files and leave the simulation ready to be ran. The second is <u>julia simulation.jl</u> this will run the simulation based on the parameters passed to the simphy-conf file in the simulation-reptiles/sim-phy-configs folder.
+
+### Installing executable
+
+
 ## simulation plan
 
 ### get a species tree from real data
