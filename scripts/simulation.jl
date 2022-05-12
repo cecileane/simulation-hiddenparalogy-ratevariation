@@ -9,7 +9,7 @@ mkdir("../astral-outfiles")
 #do I need a for loop here or is the simphy config sufficent?
 run(`../executables/SimPhy -i ../simphy-configs/simphysim-conf-new -o ../sim-phy-outfiles/sim_out`)
 
-for simulation_rep in 1:n #1000 on final
+for simulation_rep in 1:n #1000 on final number of replicates is hardcoded in config file
   repition_string = string(simulation_rep)
   repition_string = lapd(repition_string, ceil(Int, log10(n+1)), '0')
   run(`mkdir ../seq-gen-outfiles/simphy$repition_string`)
