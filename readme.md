@@ -14,31 +14,43 @@ that is, very low rate of evolution.
 Later, if we have time, add a violation of assumptions
 (hidden paralogy: gene duplications & losses? long branch attraction?)
 
-## How to run this simulation
+# How to run this simulation
 
 ### Installing software
 
--Create a new directory where you want to run the simulation the run git clone with this repo
+- Create a new directory where you want to run the simulation,
+  then run git clone with this repo
 
--This simulation needs four executable programs to run. [SimPhy](https://github.com/adamallo/SimPhy), [Seq-Gen](https://github.com/rambaut/Seq-Gen), [RAxML](https://github.com/stamatak/standard-RAxML) and [Astral](https://github.com/smirarab/ASTRAL)
+- This simulation needs four executable programs to run:
+  [SimPhy](https://github.com/adamallo/SimPhy),
+  [Seq-Gen](https://github.com/rambaut/Seq-Gen),
+  [RAxML](https://github.com/stamatak/standard-RAxML) and
+  [ASTRAL](https://github.com/smirarab/ASTRAL).  
+  Download these 4 executable programs and move their respective executable file to a folder `executables` to be created within `simulation-reptiles`,
+  with the following titles:
 
--Download these 4 executable programs and move their respective executable file to the executables folder within simulation-reptiles with the following titles:
             * SimPhy
             * seq-gen
             * raxmlHPC-PTHREADS
             * astral.5.7.8.jar
 
--Now the simulation is ready to be run. Navigate to the simulation-reptiles/scripts directory. There are two commands for this simulation. The first is <u>julia clean.jl</u> this will remove all old output files and leave the simulation ready to be ran. The second is <u>julia simulation.jl</u> this will run the simulation based on the parameters passed to the simphy-conf file in the simulation-reptiles/sim-phy-configs folder.
+- Now the simulation is ready to be run. Navigate to the
+  `simulation-reptiles/scripts` directory.
+  There are two julia scripts for this simulation.
+  The first is `julia clean.jl`: this will remove all old output files and leave the simulation ready to be ran.
+  The second is `julia simulation.jl`: this will run the simulation based
+  on the parameters passed to the simphy configuration file in the
+  `simulation-reptiles/simphy-configs` folder.
 
 ### Installing executable
 
 
-## simulation plan
+# Simulation plan
 
 ### get a species tree from real data
 
-topology, and
-branch lengths in coalescent units, also in substitution (substitution/unit of time) units
+species tree topology, with branch lengths in coalescent units,
+and also in substitution (substitution/unit of time) units.
 for this we need to process the gene trees estimated from the real data.
 
 use the tree from the **crawford** data (10 taxa) obtained with ASTRAL + IQTree
@@ -97,7 +109,9 @@ the `HL` option for a log-normal distribution of gene-family-specific rates
 (h for heterogeneity, l for locus): `-hl l:-0.19,0.6164414002968976`
 (or `ln`?) which has mean 1 because `0.6164414002968976 = sqrt(2*0.19)`.
 
-For #4: look at gene trees some more (to do)
+For #4: look at gene trees some more (to do).
+For now, use a Gamma distribution with mean 1 and shape 10
+(SimPhy option `-hg f:10`), for little variation.
 
 Parameters for rate variation across sites:
 we looked at log files from IQTree (to estimate gene trees),
@@ -124,9 +138,16 @@ we'll need to size of each gene: in # of base pairs
 
 using the same methods we used for real data (or a subset?)
 * to estimate gene trees: IQ-Tree, RAxML, FastTree, MrBayes
-* to estimate a network from a set of gene trees: SNaQ and Phylonet_MPL.
+  - focus on RAxML only
+* to estimate a species tree from a set of gene trees:
+  ASTRAL, and network methods under the constraint of h=0 hybrid nodes
+* to estimate a network from a set of gene trees: SNaQ and Phylonet_MPL,
+  under the constraint h≤1.
 
 ### summarize
 
-what is the support for a reticulation? gammas?
+- results of ASTRAL: how often is the true species tree recovered?
+- results of network methods (e.g. SNaQ) with h=0: idem.
+- results of network methods with h=1:
+  what is the support for a reticulation? gammas?
 
