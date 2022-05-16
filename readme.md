@@ -42,8 +42,42 @@ Later, if we have time, add a violation of assumptions
   on the parameters passed to the simphy configuration file in the
   `simulation-reptiles/simphy-configs` folder.
 
-### Installing executable
+### Installing executables
 
+for SimPhy, on `franklin00` server:
+
+```shell
+cd ~/private/apps # or other private folder for private installs
+wget https://github.com/adamallo/SimPhy/releases/download/v1.0.2/SimPhy_1.0.2.tar.gz
+tar -xvf SimPhy_1.0.2.tar.gz
+cp SimPhy_1.0.2/bin/simphy_lnx64 ~/bin
+chmod ug+x ~/bin/simphy_lnx64
+cd - # go back to simulation-reptiles folder
+ln -s ~/bin/simphy_lnx64 executables/SimPhy
+executables/SimPhy -h # just checking
+```
+
+for RAxML, still on `franklin00`:
+
+```shell
+git clone https://github.com/stamatak/standard-RAxML.git ~/private/apps/standard-RAxML
+cd ~/private/apps/standard-RAxML # or other private folder for private installs
+make -f Makefile.PTHREADS.gcc; rm *.o
+mv raxmlHPC-PTHREADS ~/bin/
+cd - # go back to simulation-reptiles folder
+ln -s ~/bin/raxmlHPC-PTHREADS executables/raxmlHPC-PTHREADS
+executables/raxmlHPC-PTHREADS -h # just checking
+```
+
+for ASTRAL:
+
+```shell
+cd ~/private/apps
+wget https://github.com/smirarab/ASTRAL/raw/master/Astral.5.7.8.zip
+unzip Astral.5.7.8.zip
+cd - # go back to simulation-reptiles folder
+ln -s ~/private/apps/Astral/astral.5.7.8.jar executables/astral.5.7.8.jar
+```
 
 # Simulation plan
 
