@@ -13,6 +13,9 @@ of any path from the root to any tip is equal to this height.
 using PhyloNetworks
 using PhyloPlots
 using QuartetNetworkGoodnessFit # has a function to ultrametrized a network
+
+include("utilities.jl")
+
 # below: tree from crawford data, ASTRAL on IQTree, copy-pasted from
 # https://github.com/cecileane/reptiles/blob/main/estimatednets_collapsed.csv#L44
 speciestree_string = "(Homo,(((Chrysemys,Pelomedusa)100.0:1.0288670824548658,((Crocodylus,Alligator)100.0:1.7082993293412243,(Taeniopygia,Gallus)93.2:1.6647117465735648)0.0:0.16825214855685644)0.0:0.17931560798411753,(Sphenodon,(Anolis,Pantherophis):2.2370887285658227)100.0:0.20028294826845958)0.0);"
@@ -45,6 +48,7 @@ deleteleaf!(tree, "Pelomedusa")
 deleteleaf!(tree, "Sphenodon")
 
 writeTopology(tree, round=true)
+
 # we get this below, which was copy-pasted into the main readme file
 "(Homo:3.44,((((Crocodylus:0.88,Alligator:0.88)100.0:1.71,(Taeniopygia:0.93,Gallus:0.93)93.2:1.66)0.0:0.17,Chrysemys:2.76)0.0:0.18,(Anolis:0.5,Pantherophis:0.5):2.44)0.0:0.5);"
 # has bootstrap values as node names. Let's remove them: SimPhy doesn't like them

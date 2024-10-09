@@ -33,7 +33,8 @@ use Carp;
 
 
 # ================= parameters ======================
-
+my $currentdir = `pwd`;
+chomp $currentdir; # remove new line at the end of the current path 
 my $boot = 1; # boot=0 is not implemented, in fact!
 my $numboot = 100;
 my $numCores = 6;
@@ -43,8 +44,9 @@ my $raxmldir; # directory for output, including log for this script
 my $astraldir;
 my $convertphylip = 1;
 my $doastral = 1;
-my $raxml = '../../executables/raxmlHPC-PTHREADS-AVX'; # executable
-my $astral = '../executables/astral.5.7.8.jar';
+my $raxml = $currentdir . '/executables/raxmlHPC-PTHREADS';  
+my $astral = $currentdir . '/executables/astral.5.7.8.jar'; 
+# my $astral = $currentdir . '/executables/astral'; # un-weighted astral from ASTER is fine but it calculates PP instead of BS 
 # '/class/molevol-software/astral-5.5.2/astral.5.5.2.jar'; # adapt to your system
 
 # -------------- read arguments from command-line -----------------------
@@ -77,9 +79,6 @@ my $logfile = "$raxmldir/raxml.pl.log";
 die "a directory for ASTRAL output should be specified with the --astraldir option" if ($doastral and (not defined $astraldir));
 $astraldir = "astral" if !defined($astraldir);
 make_path $astraldir if !(-d $astraldir);
-
-my $currentdir = `pwd`;
-chomp $currentdir;
 
 system("date > $logfile");
 system("hostname >> $logfile");
@@ -232,6 +231,8 @@ my $astralOUT =  "$astraldir/astral.tre";
 `ls -d $bootpath/* > $bsfile`;
 
 my $astralcmd = "java -jar $astral -i $raxmlOUT -b $bsfile -r $numboot -o $astralOUT > $astralLOG 2>&1";
+# my $astralcmd = "$astral -i $raxmlOUT -u 1 -o $astralOUT > $astralLOG 2>&1"; # This is for newer astral version from ASTER, including astral-pro and astral IV 
+
 open FHlog, ">> $logfile";
 if ($doastral){
     print FHlog "running astral:\n";

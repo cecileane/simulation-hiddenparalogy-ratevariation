@@ -1,0 +1,12 @@
+//-lb f:0 - duplication rate - 0 duplications
+-s (Homo:3.44*0.0100947,((((Crocodylus:0.88*0.0042057,Alligator:0.88*0.0036776):1.71*0.0078509,(Taeniopygia:0.93*0.0235933,Gallus:0.93*0.0199793):1.66*0.0079913):0.17*0.0068836,Chrysemys:2.76*0.0067212):0.18*0.0098089,(Anolis:0.5*0.0797969,Pantherophis:0.5*0.1796924):2.44*0.0190487):0.5*0.0694588);
+-sg f:0.00001 //Generation time - look back at this
+-sp f:10000 //Population size?
+-gt f:0 //Genome-wide horizontal gene transfer (sampled once for each species tree, and applied for all locus trees) we want no horizontal gene transfer look into what value should go here
+-hl ln:-0.19,0.6164414002968976 //log-normal distribution of gene rates
+-hg f:10 //Heterogeneity sampled for every gene tree branch using the same Gamma distribution with shape = rate = 10
+-cs 22 //Seed for the random number generator, in order to make the experiment repetible.
+-om 1 //Tree mapping output
+-od 1 //Database
+-op 1 //Output with the general sampled options (describes the simulation run)
+-oc 1 //Activates the backup of the original command line and configuration file (we recommend to always activate this option)
