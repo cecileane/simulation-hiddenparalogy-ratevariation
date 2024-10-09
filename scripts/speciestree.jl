@@ -64,3 +64,8 @@ writeTopology(tree, round=true)
 
 # Now manually combining coalescent units and substitution multiplier in SimPhy's format:
 "(Homo:3.44*0.0100947,((((Crocodylus:0.88*0.0042057,Alligator:0.88*0.0036776):1.71*0.0078509,(Taeniopygia:0.93*0.0235933,Gallus:0.93*0.0199793):1.66*0.0079913):0.17*0.0068836,Chrysemys:2.76*0.0067212):0.18*0.0098089,(Anolis:0.5*0.0797969,Pantherophis:0.5*0.1796924):2.44*0.0190487):0.5*0.0694588);"
+
+# Replace tip labels on the final tree with letters: 
+tre_string = "(Homo:3.44*0.0100947,((((Crocodylus:0.88*0.0042057,Alligator:0.88*0.0036776):1.71*0.0078509,(Taeniopygia:0.93*0.0235933,Gallus:0.93*0.0199793):1.66*0.0079913):0.17*0.0068836,Chrysemys:2.76*0.0067212):0.18*0.0098089,(Anolis:0.5*0.0797969,Pantherophis:0.5*0.1796924):2.44*0.0190487):0.5*0.0694588);"
+ReplaceTipsWithLetters(tre)
+"(A:3.44*0.0100947,((((B:0.88*0.0042057,C:0.88*0.0036776):1.71*0.0078509,(D:0.93*0.0235933,E:0.93*0.0199793):1.66*0.0079913):0.17*0.0068836,F:2.76*0.0067212):0.18*0.0098089,(G:0.5*0.0797969,H:0.5*0.1796924):2.44*0.0190487):0.5*0.0694588);"

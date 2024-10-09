@@ -1,21 +1,32 @@
 #=
 this script does:
 
-1.
-2.
-3.
+1. Simulate gene trees based on the grand species tree using SimPhy 
+2. Simulate molecular sequences using Seq-Gen based on gene trees output from SimPhy
+3. Estmate gene trees using RAxML and infer species trees using Astral 
 
 example: run this below
  on darwin cluster use the `/nobackup` dir with tmux
  on franlin use `/nobackup2`
  from the root of the repository:
-
 julia scripts/simulation.jl
 
-output: it will create folder xxx with inside:
-- 
-- 
+output: it will create folder 'output' in the root of the repo with inside:
+- sim-phy-outfiles: Simulated gene trees and configuration files 
+- seq-gen-outfiles: Simulated molecular sequences 
+- raxml-outfiles: Estimated gene trees 
+- astral-outfiles: Inferred species tree
 =#
+
+# todo for week Oct 7: add lines of code to create specific configuation file:
+# - modify the "new" simphysim-conf configure file to have less, named "master": Done 
+# - here: read the master: Done
+# - add stuff to the string to add n_reps, n_genes & seed: Done 
+# - write specific configuration file in simphyfolder: Done 
+
+# A few notes: 
+# 1) The 
+# 2) 
 
 # set all configuration parameters here
 duploss = "no"
@@ -47,12 +58,6 @@ mkdir(seqgenfolder)
 mkdir(raxmlfolder)
 mkdir(astralfolder)
 
-# todo: add lines of code to create specific configuation file:
-# - modify the "new" simphysim-conf configure file to have less, named "master": Done 
-# - here: read the master: Done
-# - add stuff to the string to add n_reps, n_genes & seed: Done 
-# - write specific configuration file in simphyfolder: Done 
-
 master_conf = joinpath(rootfolder,"simphy-configs/", "simphysim-conf-master")
 conf_content = read(master_conf, String) # read the master config file into a string 
 
@@ -67,8 +72,15 @@ combined_content = parameters * conf_content # combine parameters with master co
 new_conf_file = joinpath(simphyfolder, "simphysim-conf-DL$duploss-RV$ratevar")
 write(new_conf_file, combined_content) # write the combined config into SimPhy output folder
 
+#-----------------------------------------------#       
+#  simulate gene trees using SimPhy 
+#-----------------------------------------------#
+
 run(`$rootfolder/executables/simphy -i $new_conf_file -o $simphyfolder`)
 
+#-----------------------------------------------#       
+#  simulate molecular sequences using seq-gen
+#-----------------------------------------------#
 # run seq-gen on each replicate and each gene
 for simulation_rep in 1:n_reps
   rep_number_string = lpad(string(simulation_rep), ceil(Int, log10(n_reps+1)), '0')
@@ -81,6 +93,9 @@ for simulation_rep in 1:n_reps
   end
 end
 
+#-----------------------------------------------#       
+#  simulate raxml and astral using seq-gen
+#-----------------------------------------------#
 # run raxml on each gene of each rep: use raxml.pl on each rep
 for simulation_rep in 1:n_reps
   simulation_rep = lpad(simulation_rep, ceil(Int, log10(n_reps+1)), '0')

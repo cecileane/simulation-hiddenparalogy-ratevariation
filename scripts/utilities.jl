@@ -1,6 +1,6 @@
 using PhyloNetworks
 
-function ReplaceTipsWithLetters(tree::Union{HybridNetwork, String}) 
+function replace_tips_with_letters(tree::Union{HybridNetwork, String}) 
 	#= Goal: replace species tips with A, B, C, etc, but tips should be less than or equal to 26. 
     The input (tree) can both be a string or a tree
     If input is tree, then return a tree object
@@ -20,11 +20,8 @@ function ReplaceTipsWithLetters(tree::Union{HybridNetwork, String})
         return tree
     
     elseif isa(tree, String) # if input is a Newick string, output a string 
-
-        tips = split(tree, [',', '(', ')', ';'])  # Extract tips
-        println("tips_unfiltered", tips)
-        tips = filter(x -> !(x in ["", ":"]), tips)  # Remove empty strings and branch lengths
-        print("tips,", tips)
+        tips = split(tree, [',', '(', ')', ':', '*', ';'])  # Extract tips
+        tips = filter(x -> !(x in ["", ":", ";"]) && !occursin(r"\d", x), tips) # Remove empty, :, and any string containing numbers
 
         if length(tips) > 26
             println("Warning: The number of tips exceeds 26. That's too much. Exiting.")
@@ -38,5 +35,16 @@ function ReplaceTipsWithLetters(tree::Union{HybridNetwork, String})
         println("Warning: The input needs to be a HybridNetwork or String.")
         return tree
     end
-
 end
+
+function multiply_tips(tree::String, num_dup::Int, branch_len::Int) 
+
+    tips = split(tree, [',', '(', ')', ':', '*', ';'])  # Extract tips
+    tips = filter(x -> !(x in ["", ":", ";"]) && !occursin(r"\d", x), tips) # Remove empty, :, and any string containing numbers
+
+end 
+
+
+
+
+
