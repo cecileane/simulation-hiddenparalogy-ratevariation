@@ -38,7 +38,8 @@ function replace_tips_with_letters(tree::Union{HybridNetwork, String})
 end
 
 function multiply_tips(tree::String, num_dup::Int, branch_len::Int) 
-
+    #= A function to multiply 
+    =# 
     tips = split(tree, [',', '(', ')', ':', '*', ';'])  # Extract tips
     tips = filter(x -> !(x in ["", ":", ";"]) && !occursin(r"\d", x), tips) # Remove empty, :, and any string containing numbers
 

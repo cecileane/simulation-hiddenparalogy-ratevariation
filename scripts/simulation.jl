@@ -25,8 +25,8 @@ output: it will create folder 'output' in the root of the repo with inside:
 # - write specific configuration file in simphyfolder: Done 
 
 # A few notes: 
-# 1) The 
-# 2) 
+# 1) The bottom loop cannot be removed (see notes below)
+# 2) Add the duploss (yes and no)
 
 # set all configuration parameters here
 duploss = "no"
