@@ -18,17 +18,26 @@ output: it will create folder 'output' in the root of the repo with inside:
 - astral-outfiles: Inferred species tree
 =#
 
+
+
+
 # todo for week Oct 7: add lines of code to create specific configuation file:
 # - modify the "new" simphysim-conf configure file to have less, named "master": Done 
 # - here: read the master: Done
 # - add stuff to the string to add n_reps, n_genes & seed: Done 
 # - write specific configuration file in simphyfolder: Done 
 
-#= set all configuration parameters here
+#= Previously, the duploss and ratevar are fixed 
 duploss = "no"
 ratevar = "yes"
 n_reps = 2
 n_genes = 10 # number of sites / gene is always 1000: hard-coded into seq-gen.sh
+=# 
+
+#= Notes: 
+The very last part, which mv the output of raxml and astral to a folder, cannot be changed 
+the issue is called by line 75 in raxml.pl: die ("raxmldir should be only 1 level up\n") if ($raxmldir =~ /\//); 
+
 =# 
 
 duploss = ARGS[1] # Yes or No
@@ -39,9 +48,11 @@ n_reps = parse(Int, ARGS[3])
 n_genes = parse(Int, ARGS[4]) 
 seed = parse(Int, ARGS[5])
 
+# Print out the arguments 
 println("Running simulation.pl for:\n")
 println("duploss = $duploss, ratevar = $ratevar, n_reps = $n_reps, n_genes = $n_genes, seed = $seed")
 
+# set all configuration parameters here 
 rootfolder = pwd()
 outfolder = "output/DL$duploss-RV$ratevar"
 mkpath(outfolder)
@@ -69,18 +80,22 @@ parameters = """
 if duploss == "Yes" # Here, not sure about the duplication rate, so choose a very arbitrary number 
   parameters *= "-lb f:0.0001 // Duplication rate\n" # This should be changed 
   # Think: should I use -lb loss rate as well? 
+  # What would be the dup rate to use and loss rate to use? 
 end 
 
-## Add the loop for gene variation 
+# To simulate substitution rate variation
+if ratevar == "Ge" # gene-family-speciic rate heterogenity 
+  parameters *= " -hl ln:-0.19,0.6164414002968976 //log-normal distribution of gene rates"
+elseif ratevar == "Ln" # To simulate variation across lineages (ratevar = "Ln") 
+  parameters *= "-hs f:0.01" # An arbitrary number for now  
+elseif ratevar == "GL"  # To simulate gene-by-lineage variation  
+  parameters *= "-hh f:0.01" # An arbitrary number for now 
+end
+
 
 combined_content = parameters * conf_content # combine parameters with master config
 new_conf_file = joinpath(simphyfolder, "simphysim-conf-DL$duploss-RV$ratevar")
 write(new_conf_file, combined_content) # write the combined config into SimPhy output folder
-
-# A few notes when: 
-# 1) The bottom loop cannot be removed (see notes below) -- need to talk 
-# 2) Add the duploss (yes and no) and ratevar -- can this be added as argumenst to the julia script? 
-
 
 
 #-----------------------------------------------#       

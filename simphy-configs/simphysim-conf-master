@@ -3,9 +3,8 @@
 -sg f:0.00001 //Generation time - look back at this
 -sp f:10000 //Population size?
 -gt f:0 //Genome-wide horizontal gene transfer (sampled once for each species tree, and applied for all locus trees) we want no horizontal gene transfer look into what value should go here
--hl ln:-0.19,0.6164414002968976 //log-normal distribution of gene rates
+# -hl ln:-0.19,0.6164414002968976 //log-normal distribution of gene rates
 -hg f:10 //Heterogeneity sampled for every gene tree branch using the same Gamma distribution with shape = rate = 10
--cs 22 //Seed for the random number generator, in order to make the experiment repetible.
 -om 1 //Tree mapping output
 -od 1 //Database
 -op 1 //Output with the general sampled options (describes the simulation run)
