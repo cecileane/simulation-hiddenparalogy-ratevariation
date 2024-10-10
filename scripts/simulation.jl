@@ -24,27 +24,23 @@ output: it will create folder 'output' in the root of the repo with inside:
 # - add stuff to the string to add n_reps, n_genes & seed: Done 
 # - write specific configuration file in simphyfolder: Done 
 
-# A few notes: 
-# 1) The bottom loop cannot be removed (see notes below)
-# 2) Add the duploss (yes and no)
-
-# set all configuration parameters here
+#= set all configuration parameters here
 duploss = "no"
 ratevar = "yes"
 n_reps = 2
-n_genes = 10
-# number of sites / gene is always 1000: hard-coded into seq-gen.sh
-
-seed = 100 
-
-# Set up seeds 
-#=
-seed_set= 1:5 # start with 5 seeds first but this could be changed to a larger number 
-for i in 1:5 
-  seed = seed_set[i]
-  println("Running simulation with seed = $seed")
-end
+n_genes = 10 # number of sites / gene is always 1000: hard-coded into seq-gen.sh
 =# 
+
+duploss = ARGS[1] # Yes or No
+ratevar = ARGS[2] # "No", "Ge", "Li" or "GL” 
+# In meeting, rate var is "yes" or "no" 
+# this could be changed to "no" (no variation), "Ge" (gene), "Li" (lineage) and "Gl" (gene by lineage)
+n_reps = parse(Int, ARGS[3])
+n_genes = parse(Int, ARGS[4]) 
+seed = parse(Int, ARGS[5])
+
+println("Running simulation.pl for:\n")
+println("duploss = $duploss, ratevar = $ratevar, n_reps = $n_reps, n_genes = $n_genes, seed = $seed")
 
 rootfolder = pwd()
 outfolder = "output/DL$duploss-RV$ratevar"
@@ -68,9 +64,24 @@ parameters = """
 -rl f:$n_genes  // Number of loci (genes) per replicate - f means a fixed value 
 -cs $seed  // seed
 """
+
+# To simulate hidden paralogy, need to adjust duplication rate 
+if duploss == "Yes" # Here, not sure about the duplication rate, so choose a very arbitrary number 
+  parameters *= "-lb f:0.0001 // Duplication rate\n" # This should be changed 
+  # Think: should I use -lb loss rate as well? 
+end 
+
+## Add the loop for gene variation 
+
 combined_content = parameters * conf_content # combine parameters with master config
 new_conf_file = joinpath(simphyfolder, "simphysim-conf-DL$duploss-RV$ratevar")
 write(new_conf_file, combined_content) # write the combined config into SimPhy output folder
+
+# A few notes when: 
+# 1) The bottom loop cannot be removed (see notes below) -- need to talk 
+# 2) Add the duploss (yes and no) and ratevar -- can this be added as argumenst to the julia script? 
+
+
 
 #-----------------------------------------------#       
 #  simulate gene trees using SimPhy 
