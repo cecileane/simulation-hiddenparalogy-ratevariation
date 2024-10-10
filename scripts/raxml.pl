@@ -230,8 +230,9 @@ my $astralOUT =  "$astraldir/astral.tre";
 
 `ls -d $bootpath/* > $bsfile`;
 
-my $astralcmd = "java -jar $astral -i $raxmlOUT -b $bsfile -r $numboot -o $astralOUT > $astralLOG 2>&1";
+# my $astralcmd = "java -jar $astral -i $raxmlOUT -b $bsfile -r $numboot -o $astralOUT > $astralLOG 2>&1";
 # my $astralcmd = "$astral -i $raxmlOUT -u 1 -o $astralOUT > $astralLOG 2>&1"; # This is for newer astral version from ASTER, including astral-pro and astral IV 
+my $astralcmd = "java -jar $astral -i $raxmlOUT -o $astralOUT > $astralLOG 2>&1";
 
 open FHlog, ">> $logfile";
 if ($doastral){

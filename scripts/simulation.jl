@@ -35,15 +35,20 @@ n_genes = 10 # number of sites / gene is always 1000: hard-coded into seq-gen.sh
 =# 
 
 #= Notes: 
-The very last part, which mv the output of raxml and astral to a folder, cannot be changed 
-the issue is called by line 75 in raxml.pl: die ("raxmldir should be only 1 level up\n") if ($raxmldir =~ /\//); 
-
+1) The very last part, which mv the output of raxml and astral to a folder, cannot be changed 
+the issue is called by line 75 in raxml.pl: die ("raxmldir should be only 1 level up\n") if ($raxmldir =~ /\//); If comment out this line, then error occurs when setting up the phylipdir 
+This could be resolved later or remain as it is 
+2) Parameters for rate variations 
+Based on README.md, it seems that only gene variation is examined. 
+How about lineage variation or gene x lienage variations? 
+3) I changed the last part of raxml.pl so that the final astral has one output -- need to double chec: Why do the original script generates boostrap trees? 
+This could be changed to a newer version of unweighted astral later 
+4) After changing the tips to letters, it seems that Seq-Gen
 =# 
 
 duploss = ARGS[1] # Yes or No
 ratevar = ARGS[2] # "No", "Ge", "Li" or "GL” 
 # In meeting, rate var is "yes" or "no" 
-# this could be changed to "no" (no variation), "Ge" (gene), "Li" (lineage) and "Gl" (gene by lineage)
 n_reps = parse(Int, ARGS[3])
 n_genes = parse(Int, ARGS[4]) 
 seed = parse(Int, ARGS[5])
@@ -85,18 +90,17 @@ end
 
 # To simulate substitution rate variation
 if ratevar == "Ge" # gene-family-speciic rate heterogenity 
-  parameters *= " -hl ln:-0.19,0.6164414002968976 //log-normal distribution of gene rates"
+  parameters *= "-hl ln:-0.19,0.6164414002968976 //log-normal distribution of gene rates"
 elseif ratevar == "Ln" # To simulate variation across lineages (ratevar = "Ln") 
-  parameters *= "-hs f:0.01" # An arbitrary number for now  
+  parameters *= "-hs f:0.01" # An arbitrary number for now -- need to change 
 elseif ratevar == "GL"  # To simulate gene-by-lineage variation  
-  parameters *= "-hh f:0.01" # An arbitrary number for now 
-end
+  parameters *= "-hh f:0.01" # An arbitrary number for now -- need to change 
+end # else ratevar == "No" -- no additional para to be specified 
 
 
 combined_content = parameters * conf_content # combine parameters with master config
 new_conf_file = joinpath(simphyfolder, "simphysim-conf-DL$duploss-RV$ratevar")
 write(new_conf_file, combined_content) # write the combined config into SimPhy output folder
-
 
 #-----------------------------------------------#       
 #  simulate gene trees using SimPhy 
