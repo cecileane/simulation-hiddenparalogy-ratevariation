@@ -33,7 +33,7 @@ function parse_commandline()
     "--ratevar" 
       help = "'N': No rate variation';\n 'G: Gene specific rate variation';\n 'L': Lineage specific rate variation;\n 'GL' or 'G*L': genexlineage rate variation"
       arg_type = String
-      choices =  ['N', 'G', 'L', 'G*L']
+      choices =  ["N", "G", "L","GL", "G*L"]
       required = true
     "--n_reps"
       help = "Number of replicates" 
