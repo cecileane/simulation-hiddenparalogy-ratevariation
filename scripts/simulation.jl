@@ -49,16 +49,19 @@ function parse_commandline()
 end
 
 parsed_args = parse_commandline()
+
 duploss = parsed_args["duploss"] # A number indicates rate of gene duplication rates (0 = no dup)
 ratevar = parsed_args["ratevar"] # "N", "G", "L" or "GL" or "G*L" to include genexlineage rate variation 
 n_reps = parsed_args["n_reps"] # number of replicates 
 n_genes = parsed_args["n_genes"] # number of genes 
 seed_simphy = parsed_args["seed_simphy"] # seeds for SimPhy 
 
-valid_ratevars = ["N", "G", "L", "GL", "G*L"] # abort the process if ratevar doesn't come from this set 
+# Check if ratevar belongs to the following: 
+valid_ratevars = ["N", "G", "L", "GL", "G*L"] 
 if !(ratevar in valid_ratevars) 
   error("Invalid value for --ratevar: $ratevar. Valid options are: $(join(valid_ratevars, ", "))")
 end
+
 # Print out the parameters: 
 println("duploss = $duploss, ratevar = $ratevar, n_reps = $n_reps, n_genes = $n_genes, seed = $seed_simphy")
 
@@ -86,25 +89,28 @@ mkdir(astralfolder)
 master_conf = joinpath(rootfolder,"simphy-configs/", "simphysim-conf-master")
 conf_content = read(master_conf, String) # read the master config file into a string 
 
-#Set up the parameters (# replications, # genes, and seeds)
+#Set up the parameters (# replicates, # genes, and seeds)
 parameters = """
 # Parameters: DL:$duploss-RV:$ratevar, with replicate = $n_reps genes = $n_genes and seeds = $seed_simphy:
--lb f:$duploss // Duplication rate 
 -rs $n_reps  // Number of replicates
 -rl f:$n_genes  // Number of loci (genes) per replicate - f means a fixed value 
 -cs $seed_simphy  // seed
 """
 
+# To simulate different duplication rates (maybe add in gene loss rate?) 
+if duploss != 0 # if duploss is 0 then not include any -lb parameters 
+  parameters *= "-lb f:$duploss // Duplication rate" 
+end
+
 # To simulate substitution rate variation
-if occursin("G", ratevar) # gene-family-speciic rate heterogenity : "G" or "GL"
+if occursin("G", ratevar) # gene-family-speciic rate heterogenity : "G" or "GL" or "G*L"
   parameters *= "-hl ln:-0.19,0.6164414002968976 //log-normal distribution of gene rates"
 end
 if occursin("L", ratevar) # To simulate variation across lineages (ratevar = "L" or "GL" or "G*L") 
-  parameters *= "-hs f:0.01" # An arbitrary number for now -- need to change
+  parameters *= "-s (A:3.44*0.0100947,((((B:0.88*0.0042057,C:0.88*0.0036776):1.71*0.0078509,(D:0.93*0.0235933,E:0.93*0.0199793):1.66*0.0079913):0.17*0.0068836,F:2.76*0.0067212):0.18*0.0098089,(G:0.5*0.0797969,H:0.5*0.1796924):2.44*0.0190487):0.5*0.0694588);" # add tree with variation across lineages
+else 
+  paramerers *= "(A:3.44,((((B:0.88,C:0.88):1.71,(D:0.93,E:0.93):1.66):0.17,F:2.76):0.18,(G:0.5,H:0.5):2.44):0.5);" # If ratevar doesn't contain L (G and N), then add tree without variations across lineages 
 end
-if occursin("G*L", ratevar)  # To simulate gene-by-lineage variation  
-  parameters *= "-hh f:0.01" # An arbitrary number for now -- need to change 
-end # else ratevar == "No" -- no additional para to be specified 
 
 # change new_conf_file 
 combined_content = parameters * conf_content # combine parameters with master config
