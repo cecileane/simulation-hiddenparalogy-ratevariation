@@ -19,8 +19,6 @@ output: it will create folder 'output' in the root of the repo with inside:
 - astral-outfiles: Inferred species tree
 =#
 
-## Now, start to add in ArgParse package 
-
 using ArgParse 
 
 function parse_commandline()
@@ -28,12 +26,11 @@ function parse_commandline()
   @add_arg_table s begin 
     "--duploss"
       help = "Gene duplication rate: specify the gene duplication rate, if 0, then no duplication"
-      arg_type = Number
+      arg_type = Float64
       required = true
     "--ratevar" 
       help = "'N': No rate variation';\n 'G: Gene specific rate variation';\n 'L': Lineage specific rate variation;\n 'GL' or 'G*L': genexlineage rate variation"
       arg_type = String
-      choices =  ["N", "G", "L","GL", "G*L"]
       required = true
     "--n_reps"
       help = "Number of replicates" 
@@ -51,23 +48,19 @@ function parse_commandline()
   return parse_args(s)
 end
 
-function main()
-  parsed_args = parse_commandline()
-  println("Parsed args:")
-  for (arg,val) in parsed_args
-      println("  $arg  =>  $val")
-  end
+parsed_args = parse_commandline()
+duploss = parsed_args["duploss"] # A number indicates rate of gene duplication rates (0 = no dup)
+ratevar = parsed_args["ratevar"] # "N", "G", "L" or "GL" or "G*L" to include genexlineage rate variation 
+n_reps = parsed_args["n_reps"] # number of replicates 
+n_genes = parsed_args["n_genes"] # number of genes 
+seed_simphy = parsed_args["seed_simphy"] # seeds for SimPhy 
 
-  duploss = parsed_args["duploss"] # A number indicates rate of gene duplication rates (0 = no dup)
-  ratevar = parsed_args["ratevar"] # "N", "G", "L" or "GL" or "G*L" to include genexlineage rate variation 
-  n_reps = parsed_args["n_reps"] # number of replicates 
-  n_genes = parsed_args["n_genes"] # number of genes 
-  seed_simphy = parsed_args["seed_simphy"] # seeds for SimPhy 
-
-  println("duploss = $duploss, ratevar = $ratevar, n_reps = $n_reps, n_genes = $n_genes, seed = $seed_simphy")
+valid_ratevars = ["N", "G", "L", "GL", "G*L"] # abort the process if ratevar doesn't come from this set 
+if !(ratevar in valid_ratevars) 
+  error("Invalid value for --ratevar: $ratevar. Valid options are: $(join(valid_ratevars, ", "))")
 end
-
-main() 
+# Print out the parameters: 
+println("duploss = $duploss, ratevar = $ratevar, n_reps = $n_reps, n_genes = $n_genes, seed = $seed_simphy")
 
 # set all configuration parameters here 
 rootfolder = pwd()
@@ -95,18 +88,12 @@ conf_content = read(master_conf, String) # read the master config file into a st
 
 #Set up the parameters (# replications, # genes, and seeds)
 parameters = """
-# Parameters: DL:$duploss-RV:$ratevar, with replicate = $n_reps genes = $n_genes and seeds = $seed_simphy: 
+# Parameters: DL:$duploss-RV:$ratevar, with replicate = $n_reps genes = $n_genes and seeds = $seed_simphy:
+-lb f:$duploss // Duplication rate 
 -rs $n_reps  // Number of replicates
 -rl f:$n_genes  // Number of loci (genes) per replicate - f means a fixed value 
 -cs $seed_simphy  // seed
 """
-
-# To simulate hidden paralogy, need to adjust duplication rate 
-if duploss == "Y" # Here, not sure about the duplication rate, so choose a very arbitrary number 
-  parameters *= "-lb f:0.0001 // Duplication rate\n" # This should be changed 
-  # Think: should I use -lb loss rate as well? 
-  # What would be the dup rate to use and loss rate to use? 
-end 
 
 # To simulate substitution rate variation
 if occursin("G", ratevar) # gene-family-speciic rate heterogenity : "G" or "GL"

@@ -1,5 +1,15 @@
 ##Notes
 
+### Bing's To do list: 
+To do list for weeek Oct 10: 
+1) Read the mannual of astral and document the values on the trees (line 101 or 102), where is uncertainty? 
+2) Check astral v.5.7.8 (BS) and astral-pro (PP): 1) compare the outputs from both, 2) check mannual (check uncertainty), 3) which one is faster?  4) From the astral v.5.7.8, can we get both BS and PP? 
+3) Read the SimPhy paper 
+4) Use ArgParse 
+5) Write script for SNAQ 
+6) Read the paper (email on May) and start to think of the algorithum for distance-based comparison between semi-directed trees 
+
+##### 
 Todo This Week:
 
   *use new tree with coalecent unit and substitution unit
