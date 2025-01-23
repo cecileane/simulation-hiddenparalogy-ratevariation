@@ -1,4 +1,13 @@
-rm("../sim-phy-outfiles", force=true, recursive=true)
-rm("../seq-gen-outfiles", force=true, recursive=true)
-rm("../raxml-outfiles", force=true, recursive=true)
-rm("../astral-outfiles", force=true, recursive=true)
+# Remove the single output folder
+rm("output", force=true, recursive=true) # all output is organized within the directory output 
+
+# See simulation.jl, temp outputs of raxml and astral were moved later. 
+# In cases if we want to remove temp outfiles from the root. 
+# Check if the folder exists and then remove them. If not exist, this step is uncessary. 
+names_to_be_removed = ["raxml-outfiles", "astral-outfiles"]
+for folder in readdir()
+    if any(occursin(name, folder) for name in names_to_be_removed)
+        rm(folder; force = true, recursive = true)
+        println("Removed temporary files from $folder in the root directory")
+    end
+end

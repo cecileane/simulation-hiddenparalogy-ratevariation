@@ -1,7 +1,6 @@
 #!/usr/bin/perl
 
-# May 26, 2016
-# Perl script to run raxml + bootstrap for each locus.
+# Perl script to run iqtree + astral for each locus.
 # this is *not* part of the TICR pipeline
 # adapted from Solis-Lemus, Yang and Ane (2016) scripts:
 # https://github.com/crsl4/InconsistencySpeciesTreeGeneFlow/blob/master/scripts/estGeneTrees/raxml.pl
@@ -10,24 +9,26 @@
 
 # usage:
 #
-# raxml.pl --seqdir=xxx/yyy --raxmldir=xxx --astraldir=xxx
+# iqtree.pl --seqdir=xxx/yyy --iqtreedir=xxx --iqtreedir=xxx
 #
 # other options:
-# --numCores = number of cores to use by RAxML. default 6
-# --boot (default) or --noboot (not implemented!) to do RAxML bootstrap on each locus
+# --numCores = number of cores to use by iqtree. default 6
+# --No boostrap 
 # --numboot = number of bootstrap reps. default 100
 # --convert2phylip (default) or --noconvert2phylip to convert nexus input files to phylip format
 # --doastral (default) or --nodoastral to do or not do ASTRAL at the end.
 #
-# the script will create a log file in raxmldir/raxml.pl.log
+# the script will create a log file in iqtreedir/iqtree.pl.log
 
-# warning: assuming all paths (seqdir and raxmldir) are relative paths, and linux/mac
+# warning: assuming all paths (seqdir and iqtreedir) are relative paths, and linux/mac
 
 use Getopt::Long;
 use File::Path qw( make_path );
 use strict;
 use warnings;
 use Carp;
+
+use Cwd;
 #use lib '/u/c/l/claudia/lib/perl/lib/site_perl/'; # we need this because I had to install locally the Statistics module
 #use Statistics::R;
 
@@ -40,21 +41,20 @@ my $numboot = 100;
 my $numCores = 6;
 my $seqdir;   # directory where sequences are
 my $phylipdir;
-my $raxmldir; # directory for output, including log for this script
+my $iqtreedir;
 my $astraldir;
 my $convertphylip = 1;
-my $doastral = 1;
-my $raxml = $currentdir . '/executables/raxmlHPC-PTHREADS';  
-my $astral = $currentdir . '/executables/astral.5.7.8.jar'; 
-# my $astral = $currentdir . '/executables/astral'; # un-weighted astral from ASTER is fine but it calculates PP instead of BS 
-# '/class/molevol-software/astral-5.5.2/astral.5.5.2.jar'; # adapt to your system
+my $doastral = 1;  
+# my $astral = $currentdir . '/executables/astral.5.7.8.jar'; 
+my $astral = $currentdir . '/executables/astral'; # un-weighted astral from ASTER is fine but it calculates PP instead of BS 
+my $iqtree = $currentdir . '/executables/iqtree2';
 
 # -------------- read arguments from command-line -----------------------
 GetOptions( 'numboot=i' => \$numboot,
 	    'boot!' => \$boot,
 	    'numCores=i' => \$numCores,
 	    'seqdir=s' => \$seqdir,
-	    'raxmldir=s' => \$raxmldir,
+	    'iqtreedir=s' => \$iqtreedir,
 	    'astraldir=s' => \$astraldir,
 	    'convert2phylip!' => \$convertphylip,
 	    'doastral!' => \$doastral,
@@ -71,10 +71,10 @@ if ($convertphylip) {
     make_path $phylipdir unless(-d $phylipdir);
 }
 
-die "a directory for RAxML output should be specified with the --raxmldir option" if (not defined $raxmldir);
-die ("raxmldir should be only 1 level up\n") if ($raxmldir =~ /\//);
-make_path $raxmldir unless(-d $raxmldir);
-my $logfile = "$raxmldir/raxml.pl.log";
+die "a directory for IQtree output should be specified with the --iqtreedir option" if (not defined $iqtreedir);
+die ("iqtreedir should be only 1 level up\n") if ($iqtreedir =~ /\//);
+make_path $iqtreedir unless(-d $iqtreedir);
+my $logfile = "$iqtreedir/iqtree.pl.log";
 
 die "a directory for ASTRAL output should be specified with the --astraldir option" if ($doastral and (not defined $astraldir));
 $astraldir = "astral" if !defined($astraldir);
@@ -156,26 +156,34 @@ if ($convertphylip) {
 }
 
 #-----------------------------------------------#
-#  run RAxML on phylip files                    #
+#  Run Iqtree  -- No boostrap to increase speed #
 #-----------------------------------------------#
+# Below codes run iqtree using each individual file. 
+# Notice: This code doesn't work for now since we changed the file names for seq-gen outputs 
+# open FHlog, ">> $logfile" or die "Cannot open log file $logfile: $!\n";
+# chdir($iqtreedir) or die ("can't go to iqtree directory $iqtreedir\n");
+# for my $ig (0 .. $#genes){
+#     my $infn = "$currentdir/$seqdir/${genes[$ig]}"; 
+#     my $oufn = "${generoots[$ig]}";     
+#     my $str = "$iqtree -s $infn -m HKY+G -T $numCores -pre $oufn";
+#     print FHlog "starting IQ-TREE for gene $ig...\n";
+#     print FHlog "$str\n";
+#     system($str);
+# }
+# chdir($currentdir)
+# system("date >> $logfile");
+# close FHlog;
 
-open FHlog, ">> $logfile";
-chdir($raxmldir) or die ("can't go to raxml directory $raxmldir\n");
+# Here, use the directory as the input file to speed the process: 
+# This code is also robust to different file names. 
+open FHlog, ">> $logfile" or die "Cannot open log file $logfile: $!\n";
+chdir($iqtreedir) or die ("can't go to iqtree directory $iqtreedir\n");
+my $iqtree_input = "$currentdir/$seqdir";
+my $iqtreecmd = "$iqtree -S $iqtree_input -m HKY+G -T 2 -pre gene"; # hard-coded for now 
+# In botany server, this could only be run with 2 cores. Increasing cores would cause a memery issues. The maximum cores to be used is 2 or otherwise iqtree will fail. 
 
-for my $ig (0 .. $#genes){
-    my $infn = "../$seqdir/${genes[$ig]}";
-    my $oufn = "${generoots[$ig]}";
-    my $str = "$raxml  -T $numCores -m GTRGAMMA --HKY85  -f a -N $numboot";
-    # -f a: rapid bootstrap + search for best ML tree
-    # seeds: RAxML will fail with almost no info if a seed is 0
-    $str .= " -p " . (int(rand(10000))+1); # seed for randomized stepwise addition
-    $str .= " -x " . (int(rand(10000))+1); # seed for rapid bootstrapping
-    $str .= " -s $infn -n $oufn";      # input/output file names
-    print FHlog "starting RAxML for gene $ig...\n";
-    print FHlog "$str\n";
-    system($str);
-}
-chdir($currentdir) or die "can't go back to original directory";
+system($iqtreecmd);
+chdir($currentdir);
 system("date >> $logfile");
 close FHlog;
 
@@ -183,55 +191,47 @@ close FHlog;
 #  restructure output files                     #
 #-----------------------------------------------#
 
-# archive phylip files
-#`tar -czf ${phylipdir}.tgz $phylipdir`
-
-# delete info files created by raxml
-`rm $raxmldir/RAxML_info\.*`;
-
-# delete ".reduced" files created by RAxML for genes with duplicated sequences
-my $nreduced=`ls $seqdir | grep ".reduced" | wc -l`; # number of ".reduced" files
-$nreduced =~ s/^\s*|\s*$//g; # rm leading & trailing spaces: get the number only
-if ($nreduced){
-    print "RAxML created $nreduced reduced alignment files: removing them\n";
-    `rm $seqdir/*.reduced`;
-} 
-
-# delete empty "phylip.phy" created by ???
-if (-z "$seqdir/phylip.phy"){
-    print "found empty phylip.phy, deleting it\n";
-    `rm $seqdir/phylip.phy`;
+# delete intermediate files ending in ckp.gz (checkpoint files) created by IQ-tree: 
+my @files_checkpoint = glob("$iqtreedir/*.ckp.gz");
+if (@files_checkpoint ) {
+    print "Deleting .ckp.gz files in $iqtreedir...\n";
+    unlink @files_checkpoint or warn "Failed to delete .ckp.gz files: $!";
+    print "Successfully removed the .ckp.gz files.\n";
 }
 
-# create directory to contain the bootstrap trees for all genes: 1 file per gene
-my $bootpath = "$raxmldir/bootstrap";
-make_path $bootpath unless(-d $bootpath);
-`mv $raxmldir/RAxML_bootstrap.* $bootpath`;
-# do not tar: needed for ASTRAL
+# delete intermediate files ending in .mldist created by IQ-tree: 
+my @files_dist = glob("$iqtreedir/*.mldist");
+if (@files_dist) {
+    print "Deleting .mldist files in $iqtreedir...\n";
+    unlink @files_dist or warn "Failed to delete .mldist files: $!";
+    print "Successfully removed the .mldist files.\n";
+}
 
-# create directory to contain the consensus trees: 2 files per gene
-`tar -czf $raxmldir/contrees.tgz $raxmldir/RAxML_bipartitions*`;
-`rm -f $raxmldir/RAxML_bipartitions*`;
-
+# delete intermediate files ending in .bionj created by IQ-tree: 
+my @files_bionj = glob("$iqtreedir/*.bionj");
+if (@files_bionj) {
+    print "Deleting .bionj files in $iqtreedir...\n";
+    unlink @files_bionj or warn "Failed to delete .bionj files: $!";
+    print "Successfully removed the .bionj files.\n";
+}
+# Now the output files include .iqtree, .treefile, and .log files 
 # create file listing all best trees: one line per gene
-my $raxmlOUT = "$raxmldir/besttrees.tre";
-`cat $raxmldir/RAxML_bestTree\.* > $raxmlOUT`;
-`tar -czf $raxmldir/besttrees.tgz $raxmldir/RAxML_bestTree\.*`;
-`rm -f $raxmldir/RAxML_bestTree\.*`;
+my $iqtreeOUT = "$iqtreedir/BestTrees.tre";
+`cat $iqtreedir/gene*.treefile > $iqtreeOUT`;
 
 # ----------------------------------------------#
 #   astral analysis                             #
 # ----------------------------------------------#
 
 $astraldir = "astral" if !defined($astraldir);
-my $bsfile =  "$astraldir/BSlistfiles";
+#my $bsfile =  "$astraldir/BSlistfiles";
 my $astralLOG =  "$astraldir/astral.screenlog";
 my $astralOUT =  "$astraldir/astral.tre";
 
-`ls -d $bootpath/* > $bsfile`;
+# `ls -d $bootpath/* > $bsfile`;
 
-my $astralcmd = "java -jar $astral -i $raxmlOUT -b $bsfile -r $numboot -o $astralOUT > $astralLOG 2>&1";
-# my $astralcmd = "$astral -i $raxmlOUT -u 1 -o $astralOUT > $astralLOG 2>&1"; # This is for newer astral version from ASTER, including astral-pro and astral IV 
+# my $astralcmd = "java -jar $astral -i $raxmlOUT -b $bsfile -r $numboot -o $astralOUT > $astralLOG 2>&1";
+my $astralcmd = "$astral -i $iqtreeOUT -u 1 -o $astralOUT > $astralLOG 2>&1"; 
 
 open FHlog, ">> $logfile";
 if ($doastral){

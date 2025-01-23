@@ -13,6 +13,8 @@ of any path from the root to any tip is equal to this height.
 using PhyloNetworks
 using PhyloPlots
 using QuartetNetworkGoodnessFit # has a function to ultrametrized a network
+include("utilities.jl") # Use the function to replace all tips
+
 # below: tree from crawford data, ASTRAL on IQTree, copy-pasted from
 # https://github.com/cecileane/reptiles/blob/main/estimatednets_collapsed.csv#L44
 speciestree_string = "(Homo,(((Chrysemys,Pelomedusa)100.0:1.0288670824548658,((Crocodylus,Alligator)100.0:1.7082993293412243,(Taeniopygia,Gallus)93.2:1.6647117465735648)0.0:0.16825214855685644)0.0:0.17931560798411753,(Sphenodon,(Anolis,Pantherophis):2.2370887285658227)100.0:0.20028294826845958)0.0);"
@@ -45,6 +47,7 @@ deleteleaf!(tree, "Pelomedusa")
 deleteleaf!(tree, "Sphenodon")
 
 writeTopology(tree, round=true)
+
 # we get this below, which was copy-pasted into the main readme file
 "(Homo:3.44,((((Crocodylus:0.88,Alligator:0.88)100.0:1.71,(Taeniopygia:0.93,Gallus:0.93)93.2:1.66)0.0:0.17,Chrysemys:2.76)0.0:0.18,(Anolis:0.5,Pantherophis:0.5):2.44)0.0:0.5);"
 # has bootstrap values as node names. Let's remove them: SimPhy doesn't like them
@@ -58,5 +61,17 @@ writeTopology(tree, round=true)
 =#
 "(Homo:0.0100947,((((Crocodylus:0.0042057,Alligator:0.0036776):0.0078509,(Taeniopygia:0.0235933,Gallus:0.0199793):0.0079913):0.0068836,Chrysemys:0.0067212):0.0098089,(Anolis:0.0797969,Pantherophis:0.1796924):0.0190487):0.0694588);"
 
-# Now manually combining coalescent units and substitution multiplier in SimPhy's format:
-"(Homo:3.44*0.0100947,((((Crocodylus:0.88*0.0042057,Alligator:0.88*0.0036776):1.71*0.0078509,(Taeniopygia:0.93*0.0235933,Gallus:0.93*0.0199793):1.66*0.0079913):0.17*0.0068836,Chrysemys:2.76*0.0067212):0.18*0.0098089,(Anolis:0.5*0.0797969,Pantherophis:0.5*0.1796924):2.44*0.0190487):0.5*0.0694588);"
+# Replace tip labels on the final tree with letters: 
+tre_string1 = "(Homo:3.44,((((Crocodylus:0.88,Alligator:0.88):1.71,(Taeniopygia:0.93,Gallus:0.93):1.66):0.17,Chrysemys:2.76):0.18,(Anolis:0.5,Pantherophis:0.5):2.44):0.5);"
+replace_tips_with_letters(tre_string1)
+"(A:3.44,((((B:0.88,C:0.88):1.71,(D:0.93,E:0.93):1.66):0.17,F:2.76):0.18,(G:0.5,H:0.5):2.44):0.5);"
+
+tre_string2 = "(Homo:3.44*0.0100947,((((Crocodylus:0.88*0.0042057,Alligator:0.88*0.0036776):1.71*0.0078509,(Taeniopygia:0.93*0.0235933,Gallus:0.93*0.0199793):1.66*0.0079913):0.17*0.0068836,Chrysemys:2.76*0.0067212):0.18*0.0098089,(Anolis:0.5*0.0797969,Pantherophis:0.5*0.1796924):2.44*0.0190487):0.5*0.0694588);"
+replace_tips_with_letters(tre_string2)
+"(A:3.44*0.0100947,((((B:0.88*0.0042057,C:0.88*0.0036776):1.71*0.0078509,(D:0.93*0.0235933,E:0.93*0.0199793):1.66*0.0079913):0.17*0.0068836,F:2.76*0.0067212):0.18*0.0098089,(G:0.5*0.0797969,H:0.5*0.1796924):2.44*0.0190487):0.5*0.0694588);"
+
+# Now manually combining coalescent units and substitution multiplier in SimPhy's format: 
+# The tree without lineage variations: 
+"(A:3.44,((((B:0.88,C:0.88):1.71,(D:0.93,E:0.93):1.66):0.17,F:2.76):0.18,(G:0.5,H:0.5):2.44):0.5);"
+# The tree with lineage variations: 
+"(A:3.44*0.0100947,((((B:0.88*0.0042057,C:0.88*0.0036776):1.71*0.0078509,(D:0.93*0.0235933,E:0.93*0.0199793):1.66*0.0079913):0.17*0.0068836,F:2.76*0.0067212):0.18*0.0098089,(G:0.5*0.0797969,H:0.5*0.1796924):2.44*0.0190487):0.5*0.0694588);"
