@@ -1,8 +1,29 @@
 
 # Jan 23 to Jan 30 
+To do list: 
+1) Clarify the max_iteration and lower_threshold -- Done
+2) Ogranize notes for merging git branches and deleting git branches 
+3) Re-organize folder structure --Done
+
+Other things that have been done:
+1) Add a function to check preexisting files and allow user input to decide if to rm the files or not (see utilities.jl)
+
+Notes from meeting on Jan 23: 
 1) In simulation_iqtree.jl, after max_iter, if lower_threshold (change to a more informative name, min_gene_porportion) not met, ignore the replicate intead of stopping the pipeline. 
 2) Re-organize the output folder structure so that the top layer is each rep. Inside each rep, there are outputs from genetrees_simphy, iqtree, astral, seq-gen, genetrees_singlecopy folders.  
 3) Revise documentation: After running max_iter, if still not hitting min, then ignore the rep
+
+Check this each time before merging branches! 
+Steps for merging git branches: 
+S0: Make sure everything is saved and commited on the working branch. 
+S1: git checkout to the branch we want to grow (typically main).
+S2: Use git log to show the abbreciated structure of all commit: 
+        git log --oneline --graph --decorate --all
+        This above code checks where the HEAD is. The HEAD shows the branch we want to grow. If we want to grow in the main branch, then (HEAD is on origin/main) 
+S3: Squash all commits and merge them into origin/main
+        git merge --squash "branch" Here, branch is the one we want to merge into origin/main
+
+
 
 # Jan 16 to Jan 22
 To do list: 

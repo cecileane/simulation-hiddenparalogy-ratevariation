@@ -5,83 +5,24 @@ using Random # Used to generate random seeds
 #= Script to store utility functions 
 The below script has three parts 
 
-Part 1 --> "replace_tips_with_letters": Replace text tips with letters to both strings and Network/tree (used in scripts/speciestree.jl) 
-
-Part 2 --> A group of unctions to modify gene tree output from SimPhy (scripts/simulation.jl)
+Part 1 --> A group of unctions to modify gene tree output from SimPhy (scripts/simulation.jl)
     F1: "replace_taxa_name" -> Count and modify one tree tip given Char and newick 
     F2: "count_missing" -> Count # missing taxa in the given newick and modify all tree tips (conditions seen below)
     F3: "modify_newicks" -> write modified newicks (condtions seen below)
     F4: "modify_newick_for_n_genes" -> run "modify_newicks" for n times and output the files with given prefix 
 
-Part 3 --> A group of helper functions to re-run simphy simulation and modify newicks (seen details in scripts/speciestree.jl section "run SimPhy + modify newick strings" ) 
+Part 2 --> A group of helper functions to re-run simphy simulation and modify newicks (seen details in scripts/speciestree.jl section "run SimPhy + modify newick strings" ) 
     F1: “seed_generator” -> generate N x M arrays with random seeds given a master seed 
     F2: "calculate_batch" -> Estimate batch size for simulating gene trees in the next iterations 
-    F3: "pad_number" -> convert a given Int to a string to meet the output from Simphy 
-    F4: "check_and_move_files" -> If files mattching certain pattern exists, move them to the desired dir
+    F3: "pad_number" -> convert a given Int to a string to meet the output from Simphy
+
+Part 3 --> Other utilities functions 
+    F1: "check_existing_dir" -> check if a path exists and then decide to remove the path or not
+    F2: "replace_tips_with_letters" -> Replace text tips with letters to both strings and Network/tree (used in scripts/speciestree.jl) 
 =# 
 
 #-----------------------------------------------#       
 #               Part 1  
-#    Replace tips in String/Tree with letters   
-#-----------------------------------------------#
-"""
-This function replaces text tips with letters (max # taxa: 26). Examples:
-
-1. String input → string output:  
-Input: replace_tips_with_letters("(Homo:0.01,(((Cat:0.004,Dog:0.003):0.007,(Dinosaur:0.02,Birds:0.02):0.01)));")  
-Output: "(A:0.01,(((B:0.004,C:0.003):0.007,(D:0.02,E:0.02):0.01)));"
-
-2. Tree input → tree output:  
-Input: replace_tips_with_letters(readTopology("(Homo:0.01,(((Cat:0.004,Dog:0.003):0.007,(Dinosaur:0.02,Birds:0.02):0.01)));"))  
-Output:  
-HybridNetwork, Rooted Network  
-9 edges, 10 nodes (5 tips, 5 internal).  
-Tip labels: A, B, C, D, ...  
-"(A:0.01,(((B:0.004,C:0.003):0.007,(D:0.02,E:0.02):0.01)));"
-
-3. Handles special characters like *:  
-Input: replace_tips_with_letters("(Homo:0.01*4,(((Cat:0.004*5,Dog:0.003*10):0.007,(Dinosaur:0.02*20,Birds:0.02*3):0.01*9)));")  
-Output: "(A:0.01*4,(((B:0.004*5,C:0.003*10):0.007,(D:0.02*20,E:0.02*3):0.01*9)));"
-"""
-function replace_tips_with_letters(tree::Union{HybridNetwork, String}) 
-	#= Goal: replace species tips with A, B, C, etc, but tips should be less than or equal to 26. 
-    The input (tree) can both be a string or a tree
-    If input is tree, then return a tree object
-    If input is a string, then return a string: which could be used to modified the input to SimPhy=#
-    new_labels = ['A':'Z';]
-    if isa(tree, HybridNetwork) # If input is a tree, output a tree 
-        tips = tipLabels(tree)
-
-        if length(tips) > 26 # Give an warning and return the original tree if there are more than 26 tips 
-            println("Warning: The number of tips exceeds 26. That's too much. Exiting.")
-            return tree
-        end 
-    
-        for (i, tip) in enumerate(tree.leaf)
-            tip.name = string(new_labels[i])
-        end
-        return tree
-    
-    elseif isa(tree, String) # if input is a Newick string, output a string 
-        tips = split(tree, [',', '(', ')', ':', '*', ';'])  # Extract tips
-        tips = filter(x -> !(x in ["", ":", ";"]) && !occursin(r"\d", x), tips) # Remove empty, :, and any string containing numbers
-
-        if length(tips) > 26
-            println("Warning: The number of tips exceeds 26. That's too much. Exiting.")
-            return tree
-        end
-        for (i, tip) in enumerate(tips)
-            tree = replace(tree, tip => string(new_labels[i]))
-        end
-        return tree
-    else # Give a warning if the input is neither network nor string 
-        println("Warning: The input needs to be a HybridNetwork or String.")
-        return tree
-    end
-end
-
-#-----------------------------------------------#       
-#               Part 2  
 #    Modify newick strings generated from Simphy
 #    Goal: Mimic hidden paralogy    
 #-----------------------------------------------#
@@ -223,7 +164,12 @@ function modify_newick_for_n_genes(input::String, output::String, n::Int, iterat
     end
 end 
 
-##################### Part 3 ##############################################
+#-----------------------------------------------#       
+#               Part 2 
+#    Re-run simphy until:
+# 1) n_genes hit the target; or 
+# 2) max_iteration reaches   
+#-----------------------------------------------#
 """ 
 Writes N random integers to be used as seeds in imphy simulation
 Input:  -master_seed: An Int to be used in Xoshiro() to generate random num 
@@ -273,14 +219,19 @@ Calculation explanations:
     - Missing trees: 30 * 0.2 = 6
     - Success rate: 1 - 0.2 = 0.8
     - estimated batch size to be simulated: 6 / 0.8 = 7.5 → 8 (rounded up)
+    - If success rate is 0 (cannot be divided), so estimated batch = n_genes 
 """
 function calculate_batch(num::Int, n_genes::Int) 
     num_missing = n_genes - num 
     success_rate = num / n_genes 
-    estimated_batch = round(num_missing / success_rate) 
+    if success_rate == 0
+        estimated_batch = n_genes 
+    else 
+        estimated_batch = round(num_missing / success_rate) 
+    end 
     # println("For replicate", n_reps, " estimated batch size = ", estimated_batch)
     return Int(estimated_batch)
-end
+end 
 
 """
 pad_number(num::Int, range::Int) -> String
@@ -302,43 +253,138 @@ function pad_number(num::Int, range::Int)
   return number_string
 end
 
+#-----------------------------------------------#       
+#               Part 3  
+#       Other utilities functions     
+#-----------------------------------------------#
 """
-Checks for files in `input_dir` containing `pattern` in their names and moves them to `output_dir`.
-Input: 
-    - `input_dir::String`: Path to the source directory.
-    - `pattern::String`: Substring to match in file names.
-    - `output_dir::String`: Path to the destination directory.
-Output 
-    - nothing if no file matches the matching patterns 
-    - mv files from input_dir to output_dir if file(s) matches the matching pattern 
+Checks if a specified path (`dir`) exists and rm or keep the files based on user inputs 
+    The function is useful for testing the same parameters repeatedly. 
+- If it exists, the function allows the user to decide whether to remove it. 
+- If there are more than one paths, user input "ALL" (case-insensitive) to remove all paths 
+- If there are one path, ->`y` (case-insensitive), the directory or file is removed using `rm`.
+- If the user inputs `n` (case-insensitive), the function raises an error and stops further execution.
+- If the user inputs anything else, the function repeatedly prompts for valid input (`y` or `n`).
+- If the path does not exist, the function is skipped 
 """
-function check_and_move_files(input_dir::String, pattern::String, output_dir::String)
-    matching_files = filter(file -> occursin(pattern, file), readdir(input_dir))
-    if isempty(matching_files)
-        return nothing 
+function check_existing_dir(dir_input::Vector)
+
+    len = length(dir_input)
+    if len == 0 # If input an empty string, then output an error 
+        error("Oh no! It's empty string/vector. Check out the code.")
+        return 
     end
-    for file in matching_files
-        mv(joinpath(input_dir, file), joinpath(output_dir, file))
+
+    if len > 1 && ispath(dir_input[1]) # if input is a list of strings and the first path of the list exists 
+        println("Multiple directories were provided: ")
+        while true
+            println("Do you want to remove all directories at once? ALL/N")
+            user_input = lowercase(readline())
+            if user_input == "all"
+                for dir in dir_input
+                    if ispath(dir)
+                        rm(dir; recursive=true) # Remove all paths at once 
+                    else
+                        println("Directory $dir does not exist.")
+                        continue
+                    end 
+                end
+                println("All directories have been removed.") 
+                return    
+            elseif user_input == "n"
+                println("Don't want to remove all dirs, let's remove each individual one")
+                break 
+            else
+                println("Invalid input. Please type ALL or N.")
+            end
+        end
+    end
+
+    for dir in dir_input # remove individual strings in the input
+        # If only one path in dir_input -> 
+        if ispath(dir)
+            while true
+                println("The directory $dir already exists. Do you want to remove it? Y/N")
+                user_input = lowercase(readline()) 
+                if user_input == "y"
+                    rm(dir; recursive=true)
+                    break
+                elseif user_input == "n"
+                    error("Hey! $dir already exists, and we don't want to remove it")
+                    return
+                else
+                    println("Invalid input. Please type Y or N.")
+                end
+            end
+        end
+    end
+end
+
+"""
+This function replaces text tips with letters (max # taxa: 26). Examples:
+
+1. String input → string output:  
+Input: replace_tips_with_letters("(Homo:0.01,(((Cat:0.004,Dog:0.003):0.007,(Dinosaur:0.02,Birds:0.02):0.01)));")  
+Output: "(A:0.01,(((B:0.004,C:0.003):0.007,(D:0.02,E:0.02):0.01)));"
+
+2. Tree input → tree output:  
+Input: replace_tips_with_letters(readTopology("(Homo:0.01,(((Cat:0.004,Dog:0.003):0.007,(Dinosaur:0.02,Birds:0.02):0.01)));"))  
+Output:  
+HybridNetwork, Rooted Network  
+9 edges, 10 nodes (5 tips, 5 internal).  
+Tip labels: A, B, C, D, ...  
+"(A:0.01,(((B:0.004,C:0.003):0.007,(D:0.02,E:0.02):0.01)));"
+
+3. Handles special characters like *:  
+Input: replace_tips_with_letters("(Homo:0.01*4,(((Cat:0.004*5,Dog:0.003*10):0.007,(Dinosaur:0.02*20,Birds:0.02*3):0.01*9)));")  
+Output: "(A:0.01*4,(((B:0.004*5,C:0.003*10):0.007,(D:0.02*20,E:0.02*3):0.01*9)));"
+"""
+function replace_tips_with_letters(tree::Union{HybridNetwork, String}) 
+	#= Goal: replace species tips with A, B, C, etc, but tips should be less than or equal to 26. 
+    The input (tree) can both be a string or a tree
+    If input is tree, then return a tree object
+    If input is a string, then return a string: which could be used to modified the input to SimPhy=#
+    new_labels = ['A':'Z';]
+    if isa(tree, HybridNetwork) # If input is a tree, output a tree 
+        tips = tipLabels(tree)
+
+        if length(tips) > 26 # Give an warning and return the original tree if there are more than 26 tips 
+            println("Warning: The number of tips exceeds 26. That's too much. Exiting.")
+            return tree
+        end 
+    
+        for (i, tip) in enumerate(tree.leaf)
+            tip.name = string(new_labels[i])
+        end
+        return tree
+    
+    elseif isa(tree, String) # if input is a Newick string, output a string 
+        tips = split(tree, [',', '(', ')', ':', '*', ';'])  # Extract tips
+        tips = filter(x -> !(x in ["", ":", ";"]) && !occursin(r"\d", x), tips) # Remove empty, :, and any string containing numbers
+
+        if length(tips) > 26
+            println("Warning: The number of tips exceeds 26. That's too much. Exiting.")
+            return tree
+        end
+        for (i, tip) in enumerate(tips)
+            tree = replace(tree, tip => string(new_labels[i]))
+        end
+        return tree
+    else # Give a warning if the input is neither network nor string 
+        println("Warning: The input needs to be a HybridNetwork or String.")
+        return tree
     end
 end
 
 
-
-
-
-
-
-    
-    
-    
-
-    
-
-
-
-
-
-       
-        
-
+"""
+Return output path string based on inputs: 
+  -folder_path_list: A list containing folder path from rep 1 to n_reps
+  -simulation_rep: Current rep ID
+  -path_string: The appending string to extend the folder name
+"""
+function setup_rep_output_folders(folder_path_list::Vector, simulation_rep::Int, path_string::String)
+  rep_folder_path = folder_path_list[simulation_rep]  
+  return (joinpath(rep_folder_path, path_string))
+end 
 

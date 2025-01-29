@@ -178,7 +178,7 @@ if ($convertphylip) {
 # This code is also robust to different file names. 
 open FHlog, ">> $logfile" or die "Cannot open log file $logfile: $!\n";
 chdir($iqtreedir) or die ("can't go to iqtree directory $iqtreedir\n");
-my $iqtree_input = "$currentdir/$seqdir";
+my $iqtree_input = "$seqdir";
 my $iqtreecmd = "$iqtree -S $iqtree_input -m HKY+G -T 2 -pre gene"; # hard-coded for now 
 # In botany server, this could only be run with 2 cores. Increasing cores would cause a memery issues. The maximum cores to be used is 2 or otherwise iqtree will fail. 
 
@@ -216,7 +216,7 @@ if (@files_bionj) {
 }
 # Now the output files include .iqtree, .treefile, and .log files 
 # create file listing all best trees: one line per gene
-my $iqtreeOUT = "$iqtreedir/BestTrees.tre";
+my $iqtreeOUT = "$iqtreedir/besttrees.tre";
 `cat $iqtreedir/gene*.treefile > $iqtreeOUT`;
 
 # ----------------------------------------------#
@@ -230,9 +230,9 @@ my $astralOUT =  "$astraldir/astral.tre";
 
 # `ls -d $bootpath/* > $bsfile`;
 
-# my $astralcmd = "java -jar $astral -i $raxmlOUT -b $bsfile -r $numboot -o $astralOUT > $astralLOG 2>&1";
+# my $astralcmd = "$astral -i $iqtreeOUT -b $bsfile -r $numboot -o $astralOUT > $astralLOG 2>&1"; 
 my $astralcmd = "$astral -i $iqtreeOUT -u 1 -o $astralOUT > $astralLOG 2>&1"; 
-
+ 
 open FHlog, ">> $logfile";
 if ($doastral){
     print FHlog "running astral:\n";

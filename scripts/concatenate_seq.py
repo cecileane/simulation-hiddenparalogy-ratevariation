@@ -2,9 +2,7 @@
 Concatenate output alignments from Seq-Gen and generate a single FASTA file.
 
 This script processes the output alignments produced by Seq-Gen, where the outputs 
-are organized as gene1, gene2, ..., geneM.nex files within directories named 
-rep1, rep2, ..., repN. The script concatenates all gene files within each rep folder 
-and produces a single concatenated FASTA file for each rep directory.
+are organized as gene1, gene2, ..., geneM.nex files within a directory. The script concatenates all gene files within each rep folder and produces a single concatenated FASTA file for each rep directory. RepID is provided as one argument in the final output. 
 
 The script handles missing gene.nexus files as follows:
 - If hidden paralogy is simulated, some geneM.nex files may be missing. The script will ignore such cases. 
@@ -14,10 +12,12 @@ The script handles missing gene.nexus files as follows:
 A test kit is saved in `$ROOT/example/test_concatenate_seq`.
 Run the following shell commands in `$ROOT`:
 #!/bin/bash
+cd ~ `$ROOT/example/` 
 for i in 1 2; do
-    python scripts/concatenate_seq.py \
-        /home/bli283/simulation-reptiles/example/test_concatenate_seq/rep$i \
-        /home/bli283/simulation-reptiles/example/test_concatenate_seq/
+    python ../scripts/concatenate_seq.py \
+        test_concatenate_seq/rep$i \
+        test_concatenate_seq/ \
+        $i
 done
 ### 
 This above code will concatenate nexus files within folder rep1 and rep2. It creates two output files concatenated_alignment_rep1.fasta and concatenated_alignment_rep2.fasta in the specific output directory. Each fasta is the concatenated sequences from each rep folder.  
@@ -68,7 +68,7 @@ def concatenate_nexus_to_fasta(nexus_dir, fasta_dir, rep_id):
                     concate_sequences[taxon] += "-" * seq_length # Set the length to be the same as the last sequence 
 
      # Write the dic to a fasta files: 
-    fasta_path = os.path.join(fasta_dir, f"concatenated_alignment_{rep_id}.fasta") # Output fasta files: The output file is within the assigned output folder named as concatenated_alignment_rep$id.fasta
+    fasta_path = os.path.join(fasta_dir, f"concate_alignment_rep{rep_id}.fasta") # Output fasta files: The output file is within the assigned output folder named as concatenated_alignment_rep$id.fasta
     with open(fasta_path, "w") as fasta_file: 
         for taxon, sequence in concate_sequences.items():
             fasta_file.write(f">{taxon}\n{sequence}\n")
@@ -76,7 +76,6 @@ def concatenate_nexus_to_fasta(nexus_dir, fasta_dir, rep_id):
 if __name__ == "__main__":
     nexus_dir = sys.argv[1] # First argument is the input nexus folder
     fasta_dir = sys.argv[2] # Second argument is the folder to store the output fasta 
-
-    rep_id = os.path.basename(nexus_dir) # get rep_id from this string 
+    rep_id = sys.argv[3] # replicate ID
     concatenate_nexus_to_fasta(nexus_dir, fasta_dir, rep_id)
     print("Aww! Concatenated nexus files into fasta!")
