@@ -1,6 +1,8 @@
 # The script to run snaq 
 
-using PhyloNetworks 
+using PhyloNetworks
+using CSV
+using DataFrames
 using Distributed
 using ArgParse
 
@@ -90,6 +92,7 @@ species_tree = readMultiTopology(species_tree)[1]
 gene_trees = readMultiTopology(gene_trees)
 q,t = countquartetsintrees(gene_trees)
 df = writeTableCF(q,t)
+CSV.write("$outdir/CF_results.csv", df) # save CFs into a file 
 iqtreeCF = readTableCF(df)
 
 # hmax = 0 or 1
@@ -100,9 +103,13 @@ net0 = snaq!(species_tree, iqtreeCF, hmax=0, filename=joinpath(H0folder, "H0"), 
 net1out = joinpath(H1folder, "H1")
 net1 = snaq!(net0, iqtreeCF, hmax=1, filename=net1out, seed=seed_snaq, runs=runs)
 
-#=  Boostrapping: 
+#= Boostrapping: 
+# Previously I used raxml and the files generated bslist.txt based on the tutorial: https://github.com/JuliaPhylo/PhyloNetworks.jl/wiki/Bootstrap-analysis
+# Now we changed to iqtree so no bslist files. 
+# Based on: https://github.com/JuliaPhylo/PhyloNetworks.jl/wiki/Bootstrap-analysis, it seems that boostrap needs boostrap gene trees. 
+
 bootnetout_dir = joinpath(H1folder, "bootnet_H1")
-bootnet = bootsnaq(net0, iqtreeCF, hmax=1, nrep=n_snaqboot_rep, filename=bootnetout_dir, seed=seed_snaq, runs=runs)
+bootnet = bootsnaq(net0, iqtreeCF, hmax=1, nrep=n_snaqboot_rep, filename=bootnetout_dir, seed=seed_snaq, runs=runs) # iqtreeCF is not correct here 
 bootnet_networks = readMultiTopology(bootnetout);
 net1 = readTopology("$net1out.out")
 BSe_tree, tree1 = treeEdgesBootstrap(bootnet,net1)

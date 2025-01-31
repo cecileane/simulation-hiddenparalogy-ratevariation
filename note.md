@@ -1,9 +1,20 @@
+# Jan 31 to Feb 7 
+
+Questions for Meeting on Jan 31: 
+1) Approach to do find_graph (see notes below)
+2) Write codes to extract the best network from snaq outputs 
+3) Boostrap for snaq --> First, do we need to have boostrapping? Second, the pipeline used to have boostrap gene trees uding RAxML and use the bslist file to run snaq boostrapoing. However, because running boostrap gene trees is very slow, we changed to iqtree without boostrap. Based on: https://github.com/JuliaPhylo/PhyloNetworks.jl/wiki/Bootstrap-analysis, we need boostrap gene trees to run boostraping. If we want to run snaq boostrap, then we probably need to run iqtree boostrapping as well, which might slow down the whole process (?). 
 
 # Jan 23 to Jan 30 
 To do list: 
 1) Clarify the max_iteration and lower_threshold -- Done
-2) Ogranize notes for merging git branches and deleting git branches 
+2) Ogranize notes for merging git branches and deleting git branches --Done. I have re-done the process -- merging the working branch to main. The commit on Jan 29 is committed to the 
 3) Re-organize folder structure --Done
+4) Changed to emacs editor -- Done
+5) Start thinking of Find_graphs 
+Based on Lauren's code, her project simulates SNPs directly from simphy gene trees. Here, I am wondering what would be the best approach to do this. Two approaches: 
+      a. Get N SNPs from the simphy gene trees (what Lauren has done)
+      b. SNP calling from seqgen alignments to get SNPs
 
 Other things that have been done:
 1) Add a function to check preexisting files and allow user input to decide if to rm the files or not (see utilities.jl)
@@ -22,8 +33,11 @@ S2: Use git log to show the abbreciated structure of all commit:
         This above code checks where the HEAD is. The HEAD shows the branch we want to grow. If we want to grow in the main branch, then (HEAD is on origin/main) 
 S3: Squash all commits and merge them into origin/main
         git merge --squash "branch" Here, branch is the one we want to merge into origin/main
-
-
+S4: Use "git status" to check and use "git commit" to commit 
+        Note here: The commit message should summarize what have done in the branch that is squashed into main 
+S5: Delete remote and local branches 
+        Romate branches could be deleted in Github webpage
+        Local branches could be deleted using git branch -d
 
 # Jan 16 to Jan 22
 To do list: 
