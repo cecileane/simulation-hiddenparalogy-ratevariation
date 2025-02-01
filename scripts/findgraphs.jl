@@ -84,21 +84,28 @@ end
 check_existing_dir(findgraph_folder_list) # see utilies.jl. 
 
 #-----------------------------------------------#       
-#         Variant Calling using snp-sites 
-#       snp-sites calls SNP from fasta files 
+#         Variant Calling + File Conversion
+#    Goal 1: snp-sites calls SNP from fasta files 
+#   Goal 2:  Convert VCF to eigenstrat using codes from https://github.com/mathii/gdc  
 #-----------------------------------------------# 
 for ind in 1:index_length 
     # concatenated fasta files are stored in Rep$id/seqgenfolder
     seqgenfolder = setup_rep_output_folders(folder_path_list, ind, "seqgenfolder")
     findgraphfolder = findgraph_folder_list[ind]
     mkpath(findgraphfolder)
-    # Find the file name in the concatenated fasta file: 
+   
+    # Goal 1: snp-sites calls SNP from fasta files 
     match_result = match(r"rep(\d+)/", seqgenfolder) 
-    rep_id = match_result.captures[1] 
+    rep_id = match_result.captures[1]  # Find the file name in the concatenated fasta file: 
     fasta_file_name = "concate_alignment_rep$(rep_id).fasta" 
     fasta_file = joinpath(seqgenfolder, fasta_file_name) 
-    println("for $seqgenfolder, here is the file name: $fasta_file_name")
-    run(`./executables/snp-sites $fasta_file -v -o $findgraphfolder/snps.vcf`) # run snp-sites 
+    run(`./executables/snp-sites $fasta_file -v -o $findgraphfolder/snps_rep$(rep_id).vcf`) # run snp-sites
+    
+    # Goal 2:  Convert VCF to eigenstrat using codes from https://github.com/mathii/gdc   
+    
 end 
+
+
+
 
 
