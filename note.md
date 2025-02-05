@@ -1,3 +1,14 @@
+# Feb 3 
+1) Start running the pipeline (n_reps = 100, n_genes = #the same to the emprical data) 
+      - 100 reps would be good to test if the true type I eror rate is 0.05 (organize notes later)
+      - Have an estimation about how long to run the pipeline 
+2) Check how to incorporate copyright/license (https://github.com/mathii/gdc/blob/master/LICENSE) into the code/repo 
+3) Think of my own license (MIT -- check online)
+4) Read find_graph/admixture and think of a. paramater setting; b. evidence for reticulation 
+5) Run iqtree with boostrap and then have boostrap for snaq 
+
+
+
 # Jan 31 to Feb 7 
 
 Questions for Meeting on Jan 31: 
