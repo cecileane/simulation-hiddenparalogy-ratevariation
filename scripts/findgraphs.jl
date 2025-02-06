@@ -99,10 +99,13 @@ for ind in 1:index_length
     rep_id = match_result.captures[1]  # Find the file name in the concatenated fasta file: 
     fasta_file_name = "concate_alignment_rep$(rep_id).fasta" 
     fasta_file = joinpath(seqgenfolder, fasta_file_name) 
-    run(`./executables/snp-sites $fasta_file -v -o $findgraphfolder/snps_rep$(rep_id).vcf`) # run snp-sites
+    vcf_file = joinpath(findgraphfolder, "rep$(rep_id).vcf")
+    run(`./executables/snp-sites $fasta_file -v -o $vcf_file`) # run snp-sites
     
-    # Goal 2:  Convert VCF to eigenstrat using codes from https://github.com/mathii/gdc   
-    
+    # Goal 2:  Convert VCF to eigenstrat using codes from https://github.com/mathii/gdc  
+    eigenstrat_file = joinpath(findgraphfolder, "eigenstrat_rep$(rep_id)") 
+    run(`python scripts/vcf2eigenstrat_modified_py3.py -v $(vcf_file) -o $(eigenstrat_file)`)
+
 end 
 
 
