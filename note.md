@@ -1,3 +1,25 @@
+# Feb 7
+Emprical paper list: 
+1) https://www.nature.com/articles/s41586-024-08531-5
+
+
+2) https://doi.org/10.1126/science.adn2094: They used TreeMix. They run treemix with number of migration events from m = 0 to m = 8. At each m, they calculated the residual for F-statistics and the changes to log likelihood (deltaM) between each m. At m=2 (Figure S12), Δm was observed to shift thus indicating that successive migration edges were not substantially improving the model likelihood (Figure S13). 
+
+Then, at m=2, they run treemix with the boostrap mode with 100 bootstrap. They summarized the resulting topologies from m=2 when running treemix to get a boostrap values. They mentioned that there is outliers in the log likelihood just for m=2. 
+
+
+Think of how to determine the number of reticulation events using find_graphs 
+  1) Run findgraphs with k (number of admixture) = 0, 1, 2, (or 3?). Each run generates multiple well-fitting admixture graphs (AGs) with different topologies. 
+  2) For the set of best-fit AGs given k, find the log-likelihood score and the worst f-statistics residuals (he largest absolute difference between observed and predicted f-statistics), both of which should be minimized. 
+  3) Find out the is AGs with particular K improve the score. The K which improved the scores should be treated as the real K. 
+For example, if both log-likelihood and worst f-statistics residuals improve a lot from k=0 to k=1, then k = 1. 
+
+Potentially other methods: 
+1) Using AIC or BIC between models with different Ks, which could panalize models with more complexity.
+2) Have subset of SNPs and run bootstrap. However, unlike SnaQ, findgraphs could not have BS support for the branch particularly the admixture. However, bootstrap could be run to have a CI for log-likelihood (LL) and f-statistics residuals. In this case, this method could only validate whether the LL and residuls are statistical robust and if the model is over-fitting. This might not be able to help with choosing k. 
+
+I think this is an interesting question. The original findgraphs paper is very vague about how to choose optimal K. This could even be a good separate project to work on. 
+
 # Feb 3 
 1) Start running the pipeline (n_reps = 100, n_genes = #the same to the emprical data) 
       - 100 reps would be good to test if the true type I eror rate is 0.05 (organize notes later)
@@ -6,8 +28,6 @@
 3) Think of my own license (MIT -- check online)
 4) Read find_graph/admixture and think of a. paramater setting; b. evidence for reticulation 
 5) Run iqtree with boostrap and then have boostrap for snaq 
-
-
 
 # Jan 31 to Feb 7 
 
