@@ -103,25 +103,11 @@ net0 = snaq!(species_tree, iqtreeCF, hmax=0, filename=joinpath(H0folder, "H0"), 
 net1out = joinpath(H1folder, "H1")
 net1 = snaq!(net0, iqtreeCF, hmax=1, filename=net1out, seed=seed_snaq, runs=runs)
 
-#= Boostrapping: 
-# Previously I used raxml and the files generated bslist.txt based on the tutorial: https://github.com/JuliaPhylo/PhyloNetworks.jl/wiki/Bootstrap-analysis
-# Now we changed to iqtree so no bslist files. 
-# Based on: https://github.com/JuliaPhylo/PhyloNetworks.jl/wiki/Bootstrap-analysis, it seems that boostrap needs boostrap gene trees. 
-
+# Boostrapping: 
 bootnetout_dir = joinpath(H1folder, "bootnet_H1")
-bootnet = bootsnaq(net0, iqtreeCF, hmax=1, nrep=n_snaqboot_rep, filename=bootnetout_dir, seed=seed_snaq, runs=runs) # iqtreeCF is not correct here 
-bootnet_networks = readMultiTopology(bootnetout);
+gene_tree_list = [ [tree] for tree in gene_trees ] # Convert to Vector{Vector{HybridNetwork}}
+bootnet = bootsnaq(net0, gene_tree_list, hmax=1, nrep=n_snaqboot_rep, filename=bootnetout_dir, seed=seed_snaq, runs=runs)
 net1 = readTopology("$net1out.out")
 BSe_tree, tree1 = treeEdgesBootstrap(bootnet,net1)
 
-bslist = joinpath(astralfolder, "astral-outfiles-$paramname_root-$simulation_rep", "BSlistfiles") # BS files to run boostrap 
-# Incorporate bootrapping for hmax = 1
-# In simulation.jl the output of raxml and astral was moved into the folder so the filenames listed in BSListfiles starts from $root instead of the correct file 
-println("running snaq boostrap for $n_snaqboot_rep reps and Hmax = 1")
-# Below setting bslist = path doesn't work. 
-write("bslist_revised.txt", join((joinpath(outfolder, "raxml-outfiles", line) for line in readlines(bslist)), "\n")) # revise the bslist 
-bootTrees = readBootstrapTrees("bslist_revised.txt") # The bslist_revised store the path from the root to raxml boostrap file
-bootnet = bootsnaq(net0, bootTrees, hmax=1, nrep= n_snaqboot_rep, runs= runs, filename=joinpath(H1folder, "bootnet_H1"), seed=seed_snaq)
 
-rm("bslist_revised.txt") # removed intermediate file
-=# 
