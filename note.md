@@ -1,12 +1,40 @@
-# Feb 7
+# Feb 7 -- Feb 14 
+1) License issue: 
+GPL-3.0 (https://github.com/mathii/gdc/blob/master/LICENSE) Code Cannot Be Used in an MIT Project Without Making the Whole Project GPL-3.0, meaning any derived work must also be licensed under GPL-3.0. However, our repo is under MIT, which is a permissive license that does not impose such restrictions. This creates a conflict because the MIT License does not require modifications to be under the same license, whereas the GPL-3.0 does. Thus, we have two options: 
+  Option 1: Re-license simulation-reptiles Under GPL-3.0 
+  Option 2: Remove GPL-3.0 Code and Find an MIT-Compatible Alternative 
+Thus, we cannot mix GPL-3.0 and MIT in the same repository without converting the entire project to GPL-3.0. If keeping the MIT license is required, we must remove the GPL-3.0 code. If we choose to use the GPL-3.0 code, the entire repository must be re-licensed under GPL-3.0.
+
+I think the best option here is 2. Here are some other resources to convert between vcf to eigenstrat: https://ppp.readthedocs.io/en/latest/PPP_pages/Input_File_Generators/vcf_format_conversions.html 
+https://github.com/ACAD-UofA/Guide-to-manipulating-PLINK-EIG-and-VCF-files
+https://github.com/DReichLab/EIG/tree/master/CONVERTF 
+
+Those could be easier to use. 
+
+2) How to find the best k for findgraph: 
+  Based on the emprical studies and after talking with Lauren, my proposed workflow:
+
+  Workflow 1: 
+    1) Run findgraphs from k = 0 to k = 2 (or even higher) for multiple times N 
+    2) Filter M best topologies from each N runs at each K level -- based on log-likelihood 
+    3) For the remaining M topologies at K's level, check WR. If WR smaller than certain level, then choose that. 
+  Workflow 2: 
+    2) Run findgraphs from k = 0 to k = 2 with N times 
+    3) Find if there is a big improvment in log-liklihood score 
+      --If yes, choose the smallest k level with a big improvmennt in log-likelihood score 
+      --If no, follow the process in workflow 1 to determine the best fit graphs 
+
+3) Change SnaQ to run boostrap 
+
+
+
 Emprical paper list: 
 1) https://www.nature.com/articles/s41586-024-08531-5
-
+The method for this paper is much complicated and has a lot of prior knowledge based on the data, language, geography itself. I don't think the way this paper finds the best model(s) could be used in our study. They used qpWave/qpAdm methods to identify a group of feasible models based on criteria (having P > 0.05, all standard errors ≤0.1, and admixture proportions ≤2 standard errors from 0 and 1). Later, they examined each model and how or if the model could be feasible in their supplementary material 2 (around pp300 to the end). Such work involes a lot of prior knowledge for the data itself. I don't think they specifically address the issue of determining the number of admixture. 
 
 2) https://doi.org/10.1126/science.adn2094: They used TreeMix. They run treemix with number of migration events from m = 0 to m = 8. At each m, they calculated the residual for F-statistics and the changes to log likelihood (deltaM) between each m. At m=2 (Figure S12), Δm was observed to shift thus indicating that successive migration edges were not substantially improving the model likelihood (Figure S13). 
 
 Then, at m=2, they run treemix with the boostrap mode with 100 bootstrap. They summarized the resulting topologies from m=2 when running treemix to get a boostrap values. They mentioned that there is outliers in the log likelihood just for m=2. 
-
 
 Think of how to determine the number of reticulation events using find_graphs 
   1) Run findgraphs with k (number of admixture) = 0, 1, 2, (or 3?). Each run generates multiple well-fitting admixture graphs (AGs) with different topologies. 

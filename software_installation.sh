@@ -23,8 +23,17 @@ executables/seq-gen -h
 
 # Download IQtree
 cd ~/private/software/
-wget https://github.com/iqtree/iqtree2/archive/refs/tags/v2.3.6.tar.gz 
-tar -xvf v2.3.6.tar.gz 
-mkdir build && cd build 
+wget https://github.com/iqtree/iqtree2/releases/download/v2.4.0/iqtree-2.4.0-Linux-intel.tar.gz 
+tar -xvf iqtree-2.4.0-Linux-intel.tar.gz # Latest version on Feb 7 2025 
+# Interestingly, iqtree 2.4.0 was released on Feb 7 2025. Based on the new manual, the executable is located in bin/ and could be directly used. 
+cd iqtree-2.4.0-Linux-intel 
+bin/iqtree2 -s example.phy # run an example to test installation --> work okay 
+cd ~/PATH/TO/simulation-reptiles 
+ln -s ~/private/software/iqtree-2.4.0-Linux-intel/bin/iqtree2 executables/iqtree2 
+./executables/iqtree2 -h # test 
+
+# 
+
+
 
 
