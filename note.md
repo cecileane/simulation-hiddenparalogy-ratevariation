@@ -26,7 +26,8 @@ Those could be easier to use.
       --If yes, choose the smallest k level with a big improvmennt in log-likelihood score 
       --If no, follow the process in workflow 1 to determine the best fit graphs 
 
-3) Change SnaQ to run boostrap 
+3) Change SnaQ to run boostrap --> Done 
+  Depending on the number of findgraph to be run, maybe we want to increase the hmax of snaq as well? 
 
 
 

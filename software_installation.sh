@@ -32,7 +32,17 @@ cd ~/PATH/TO/simulation-reptiles
 ln -s ~/private/software/iqtree-2.4.0-Linux-intel/bin/iqtree2 executables/iqtree2 
 ./executables/iqtree2 -h # test 
 
-# 
+# Download ASTER/Astral 
+cd ~/private/software/
+wget https://github.com/chaoszhang/ASTER/archive/refs/heads/Linux.zip # Version: v1.20.3.6 -- Newest version on Feb 14 2025 
+unzip Linux.zip  
+cd ASTER-Linux/ && make 
+cd ~/PATH/TO/simulation-reptiles  
+ln -s ~/private/software/ASTER-Linux/bin/astral-pro3 executables/astral-pro3 
+
+
+
+
 
 
 

@@ -46,7 +46,7 @@ my $astraldir;
 my $convertphylip = 1;
 my $doastral = 1;  
 # my $astral = $currentdir . '/executables/astral.5.7.8.jar'; 
-my $astral = $currentdir . '/executables/astral'; # un-weighted astral from ASTER is fine but it calculates PP instead of BS 
+my $astral = $currentdir . '/executables/astral-pro3'; # un-weighted astral from ASTER is fine but it calculates PP instead of BS 
 my $iqtree = $currentdir . '/executables/iqtree2';
 
 # -------------- read arguments from command-line -----------------------
