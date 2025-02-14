@@ -1,17 +1,8 @@
 # Feb 7 -- Feb 14 
-1) License issue: 
-GPL-3.0 (https://github.com/mathii/gdc/blob/master/LICENSE) Code Cannot Be Used in an MIT Project Without Making the Whole Project GPL-3.0, meaning any derived work must also be licensed under GPL-3.0. However, our repo is under MIT, which is a permissive license that does not impose such restrictions. This creates a conflict because the MIT License does not require modifications to be under the same license, whereas the GPL-3.0 does. Thus, we have two options: 
-  Option 1: Re-license simulation-reptiles Under GPL-3.0 
-  Option 2: Remove GPL-3.0 Code and Find an MIT-Compatible Alternative 
-Thus, we cannot mix GPL-3.0 and MIT in the same repository without converting the entire project to GPL-3.0. If keeping the MIT license is required, we must remove the GPL-3.0 code. If we choose to use the GPL-3.0 code, the entire repository must be re-licensed under GPL-3.0.
+1) License issue: https://github.com/mathii/gdc/blob/master/LICENSE has Apache License 2.0. 
+I should include the text about the license into my MIT license. The licsense should indicate that The majority of this repository is licensed under the MIT License. However, some parts of this project include code under the Apache License 2.0.
+For details, see `LICENSES/APACHE-2.0.txt`. 
 
-I noticed that Lauren's f4rate github repo also uses this code while not changing the license. 
-
-I think the best option here is 2. Here are some other resources to convert between vcf to eigenstrat: https://ppp.readthedocs.io/en/latest/PPP_pages/Input_File_Generators/vcf_format_conversions.html 
-https://github.com/ACAD-UofA/Guide-to-manipulating-PLINK-EIG-and-VCF-files
-https://github.com/DReichLab/EIG/tree/master/CONVERTF 
-
-Those could be easier to use. 
 
 2) How to find the best k for findgraph: 
   Based on the emprical studies and after talking with Lauren, my proposed workflow:
@@ -29,6 +20,11 @@ Those could be easier to use.
 3) Change SnaQ to run boostrap --> Done 
   Depending on the number of findgraph to be run, maybe we want to increase the hmax of snaq as well? 
 
+4) Notes about AIC/BIC in Maier et al. (2023): The authors note that applying AIC and BIC is not straightforward for AGs, because the number of independent parameters in an AG is topology-dependent. It is not solely determined by the number of groups, drift edges, or admixture events. This issue means that previous studies that used AIC/BIC thresholds to reject models were often overly aggressive, assuming the models had the same number of degrees of freedom when in fact they did not​ 
+
+Thus, instead of relying strictly on AIC and BIC, the authors employ a cross-validation-based likelihood scoring approach. This method: 1. Uses different blocks of SNPs for model fitting and evaluation. 2. Prevents overfitting by ensuring that complex models do not simply fit better because they have more parameters. 
+
+Thus, AIC and BIC should not be used when examining the best graph in our study. 
 
 
 Emprical paper list: 
