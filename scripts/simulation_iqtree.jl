@@ -332,7 +332,7 @@ for simulation_rep in 1:n_reps
   rep_number_string = pad_number(simulation_rep, n_reps)
   seqgenfolder = setup_rep_output_folders(folder_path_list, simulation_rep, "seqgenfolder") # output folder. Save the concated fasta one layer above nexus_folder 
   input_nexus_folder = joinpath(seqgenfolder, "nexus_folder")
-  run(`python scripts/concatenate_seq.py $input_nexus_folder $seqgenfolder $rep_number_string`) 
+  run(`python3 scripts/concatenate_seq.py $input_nexus_folder $seqgenfolder $rep_number_string`) 
 end
 
 #-----------------------------------------------#       

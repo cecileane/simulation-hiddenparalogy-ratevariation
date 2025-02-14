@@ -1,4 +1,17 @@
-# Document software installtion in Franklin00 
+# Document software installtion in the stats servers at UW-Madison 
+
+# Install julia 
+curl -fsSL https://install.julialang.org | sh # choose to proceed
+. /u/b/i/bingl/.bashrc # Depending on the path 
+. /u/b/i/bingl/.bash_profile 
+# Install packages used in Julia 
+julia
+import Pkg
+Pkg.add("PhyloPlots")
+Pkg.add("PhyloNetworks")
+Pkg.add("ArgParse") 
+Pkg.add("StatsBase") 
+Pkg.add("Random")
 
 # Download simphy 
 cd ~/private/software/ 
@@ -39,6 +52,9 @@ unzip Linux.zip
 cd ASTER-Linux/ && make 
 cd ~/PATH/TO/simulation-reptiles  
 ln -s ~/private/software/ASTER-Linux/bin/astral-pro3 executables/astral-pro3 
+
+
+
 
 
 
