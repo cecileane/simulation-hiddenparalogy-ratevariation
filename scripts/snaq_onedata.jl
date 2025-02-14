@@ -5,6 +5,7 @@ using CSV
 using DataFrames
 using Distributed
 using ArgParse
+include("utilities.jl")
 
 function parse_commandline()
     s = ArgParseSettings()
@@ -104,7 +105,7 @@ net1out = joinpath(H1folder, "H1")
 net1 = snaq!(net0, iqtreeCF, hmax=1, filename=net1out, seed=seed_snaq, runs=runs)
 
 # Boostrapping: 
-bootnetout_dir = joinpath(H1folder, "bootnet_H1")
+bslist = joinpath(iqtreefolder, "bslist.txt") 
 gene_tree_list = [ [tree] for tree in gene_trees ] # Convert to Vector{Vector{HybridNetwork}}
 bootnet = bootsnaq(net0, gene_tree_list, hmax=1, nrep=n_snaqboot_rep, filename=bootnetout_dir, seed=seed_snaq, runs=runs)
 net1 = readTopology("$net1out.out")

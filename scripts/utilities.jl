@@ -388,3 +388,35 @@ function setup_rep_output_folders(folder_path_list::Vector, simulation_rep::Int,
   return (joinpath(rep_folder_path, path_string))
 end 
 
+"""
+A test function which is not used in the main script
+    Input: 
+        -file_path: A file path to a tree file containing multiple boostrap trees 
+        -Output_dir: The output directory to store resulting files as below 
+        -output_filename: a string to 
+        -relative_path: Boolean -> Create a relative path or absolte in the output filename 
+            -> If true -> create relative path else absolute path 
+    Return: 
+        -Split the each individual tree in the file path into a separate file
+        -Write the file path to each individual tree into a .txt file 
+This function is not used in the major script but used as a test function to test if the input for bootsnaq could be converted as [[Hybird tree]]
+"""
+function write_boostrapTrees_2_Ind_filepath(file_path::String, output_dir::String, output_filename::String, relative_path::Bool)
+    trees = readlines(file_path)
+    output_txt = joinpath(output_dir, output_filename)
+
+    open(output_txt, "w") do io 
+        for (i, tree) in enumerate(trees) 
+            if relative_path
+                tree_path = joinpath(output_dir, "tree_$i.trees")
+            else 
+                tree_path = joinpath("./", "tree_$i.trees") 
+            end 
+            open(tree_path, "w") do f
+                write(f, tree)
+            end 
+            println(io, tree_path) 
+        end 
+    end
+end 
+

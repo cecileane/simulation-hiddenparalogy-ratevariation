@@ -5,6 +5,8 @@ GPL-3.0 (https://github.com/mathii/gdc/blob/master/LICENSE) Code Cannot Be Used 
   Option 2: Remove GPL-3.0 Code and Find an MIT-Compatible Alternative 
 Thus, we cannot mix GPL-3.0 and MIT in the same repository without converting the entire project to GPL-3.0. If keeping the MIT license is required, we must remove the GPL-3.0 code. If we choose to use the GPL-3.0 code, the entire repository must be re-licensed under GPL-3.0.
 
+I noticed that Lauren's f4rate github repo also uses this code while not changing the license. 
+
 I think the best option here is 2. Here are some other resources to convert between vcf to eigenstrat: https://ppp.readthedocs.io/en/latest/PPP_pages/Input_File_Generators/vcf_format_conversions.html 
 https://github.com/ACAD-UofA/Guide-to-manipulating-PLINK-EIG-and-VCF-files
 https://github.com/DReichLab/EIG/tree/master/CONVERTF 
