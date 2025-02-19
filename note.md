@@ -3,14 +3,38 @@
 I should include the text about the license into my MIT license. The licsense should indicate that The majority of this repository is licensed under the MIT License. However, some parts of this project include code under the Apache License 2.0.
 For details, see `LICENSES/APACHE-2.0.txt`. 
 
+Check if how previous repo did this -- example. 
 
 2) How to find the best k for findgraph: 
-  Based on the emprical studies and after talking with Lauren, my proposed workflow:
+  Based on the emprical studies and after talking with Lauren, my proposed workflow
 
-  Workflow 1: 
-    1) Run findgraphs from k = 0 to k = 2 (or even higher) for multiple times N 
-    2) Filter M best topologies from each N runs at each K level -- based on log-likelihood 
+  Workflow 1 (reference needed): 
+    1) Run findgraphs from k = 0 to k = 1 for multiple times N
+    2) Filter M (check emprical studies) best topologies from each N runs at each K level -- based on log-likelihood 
+      -estimate f-2 statistics first 
+      --> How to determine M? -> Lauren chose M=5. In "On the limits of", they mentioned not to choose the first graph but chose the first a few as the best graphs. 
+       -Compile all runs into a single replicate 
+       -"On the limits of ..." 
+       -Lauren chose a set of best graphs with the 10 log-likehood
+
     3) For the remaining M topologies at K's level, check WR. If WR smaller than certain level, then choose that. 
+      --> How to determine WR? 
+       -|WR| < 3 --> From "On the limits of ..." 
+
+    DeltaK method --> The best log-likehood drop. 
+
+    Write all the stuff in a markdown documents and push to the git repo 
+
+  Check the paper who cited Mainer et al. paper to see how they used their emprical data. 
+
+  Why or why not to use boostrap? If to use boostrap, which step should I apply? 
+  M and certain lebel of WR should be bsed on emprical studies  
+  
+  Whether to use boostrapping -- Undertsand how they did this. 
+    1. Time to run in my own dataset (then decide if to use this or not); Maier et al. paper (On the limits of ..., especially Appendix 2E for boostrapping procedure figure 3A, 3B, Supplementary materials 1.B.3; check how they analyzed their emprical data). 
+  
+  If k is bigger than 0, then I can reject the null hypothesis. K=0 to K=1 (cite https://journals.plos.org/plosgenetics/article?id=10.1371/journal.pgen.1010931#sec015). 
+  
   Workflow 2: 
     2) Run findgraphs from k = 0 to k = 2 with N times 
     3) Find if there is a big improvment in log-liklihood score 
@@ -18,7 +42,6 @@ For details, see `LICENSES/APACHE-2.0.txt`.
       --If no, follow the process in workflow 1 to determine the best fit graphs 
 
 3) Change SnaQ to run boostrap --> Done 
-  Depending on the number of findgraph to be run, maybe we want to increase the hmax of snaq as well? 
 
 4) Notes about AIC/BIC in Maier et al. (2023): The authors note that applying AIC and BIC is not straightforward for AGs, because the number of independent parameters in an AG is topology-dependent. It is not solely determined by the number of groups, drift edges, or admixture events. This issue means that previous studies that used AIC/BIC thresholds to reject models were often overly aggressive, assuming the models had the same number of degrees of freedom when in fact they did not​ 
 
