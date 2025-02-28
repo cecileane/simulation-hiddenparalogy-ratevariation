@@ -1,3 +1,42 @@
+# Feb 14 to Feb 19
+To-do list: 
+-Multi-process simulation_iqtree.jl --> Half done. Check the speed between using iqtree's own multi-processing and the speed in multi-processing in each rep. Multi-process the last part of simulation_iqtree.jl 
+-Multi-process snaq builing 
+-Finish literature review and send the notes. 
+
+Updates about find_graph workflow: 
+I created a workflor_findgraph.md in $root/notebook. Plan to have a detailed literature review over the weekends and send the workflow with reference earlier next week through Slack. 
+
+Question 1: 
+In Crawford paper, the average length for each UCE is 406 bp. Now, our seq-gen simulation is hard-coded to be 1000 base pair. I am wondering if we should change to 406bp since this is the estimate from emprical studies. --> keep as 1000 bp. 
+--> Check this README.md 
+
+Question 2: 
+Multi-processing. After running simulation_iqtree.jl with n_genes = 1145 and n_reps = 100, and it has been pretty slow. Since most of the processes are independent in n_reps, I think I should multi-process the process. I have a problem of sending my global arguments to all workers. 
+
+  Issue 1: Global parameters sometimes cannot be passed to all workers. 
+  Issue 2: Functions in utilities.jl sometimes cannot be passed to all workers. 
+
+a. shorten all my lines to less than 80 characters. 
+b. change all argumenst for simphy to a configuration file 
+c. pass arguments in .jl under julia interactive 
+
+ARGS = ["--dup_rate 0", "--loss_rate 0", "--ratevar N", "--seed_simphy 12345", "--n_reps 10", "--n_genes 10", "--threads 4"]
+
+1) Test simulation pipeline: 
+When dup_rate = 0, loss_rate = 0, ratevar = N, seed for simphy 12345 
+julia -p 8 scripts/simulation_iqtree.jl --dup_rate 0 --loss_rate 0 --ratevar N --n_reps 100 --n_genes 1145 --seed_simphy 12345 
+
+julia -p 8 scripts/simulation_iqtree.jl --dup_rate 0 --loss_rate 0 --ratevar N --n_reps 10 --n_genes 10 --seed_simphy 12345 
+
+When dup_rate = 0, loss_rate = 0, ratevar = G, seed for simphy 12345 
+julia -p 8 scripts/simulation_iqtree.jl --dup_rate 0 --loss_rate 0 --ratevar G --n_reps 100 --n_genes 1145 --seed_simphy 12345 
+
+After checking, I don't think simphy and seq-gen could be multi-threaded but 
+
+To do when test the pipeline: 
+1) iqtree.pl should be multi-threaded 
+
 # Feb 7 -- Feb 14 
 1) License issue: https://github.com/mathii/gdc/blob/master/LICENSE has Apache License 2.0. 
 I should include the text about the license into my MIT license. The licsense should indicate that The majority of this repository is licensed under the MIT License. However, some parts of this project include code under the Apache License 2.0.

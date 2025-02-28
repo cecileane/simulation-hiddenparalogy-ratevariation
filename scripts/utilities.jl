@@ -1,7 +1,3 @@
-using PhyloNetworks # Used in "replace_tips_with_letters" to get trees and networks 
-using StatsBase # Use the countmap function to find duplicated items
-using Random # Used to generate random seeds 
-
 #= Script to store utility functions 
 The below script has three parts 
 
@@ -20,6 +16,9 @@ Part 3 --> Other utilities functions
     F1: "check_existing_dir" -> check if a path exists and then decide to remove the path or not
     F2: "replace_tips_with_letters" -> Replace text tips with letters to both strings and Network/tree (used in scripts/speciestree.jl) 
 =# 
+using PhyloNetworks # Used in "replace_tips_with_letters" to get trees and networks 
+using StatsBase # Use the countmap function to find duplicated items
+using Random # Used to generate random seeds
 
 #-----------------------------------------------#       
 #               Part 1  
@@ -134,7 +133,7 @@ function modify_newicks(input::String, output::String)
             continue
         else
             push!(valid_lines, temp[2] * "\n")
-            println("Successfully modify $input !")
+            # println("Successfully modify $input !")
         end
     end
     
@@ -418,5 +417,4 @@ function write_boostrapTrees_2_Ind_filepath(file_path::String, output_dir::Strin
             println(io, tree_path) 
         end 
     end
-end 
-
+end

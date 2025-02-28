@@ -58,6 +58,7 @@ GetOptions( 'numboot=i' => \$numboot,
 	    'astraldir=s' => \$astraldir,
 	    'convert2phylip!' => \$convertphylip,
 	    'doastral!' => \$doastral,
+        'numCores=i' => \$numCores
     );
 
 die "seqdir not defined or not a directory" if (!(defined $seqdir) or !(-d $seqdir));
@@ -179,7 +180,7 @@ if ($convertphylip) {
 open FHlog, ">> $logfile" or die "Cannot open log file $logfile: $!\n";
 chdir($iqtreedir) or die ("can't go to iqtree directory $iqtreedir\n");
 my $iqtree_input = "$seqdir";
-my $iqtreecmd = "$iqtree -S $iqtree_input -m HKY+G -T 2 -pre gene -B 1000"; # hard-coded for now 
+my $iqtreecmd = "$iqtree -S $iqtree_input -m HKY+G -T $numCores -pre gene -B 1000"; # hard-coded for now 
 # In botany server, this could only be run with 2 cores. Increasing cores would cause a memery issues. The maximum cores to be used is 2 or otherwise iqtree will fail. 
 
 system($iqtreecmd);
