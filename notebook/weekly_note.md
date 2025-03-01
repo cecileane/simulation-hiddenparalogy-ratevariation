@@ -1,8 +1,30 @@
+# Feb 28 to March 7 
+Agenda for meeting: 
+--> Estimated running time for different steps of my pipeline. 
+
+-Having this project as a talk in the Evolution 
+  -> Too early to show 
+-How about the find_graph workflow? 
+
+---> find_graphs coding 
+Which graph could be comparing. 
+
+---> Sort the graph based on score, so k = 1 should have the best score. 
+---> Or we can compare the grand truth tree to all good graphs with k = 1, but it won't represent the reality. 
+---> However, this method has a biased sample. This means that we inferred the best graphs based on the data. Now, we are using the best-inferred graphs to fit the data. This is very circurlar, because we are using something estimated from the dataset itself to test how good they fit to the dataset. This could be the reason why in the discussion of Maier et al. they didn't talk about using their boostrap method to compare models between different complexity levels. Instead, they used the threshold in WR to compare with models with different complexity. 
+
+---> We should do the boostrapping method, to compare the best tree with graph with k = 1. 
+Save a threshold of 3, what if threshold of 4 --> save all the WR 
+
+---> Just do the boostrap for the best tree and the best graph with k = 1.  
+
+
+
 # Feb 14 to Feb 19
 To-do list: 
--Multi-process simulation_iqtree.jl --> Half done. Check the speed between using iqtree's own multi-processing and the speed in multi-processing in each rep. Multi-process the last part of simulation_iqtree.jl 
--Multi-process snaq builing 
--Finish literature review and send the notes. 
+-Multi-process simulation_iqtree.jl --> Half done. Check the speed between using iqtree's own multi-processing and the speed in multi-processing in each rep. Multi-process the last part of simulation_iqtree.jl -> Done. 
+-Multi-process snaq builing -> Need to fianlize 
+-Finish literature review and send the notes. -> done. 
 
 Updates about find_graph workflow: 
 I created a workflor_findgraph.md in $root/notebook. Plan to have a detailed literature review over the weekends and send the workflow with reference earlier next week through Slack. 

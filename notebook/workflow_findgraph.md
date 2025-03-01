@@ -13,12 +13,24 @@ Workflow 1:
 
 3. Pool all graphs from the same replicate together, then discard topologically redundant graphs within each replicate. To reduce searching time, we first merge graphs from all runs in the replicate first, and start to discard topologically redundant graphs. Then, we merge graphs from all replicates, and delete topologically redundant graphs iteratively. Hopefully this will reduce the number of total graphs. 
 
-3. Use qpgraph to find |WR| among the the remaining graphs, in set with both k = 0 and k = 1, if there is any graph with |WR| < 3se, then we set the lowst K as the number of K we found. Here, if k = 0 set has any graphs with |WR| <3, then no migration is found. If K = 1 has graphs with |WR| < 3 while k = 0 doesn't, then we find one migration. 
+Notes from Feb 28: When pooling all the graphs together, ideally most of the runs could have many redundant graphs compared to another runs, so it is very likely to throw a lot of graphs. Eespecially k = 0. Thus, it is less likely to have too many graphs. The final list would have 5 to 500 graphs. 
+
+4. Use qpgraph to find |WR| among the the remaining graphs, in set with both k = 0 and k = 1, if there is any graph with |WR| < 3se, then we set the lowst K as the number of K we found. Here, if k = 0 set has any graphs with |WR| <3, then no migration is found. If K = 1 has graphs with |WR| < 3 while k = 0 doesn't, then we find one migration. 
 
 This process is described in the discussion of Maier et al. about how to chose migration number. They mentioned a threshold of WR or LL should be decided to find the lowest K number which meet this threshold. Since we used LL to select the best graphs, here we could use |WR < 3| to select the K. This threshold is also widely used in many emprical studies (eg. Gutaker et al. 2020 using |f4-statistic z-scores| < 3 with qdgraph in AdmixtureTools1 and Flegontov et al. 2023 with findgraph in AdmixtureTools2, ) and Maire et al iteself. 
 
-4. Across all replications within a particular parameter setting, we can calculate how many replicates have falsely inferred K = 1, which is the type I error rate. We calculate the number of replicates which are correctly inferred as K = 0, which is our power. 
+If any graph places the outgroup not as the outgroup, then this graph is not possible. 
 
+If no graph has wr < 3, then migration is higher than one. 
+
+5. Across all replications within a particular parameter setting, we can calculate how many replicates have falsely inferred K = 1 or higher (of no graph with wr < 3), which is the type I error rate. We calculate the number of replicates which are correctly inferred as K = 0, which is the probability of if we can fit the graph correctly. This is not power, since power is the accept the alternative. 
+
+If we only want to know if we want to reject the null, we only need to do k = 0. 
+If we want to know what kind of graphs we could infer, we then need to do k = 0 and k = 1. 
+
+Let's see how long it takes to run K = 0. Let me code k = 0 first, and then test the speed. Have the code to run k = 0 or k = 1, separately. 
+
+--Double check the function of booststrapping. 
 
 Workflow 2: 
 1. In each replicate, run find_graphs for 100 times with K = 0 and K = 1 (same as workflow 1).  
@@ -44,12 +56,12 @@ Same K model comparison:
     d. A set of b score difference deltaj. 
     e. Boostrap confidence interval for difference in scores is given by the distribution of deltaj. 
     d. Compyte emprical boostrap p-values (see appdenix 2.e)
+
 Different K model comparison: 
 First, more complex models have more degree of freedom and could be over-fitted. 
-    a. Implement out-of-sample likelihood score, which have observed f3 and expected f3 statistics defined on mutually exclusive sets of SNP blocks. --> I need some help understanding this (appendix 2.e). 
+    a. Implement out-of-sample likelihood score, which have observed f3 and expected f3 statistics defined on mutually exclusive sets of SNP blocks. --> I need some help understanding this (appendix 2
 
-Workflow 3: 
-read this: https://pubmed.ncbi.nlm.nih.gov/33772284/ 
+The function for boostrap: https://uqrmaie1.github.io/admixtools/reference/qpgraph_resample_multi.html 
 
 
 
