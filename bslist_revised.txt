@@ -1,2 +1,0 @@
-output/DL0.01-RVG*L/raxml-outfiles/raxml-outfiles-DL0.01-RVG*L-2/bootstrap/RAxML_bootstrap.gene1
-output/DL0.01-RVG*L/raxml-outfiles/raxml-outfiles-DL0.01-RVG*L-2/bootstrap/RAxML_bootstrap.gene2

@@ -1,6 +1,9 @@
+
+
 # Feb 28 to March 7 
 Agenda for meeting: 
 --> Estimated running time for different steps of my pipeline. 
+    1. Estimate simulation_iqtree.jl, see output/
 
 -Having this project as a talk in the Evolution 
   -> Too early to show 
@@ -17,7 +20,6 @@ Which graph could be comparing.
 Save a threshold of 3, what if threshold of 4 --> save all the WR 
 
 ---> Just do the boostrap for the best tree and the best graph with k = 1.  
-
 
 
 # Feb 14 to Feb 19
