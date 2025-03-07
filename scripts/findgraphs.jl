@@ -1,10 +1,13 @@
 # This script documents using find_graphs to estimate graph 
 
-# SnaQ submission files 
-# This script call snaq_onedata.jl to run SnaQ. It allows to run specific replicate (red_start to rep_end). 
-
 using ArgParse 
-include("utilities.jl")
+using TimerOutputs 
+using Distributed
+include("utilities.jl") 
+@everywhere using include("utilities.jl")
+
+addprocs()
+const to = TimerOutput()  
 
 function parse_commandline()
     s = ArgParseSettings() 
@@ -39,7 +42,20 @@ function parse_commandline()
         help = "Paramater setting (gene loss rate) to run snaq"
         arg_type = Int
         default = 1
-    
+      "--processors"
+        help= "Number of processors to multi-process snaq"
+        arg_type = Int
+        default = nprocs() - 1 # -p will naturally add 1 to this maximum processors 
+      
+      # Specify arguments for findgraph: 
+      "--runs"
+        help = "Number of runs in findgraph"
+        arg_type = Int
+        required = true
+      "--seed_fingraph"
+        help = "Seed to run findgraph"
+        arg_type = Int
+        required = true
     end 
     
     parsed_args = parse_args(s)
@@ -60,6 +76,9 @@ n_reps = parsed_args["n_reps"]
 n_inds = parsed_args["n_inds"]
 rep_start = parsed_args["rep_start"]
 rep_end = parsed_args["rep_end"]
+runs = parsed_args["runs"]
+seed_findgraph = parsed_args["seed_findgraph"]
+processors = parsed_args["processors"]
 
 # set up folders: 
 paramname_root = "DUP$dup_rate-LOS$loss_rate-RV$ratevar-N_ind$n_inds" # Specify to find the folder
@@ -75,19 +94,21 @@ for simulation_rep in rep_start:rep_end
   push!(folder_path_list, rep_folder_path) 
 end 
 
-findgraph_folder_list = []
+snaqfolder_list = []
 index_length = rep_end - rep_start + 1 # see utilities.jl to match how we set up rep_start:rep_end, 
 for ind in 1:index_length 
-  findgraph_folder = setup_rep_output_folders(folder_path_list, ind, "findgraphfolder")
-  push!(findgraph_folder_list, findgraph_folder)
+  snaqfolder = setup_rep_output_folders(folder_path_list, ind, "snaqfolder")
+  push!(snaqfolder_list, snaqfolder)
 end 
-check_existing_dir(findgraph_folder_list) # see utilies.jl. 
+check_existing_dir(snaqfolder_list) # see utilies.jl. 
 
 #-----------------------------------------------#       
 #         Variant Calling + File Conversion
 #    Goal 1: snp-sites calls SNP from fasta files 
 #   Goal 2:  Convert VCF to eigenstrat using codes from https://github.com/mathii/gdc  
 #-----------------------------------------------# 
+
+# Notes: This part could be multi-processed with Distribured.jl 
 for ind in 1:index_length 
     # concatenated fasta files are stored in Rep$id/seqgenfolder
     seqgenfolder = setup_rep_output_folders(folder_path_list, ind, "seqgenfolder")
@@ -107,6 +128,8 @@ for ind in 1:index_length
     run(`python scripts/vcf2eigenstrat_modified_py3.py -v $(vcf_file) -o $(eigenstrat_file)`)
 
 end 
+
+
 
 
 

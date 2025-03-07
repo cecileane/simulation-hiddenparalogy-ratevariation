@@ -1,9 +1,68 @@
+# March 7 to March 14: 
+
+To-do list for this week: 
+1. Write find_graph codes 
+2. Think/write codes for SNaQ handling multiple individuals per taxa 
+3. Think of a workflow for the overall process: 
+    a. identify where seed could be implemented while not implemented already 
+        -> iqtree 
+        -> astral 
+        -> seq-gen
+        
+
+
+To do list after meeting: 
+1. Just use 1000 genes --> Need to remember this 
+2. Rename paras: 
+        max_iteration replaced with max_iteration_simphy --> Done. 
+        lower_threshold replaced with n_genes_min --> Done. 
+3. print host name in the .log in simulation_iqtree.jl and snaq_submit.jl --> Done. 
+4. For snaq: --> Need to remember this 
+    snaq_runs_H0 = 10 (bootnet runs)
+    sanq_runs_H1 = 10 (bootnet runs)
+    boostrapping replicate = 100 (for H0 and H1)
+
+5. Make sure SNaQ could handle more than more individual per taxa 
+If we are having more than 1 inds, check snaq tutorial. 
+
+6. Use stablerng instead of the unstable rng because random number generator changes from Julia version to verion --> Done. 
+
+7. Make a workflow of the overall simulation process --> Listed anywhere when using seeds 
+  1. Potentially have a graph 
+  2. List everything 
+  3. Think of a plan of a master seeds, which is different for every step but still could be repeated 
+
+Notes: 
+SNaQ: 
+If tells SNaQ to run multi-process, for example rep = 10 and runs = 10. SNaQ will only distribute runs, so if we have 10 runs then we never exceeds 10 runs. 
+
+For each time running the script, only give 10 processors and run with rep_start to rep_end. Or, we can have take the default processors from nproc() to runs. 
+
+Always have a few free processors. 
+
+5.  
+    In seed_generator --> Use stable RNG or know which version of Julia to be used. 
+    Because rng changed from julia version to version 
+    rng = Xoshiro(master_seed)
+    seeds = rand(rng, Int, n, m) # generates n x m seed array  
+
+6. seqgen seeds
+
+
+Meeting agenda: 
+1. Show estimation time 
+2. Go through SnaQ codes and discuss the multi-process pipeline 
+  -> quickly check the seed selecting method 
 
 
 # Feb 28 to March 7 
-Agenda for meeting: 
+Notes: The new PhyloNetworks v.1.0.0 doesn't have SnaQ so no writeCFTable function, so downgrade the PhyloNetworks to a previous version PhyloNetworks v0.16.4 and PhyloPlot v.1.0.1 Information see: https://groups.google.com/g/phylonetworks-users/c/sNxwXxhmDb4 --> This solved the issues for SnaQ 
+
+To do: 
 --> Estimated running time for different steps of my pipeline. 
     1. Estimate simulation_iqtree.jl, see output/
+    2. Estimate for snaq_submit.jl --> see the code. 
+--> Write find_graph codes --> doing 
 
 -Having this project as a talk in the Evolution 
   -> Too early to show 

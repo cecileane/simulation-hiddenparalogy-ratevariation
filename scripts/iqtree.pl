@@ -38,7 +38,7 @@ my $currentdir = `pwd`;
 chomp $currentdir; # remove new line at the end of the current path 
 my $boot = 1; # boot=0 is not implemented, in fact!
 my $numboot = 100;
-my $numCores = 6;
+my $numCores = 1; # The script got multi-processed through simulation_iqtree.jl 
 my $seqdir;   # directory where sequences are
 my $phylipdir;
 my $iqtreedir;

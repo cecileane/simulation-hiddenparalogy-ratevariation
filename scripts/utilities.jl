@@ -18,7 +18,7 @@ Part 3 --> Other utilities functions
 =# 
 using PhyloNetworks # Used in "replace_tips_with_letters" to get trees and networks 
 using StatsBase # Use the countmap function to find duplicated items
-using Random # Used to generate random seeds
+using StableRNGs # Used to generate stanble random seeds that won't change between julia versions
 
 #-----------------------------------------------#       
 #               Part 1  
@@ -181,13 +181,13 @@ Output: - A random_seed.txt file with n_reps x max_iterations random seeds in th
             Lines below: list n_rep and the seeds 
         - Return an array with all seeds
 """ 
-function seed_generator(master_seed::Int, n::Int, m::Int, output_dir::String) 
+function seed_generator(master_seed::Int, n::Int, m::Int, output_dir::String, output_file_name::String) 
 
-    rng = Xoshiro(master_seed)
-    seeds = rand(rng, Int, n, m) # generates n x m seed array 
+    rng = StableRNG(master_seed)
+    seeds = abs.(rand(rng, Int, n, m)) # generates n x m seed array with positive numbers only 
 
     # write all seeds to a random_seeds.txt file in the output_dir 
-    output_file = joinpath(output_dir, "random_seeds.txt")
+    output_file = joinpath(output_dir, output_file_name)
     rep = 1
     open(output_file, "w") do io
 

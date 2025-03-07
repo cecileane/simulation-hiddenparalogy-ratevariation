@@ -59,15 +59,24 @@ Same K model comparison:
 
 Different K model comparison: 
 First, more complex models have more degree of freedom and could be over-fitted. 
-    a. Implement out-of-sample likelihood score, which have observed f3 and expected f3 statistics defined on mutually exclusive sets of SNP blocks. --> I need some help understanding this (appendix 2
+    a. Implement out-of-sample likelihood score, which have observed f3 and expected f3 statistics defined on mutually exclusive sets of SNP blocks. --> I need some help understanding this (appendix 2). 
 
 The function for boostrap: https://uqrmaie1.github.io/admixtools/reference/qpgraph_resample_multi.html 
 
 
+# Paper: https://www.science.org/doi/10.1126/science.ade2833 
+**Seehausen, O., Meier, J. I., Marques, D. A., Wagner, C. E., Excoffier, L., & Malinsky, M. (2023). Cycles of fusion and fission enabled rapid parallel adaptive radiations in cichlid fishes. Science, 381(6656), eade2833. https://doi.org/10.1126/science.ade2833** 
+
+First, the phylogenetic inferrance of this paper is interesting. They used SNP data only and used IQ-tree to fast the speed. This part could be checked out later. 
+
+In their methods, the authors used admixture graph reconstruction to estimate the Congo-Nilotic admixture proportions in the Lake Victoria Region Superflock (LVRS). They applied the “qpgraph” function from the ADMIXTOOLS 2.0.0 R package, which models demographic history by incorporating both population drift and gene flow (admixture edges) into phylogenetic trees. To validate model robustness, the authors applied block bootstrapping. 
+
+This paper indeed uses the bootstrapping method to compare models with different complexity. In their supplementary materials Figure S13 C and D, they compared models with two and one admixture edges. They found that models with two edges have higher likelihood than models with one edge, but a model comparison based on block-bootstrapping reveals that this difference is not significant (p-value: 0.157).  
+
+This paper could be cited for using the block-bootstrapping method. 
 
 
-
-# Paper 1: 
+# Paper: 
 **Gutaker, R.M., Groen, S.C., Bellis, E.S. et al. Genomic history and ecology of the geographic spread of rice. Nat. Plants 6, 492–502 (2020). https://doi.org/10.1038/s41477-020-0659-6** 
 
 *Note*: This paper used qdgraph in admixturetool but not findgraphs in admixture. When they chose models, they used |f4-statistic z-scores| < 3. This is from qd_graph in admixturetools1. 
@@ -91,10 +100,10 @@ Since many models met this criterion, they grouped them into three major "topolo
 
 Supplementary 16 and 22 are important to understand the process: 
 In supplementary figures, from kd = 3 to kd = 8, they showed the summary of admixture graphs. Two things to notice: 
-	1)  Models with |f4-statistic z-scores |< 3  are chosen 
-	2) They summarized chosen models into three topology groups starting from kd = 5, which I don’t understand how do they summarized into three topology groups. 
+	1.  Models with |f4-statistic z-scores |< 3  are chosen 
+	2. They summarized chosen models into three topology groups starting from kd = 5, which I don’t understand how do they summarized into three topology groups. 
 
-# Paper 2: 
+# Paper: 
 **Flegontov, P., Işıldak, U., Maier, R., Yüncü, E., Changmai, P., & Reich, D. (2023). Modeling of African population history using f-statistics is biased when applying all previously proposed SNP ascertainment schemes. PLOS Genetics, 19(9), e1010931. https://doi.org/10.1371/journal.pgen.1010931** 
 
 *Notes*: They used the ADMIXTURETOOLS2 (using f4 statistics). In the paper, they argued that methods like find_graphs or TreeMix, which estimate AGs from SNPs, could be problematic due to Maier et al, saying that "f-statistics do not constrain even moderately complex topology spaces (e.g., graphs including 8–9 groups and 4–5 admixture events) well enough, and topologically diverse graphs often fit the data significantly better than true simulated histories." Instead, they used f4-statistics and qdAdm to fit AGs to calculated f4 statistics data. However, in one of their simulated datasets, they used findgraphs to find poorly fitted graphs and used them as poorly fitted AGs. 
