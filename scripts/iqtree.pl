@@ -38,6 +38,7 @@ my $currentdir = `pwd`;
 chomp $currentdir; # remove new line at the end of the current path 
 my $boot = 1; # boot=0 is not implemented, in fact!
 my $numboot = 100;
+my $seed_iqtree;
 my $numCores = 1; # The script got multi-processed through simulation_iqtree.jl 
 my $seqdir;   # directory where sequences are
 my $phylipdir;
@@ -51,6 +52,7 @@ my $iqtree = $currentdir . '/executables/iqtree2';
 
 # -------------- read arguments from command-line -----------------------
 GetOptions( 'numboot=i' => \$numboot,
+        'seed_iqtree=i' => \$seed_iqtree,
 	    'boot!' => \$boot,
 	    'numCores=i' => \$numCores,
 	    'seqdir=s' => \$seqdir,
@@ -180,7 +182,7 @@ if ($convertphylip) {
 open FHlog, ">> $logfile" or die "Cannot open log file $logfile: $!\n";
 chdir($iqtreedir) or die ("can't go to iqtree directory $iqtreedir\n");
 my $iqtree_input = "$seqdir";
-my $iqtreecmd = "$iqtree -S $iqtree_input -m HKY+G -T $numCores -pre gene -B 1000"; # hard-coded for now 
+my $iqtreecmd = "$iqtree -S $iqtree_input -m HKY+G -T $numCores --seed $seed_iqtree -pre gene -B 1000"; # hard-coded for now 
 # In botany server, this could only be run with 2 cores. Increasing cores would cause a memery issues. The maximum cores to be used is 2 or otherwise iqtree will fail. 
 
 system($iqtreecmd);

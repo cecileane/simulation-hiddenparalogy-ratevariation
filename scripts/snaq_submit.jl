@@ -143,7 +143,7 @@ seed_array = seed_generator(seed_snaq, n_reps, 4, outfolder, "random_seed_snaq.t
     seed_net1_bs = seed_array[ind_in_seed_array, 4] # net1 boostrapping 
         
     # run snaq_onedata.jl: 
-    run(`julia -p $processors ./scripts/snaq_onedata.jl --outfolder $outfolder --iqtreefolder $iqtreefolder --astralfolder $astralfolder --snaqfolder $snaqfolder --paramname_root $paramname_root --seed_net0 $seed_net0 --seed_net1 $seed_net1 --seed_net0_bs $seed_net0_bs --seed_net1_bs $seed_net1_bs --runs $runs --n_snaqboot_rep $n_snaqboot_rep --processors $processors`) 
+    run(`julia -p $processors ./scripts/snaq_1rep.jl --outfolder $outfolder --iqtreefolder $iqtreefolder --astralfolder $astralfolder --snaqfolder $snaqfolder --paramname_root $paramname_root --seed_net0 $seed_net0 --seed_net1 $seed_net1 --seed_net0_bs $seed_net0_bs --seed_net1_bs $seed_net1_bs --runs $runs --n_snaqboot_rep $n_snaqboot_rep --processors $processors`) 
     # Are both processors are important? Need to test 
   end
 end 

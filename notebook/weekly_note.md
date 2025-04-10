@@ -1,15 +1,40 @@
-# March 7 to March 14: 
+# Meeting on April 4th 
+1. Build master seeds based on parameter setting --> Done 
+2. Figure out the snp error 
+3. Check if the different seed setting in simulation_iqtree.jl could work --> Done and details about seed documentation is added to the documentation.md files. 
+4. Finish findgraph workflow
 
+Meetings: 
+1. Downgrade the admixtools version --> try 2.0.9 Lauren used v.2.0.4 
+2. Download Rcpp packages 
+3. Use a "hash" function to idnetify the topologically same networks 
+  Take the igraph and input the graph into julia 
+    change igraph between julia networks and adj_matrix 
+    Check two graphs with hash --> if two graphs with the same hashs, they tend to have LL scores. So double check if the LL score is the same. 
+4. Change result$worst_residuals to include the sign 
+
+To do list: 
+1. Use hash to remove duplicate graphs (miscfxns.jl) 
+2. Calculate worst_residuals 
+
+# Meeting on March 14th 
+1. Parameters setting: each paraemeter gets a prime number and the baseline is always 1, and the master seed is the product of all. Document that the master used is specific to the used of the parameter setting. 
+2. Fingure out the error: 
+  -> Have toy dataset with first 10 SNPs, and then change the value in the toy .geno dataset to see what happened 
+  -> In the R package, search the error message to see what part of the code is doing this.
+
+
+# March 7 to March 14: 
 To-do list for this week: 
-1. Write find_graph codes 
+1. Write find_graph codes --> Question about .geno files 
 2. Think/write codes for SNaQ handling multiple individuals per taxa 
+  -> Not done 
 3. Think of a workflow for the overall process: 
     a. identify where seed could be implemented while not implemented already 
         -> iqtree 
         -> astral 
         -> seq-gen
-        
-
+4. Random thoughts: polypoidy and f statistics 
 
 To do list after meeting: 
 1. Just use 1000 genes --> Need to remember this 

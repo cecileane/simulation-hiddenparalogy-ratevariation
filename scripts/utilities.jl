@@ -15,10 +15,12 @@ Part 2 --> A group of helper functions to re-run simphy simulation and modify ne
 Part 3 --> Other utilities functions 
     F1: "check_existing_dir" -> check if a path exists and then decide to remove the path or not
     F2: "replace_tips_with_letters" -> Replace text tips with letters to both strings and Network/tree (used in scripts/speciestree.jl) 
+    F3: "replace_pop_inInd_files" -> Replace "POP" from the output ind file to make each sample is mapped to a unique population ID
 =# 
 using PhyloNetworks # Used in "replace_tips_with_letters" to get trees and networks 
 using StatsBase # Use the countmap function to find duplicated items
 using StableRNGs # Used to generate stanble random seeds that won't change between julia versions
+using Primes # use "nextprimes()" function to get the next prime bigger than a number 
 
 #-----------------------------------------------#       
 #               Part 1  
@@ -184,23 +186,20 @@ Output: - A random_seed.txt file with n_reps x max_iterations random seeds in th
 function seed_generator(master_seed::Int, n::Int, m::Int, output_dir::String, output_file_name::String) 
 
     rng = StableRNG(master_seed)
-    seeds = abs.(rand(rng, Int, n, m)) # generates n x m seed array with positive numbers only 
+    seeds = abs.(rand(rng, Int32, n, m)) # generates n x m seed array with positive numbers only 
 
     # write all seeds to a random_seeds.txt file in the output_dir 
     output_file = joinpath(output_dir, output_file_name)
     rep = 1
     open(output_file, "w") do io
+        for j in 1:m
+            print(io, j == m ? "col$j\n" : "col$j\t") # if j is the last then separate by a new line
+        end
 
-        # First line shows the master seed, also the seed used for initilizing simphy simulation: 
-        write(io, "master seeds: $master_seed , used to generate all seeds below and initilizing simphy\n") 
-        # Second line all columns, each one specify the seeds used for each iteration across all reps: 
-        iterations = collect(1:m)  # Create an array from 1 to max_iteration
-        write(io, "Iterations from: " * join(iterations, "  ") * "\n")
-        # Then, it list rows of seed for all reps: 
-        for row in eachrow(seeds)
-            rep_id = "seeds for rep $rep"
-            write(io, "$rep_id: " * join(row, ",") * "\n")
-            rep += 1
+        for i in 1:n
+            for j in 1:m
+                print(io, j == m ? "$(seeds[i, j])\n" : "$(seeds[i, j])\t") # if j is the last then separate by a new line
+            end
         end
     end
     return seeds
@@ -418,3 +417,119 @@ function write_boostrapTrees_2_Ind_filepath(file_path::String, output_dir::Strin
         end 
     end
 end
+
+"""
+A function to replace occurrences of "POP" in a file with the corresponding letter extracted from the first column.
+    Input: 
+        - input_file: File path to a .ind file where the third column may contain "POP"
+        - output_file: The output file path
+    Return: 
+        - A new file with updated values in the third column 
+            EX: If first col "A_0", then the assigned pop is A 
+                If first col "A_1", then the assigned pop is also A 
+            This is because A_0 and A_1 are accessions from the same pop
+This function is used to process .ind input files where "POP" is a placeholder for group labels based on the first column.
+"""
+function replace_pop_inInd_file(input_file::String, output_file::String)
+    open(input_file, "r") do infile
+        open(output_file, "w") do outfile
+            for line in eachline(infile)
+                fields = split(line, '\t')
+                if length(fields) != 3
+                    error("Check $(input_file) -> .ind format should have three columns")
+                end 
+                if fields[3] != "POP"
+                    error("Check $(input_file) -> .ind format has last column in \'POP\'")
+                end 
+                fields[3] = split(fields[1], '_')[1]  # Extract the letter before "_"
+                println(outfile, join(fields, '\t'))
+            end
+        end
+    end
+end
+
+"""
+Generate a dictionary of stable random seeds for each software name using a given master seed.
+Inputs:
+    - master_seed(Int): The initial master seed
+    - software_names(Vector{String}): A list of software names that require unique seeds.
+Returns
+    A dictionary where keys are software names and values are stable integer seeds.
+Example: 
+    master_seed = 123456
+    software_names = ["SimPhy", "RAxML", "Astral", "SeqGen"]
+    software_seeds = generate_software_seeds(master_seed, software_names)
+"""
+function generate_software_seeds(master_seed::Int, software_names::Vector{String})
+    rng = StableRNG(master_seed) 
+    seeds = abs.(rand(rng, Int, length(software_names)))  
+    return Dict(software_names[i] => seeds[i] for i in eachindex(software_names))
+end
+
+"""
+generate_master_seed(params::Dict{String, Int})
+Generate a master seed based on given parameter values. The parameters can be:
+    - continuous values (e.g., 0.01, 0.0001) → encoded by assigning digits after the decimal point to primes.
+    - categorical values → mapped manually using `category_map` (hard coded inside the function)
+Returns an `Int` seed, which is the product of prime values corresponding to the parameter settings.
+"""
+function generate_master_seed(params::Dict{String, Any})
+
+    digit_to_prime = Dict('0'=>2, '1'=>3, '2'=>5, '3'=>7, '4'=> 11, '5'=>13, '6'=>17, '7'=>19, '8'=>23, '9'=>29)
+    category_map = Dict("ratevar" => Dict("N"=>37, "G"=>41, "LG"=>43, "GL" => 43, "G*L" => 43))
+    master_seed = big(1)  # big to prevent large integer overflow 
+    prime = 1 # prime starts from 1 
+
+    for (param, value) in params
+        
+        if haskey(category_map, param) # If the parameter is in category_map 
+            prime = category_map[param][value]
+
+        elseif isa(value, Float64) || isa(value, Float32) # If the parameter takes a number   
+            splitted_number = split(string(value), '.') # split the string based on the decimal dot
+
+            if length(splitted_number) > 1 
+                digits_after_decimal_place = splitted_number[2]  
+                for ch in digits_after_decimal_place
+                    prime *= digit_to_prime[ch]
+                end
+            else 
+                digits_before_decimal_place = splitted_number[1]
+                for ch in digits_before_decimal_place
+                    prime *= digit_to_prime[ch] 
+                end 
+            end
+
+        elseif isa(value, Int)
+            prime = nextprime(value) # nextprime assigns a prime number which is bigger than the value
+        else
+            error("Oh no something is wrong with the parameters setting. Unable to generate master seed")
+        end   
+        master_seed *= prime
+    end
+    return Int(master_seed) # change to integer because generate_software_seeds only takes integers 
+end
+
+"""
+Function to get the dictionary for setting up the master seed
+    Params: The parameters are based on the string "paramname_root", see simulation_iqtree.jl 
+        Note: The parts and params are hard-coded. 
+    Return: output will be directly used as the input for the function generate_master_seed(params)
+"""
+function get_dict_for_seed_setting(params_string::String) 
+
+    parts = split(params_string, "-")
+
+    dup_rate = parse(Float32, split(parts[1], "DUP")[2])
+    loss_rate = parse(Float32, split(parts[1], "DUP")[2])
+    ratevar = split(parts[3],"RV")[2]
+    N_ind = parse(Int, split(parts[4],"N_ind")[2])
+
+    params = Dict{String, Any}(
+           "dup_rate" => dup_rate,
+           "LOSS_RATE" => loss_rate,
+           "ratevar" => ratevar, 
+           "n_inds" => N_ind)
+
+    return params 
+end 

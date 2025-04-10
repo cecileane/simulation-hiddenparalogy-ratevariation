@@ -1,8 +1,25 @@
+# Documentation for seed generators 
+Step 1: A master_seed is generated based on each unique combination of parameter settings (dup_rate, loss_rate, ratevar, n_inds) 
+Step 2: Each software gets its own seed generated from this master_seed using stableRNG to make sure it is reproducible. 
+Step 3: Then, each seed_"software" gets a seed_array (m x n) generated from stableRNG, which will be used for different runs (or iterations). 
+    In simulation_iqtree.jl: 
+        1. seed_simphy: 
+            For seed_simphy, a seed_array (m x n) is used for different replicate (n_reps = m) and different iteration (n_iterations = n) (details see simulation_iqtree.jl and utilities.jl) 
+            Seeds used are stored in "random_seed_simphy.txt" 
+        2. seed_seqgen: 
+            For seed_seqgen, a seed_array (m x 1) is used each replicate (n_reps = m) 
+            Seeds used are stored in "random_seed_seqgen.txt" 
+        3. seed_iqtree: 
+            For iqtree, a seed_array (m x 1) is used each replicate (n_reps = m) 
+            Seeds used are stored in "random_seed_iqtree.txt" 
+        PS: Astral, which is also used in simulation_iqtree.jl, is deterministic, so no seed used. 
+    In findgraphs.jl: 
+        1. The master_seed (step one) based on parameter setting is used to generate a seed_findgraphs. Then, a seed_array is generated with m (=num of replicate) x 2 (num_admix = 0 and 1) dimension. When running findgraphs in findgraphs_1rep.R, seed_array[m, 1] is used for m replicate and num_admix = 0, seed_array[m, 2] for num_admix = 1. 
+    
+     
 # Documentation for reasoning behind findgraph 
-
 Workflow 1: 
 1. In each replicate, run find_graphs for 100 independent runs with K = 0 and K = 1.
-
     Reasoning: 
     a. In Maier et al. for their simulation dataset, they knew the real K and they tested with n-1, n and n+1. This is also used in another study with simulated data (Flegontov et al. 2023). Here, we know our tree with k = 0, and we only want to reject the null hypothesis k = 0, so running with k = 0 and k = 1 is probably okay. 
     b. 100 independent runs is used in Maier et al. 
