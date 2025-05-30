@@ -101,9 +101,12 @@ n_genes_min = n_genes * min_gene_porportion  # After reaching max_iteration_simp
   then the substitution rate per generation = 0.0100947 / CU / 2 * Ne
 =# 
 # Parameteres could be checked from speciestree.jl 
-global_sub_rate = 0.0100947 
+
+# Global substitution rate multiplier: 
+global_sub_rate = 0.341315346400343 
 global_CU = 17.48 
-global_sub_rate_per_generation = global_sub_rate / global_CU / (2 * Ne) # substitution rate per generation
+global_sub_rate_per_generation = global_sub_rate / (global_CU * (2 * Ne))
+# Substitution rate multiplier for each branch: 
 
 
 
@@ -160,7 +163,7 @@ conf_content = read(master_conf, String) # read the master config file into a st
 
 #Set up the parameters
 parameters = ""
-parameters *= "-sp f:2$Ne //Population size\n" 
+parameters *= "-sp f:$Ne //Population size\n" 
 
 # To simulate different gene duplication and loss rates
 if dup_rate != 0 # if dup_rate is 0 then no -lb parameter 
@@ -179,7 +182,8 @@ end
 if occursin("L", ratevar) # add tree with variation across lineages
   parameters *= "-s (A:3.44*0.0100947,((((B:0.88*0.0042057,C:0.88*0.0036776):1.71*0.0078509,(D:0.93*0.0235933,E:0.93*0.0199793):1.66*0.0079913):0.17*0.0068836,F:2.76*0.0067212):0.18*0.0098089,(G:0.5*0.0797969,H:0.5*0.1796924):2.44*0.0190487):0.5*0.0694588); // tree with lineage variation\n"
 else 
-  parameters *= "-s (A:3.44,((((B:0.88,C:0.88):1.71,(D:0.93,E:0.93):1.66):0.17,F:2.76):0.18,(G:0.5,H:0.5):2.44):0.5); // tree without lineage variation\n"
+  # parameters *= "-s (A:3.44*0.019526049565237014,((((B:0.88*0.019526049565237014,C:0.88*0.019526049565237014):1.71*0.019526049565237014,(D:0.93*0.019526049565237014,E:0.93*0.019526049565237014):1.66*0.019526049565237014):0.17*0.019526049565237014,F:2.76*0.019526049565237014):0.18*0.019526049565237014,(G:0.5*0.019526049565237014,H:0.5*0.019526049565237014):2.44*0.019526049565237014):0.5*0.019526049565237014); // tree without lineage variation\n"
+  parameters *= "-s (A:3.44*$global_sub_rate_per_generation,((((B:0.88*$global_sub_rate_per_generation,C:0.88*$global_sub_rate_per_generation):1.71*$global_sub_rate_per_generation,(D:0.93*$global_sub_rate_per_generation,E:0.93*$global_sub_rate_per_generation):1.66*$global_sub_rate_per_generation):0.17*$global_sub_rate_per_generation,F:2.76*$global_sub_rate_per_generation):0.18*$global_sub_rate_per_generation,(G:0.5*$global_sub_rate_per_generation,H:0.5*$global_sub_rate_per_generation):2.44*$global_sub_rate_per_generation):0.5*$global_sub_rate_per_generation); // tree without lineage variation\n"
   # If ratevar doesn't contain L (G and N), then add tree without variations across lineages 
 end
 
@@ -190,6 +194,8 @@ end
 
 # Store all parameters into one string, which will be updated in the below loop
 simphy_conf_content = parameters * conf_content # combine parameters with master config
+
+print(simphy_conf_content) # print the content to check if everything is correct
 
 #-----------------------------------------------#       
 #  Push global params to all processors
@@ -261,6 +267,7 @@ Output:
   # modify newick string within one rep 
   simphy_output = joinpath(output_dir, "1")
   modify_newick_for_n_genes(simphy_output, final_modified_trees_output, batch, iteration)  # see utilities.jl 
+
 end 
 
 """
