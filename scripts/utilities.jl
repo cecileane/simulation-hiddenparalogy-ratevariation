@@ -533,3 +533,22 @@ function get_dict_for_seed_setting(params_string::String)
 
     return params 
 end 
+
+using PhyloNetworks
+using Statistics  # For the median function
+
+"""
+median_branch_length(tree::HybridNetwork) -> Float64
+
+Compute the median branch length of a phylogenetic tree or network.
+
+# Arguments
+- tree::HybridNetwork: A phylogenetic tree or network object from PhyloNetworks.
+
+# Returns
+- Float64: The median of the branch lengths.
+"""
+function median_branch_length(tree::HybridNetwork)
+    branch_lengths = [e.length for e in tree.edge if !ismissing(e.length)]
+    return median(branch_lengths)
+end

@@ -34,8 +34,6 @@ const to = TimerOutput()
 function parse_commandline()
   s = ArgParseSettings() 
   @add_arg_table s begin 
-
-    # Specify parameters for SimPhy: 
     "--dup_rate"
       help = "Gene duplication rate: specify the gene duplication rate, if 0, then no duplication"
       arg_type = Float64
@@ -63,6 +61,10 @@ function parse_commandline()
       help = "Number of individuals/accessions per species (Default = 1)"  
       arg_type = Int
       default = 1
+    "--Ne"
+      help = "Effective population size (Default = 1000)"
+      arg_type = Int
+      default = 1000
     "--max_iteration_simphy"
       help = "Maximum iteration to re-run simphy to get enough gene trees"
       arg_type = Int
@@ -86,9 +88,27 @@ ratevar = parsed_args["ratevar"] # "N", "G", "L" or "GL" or "G*L" to include gen
 n_reps = parsed_args["n_reps"] # number of replicates 
 n_genes = parsed_args["n_genes"] # number of genes 
 n_inds = parsed_args["n_inds"] # Number of individuals per taxa -- default = 1
+Ne = parsed_args["Ne"] # Effective population size, default = 1000 
 max_iteration_simphy = parsed_args["max_iteration_simphy"] # Maximum number of iteration of re-running simphy 
 min_gene_porportion = parsed_args["min_gene_porportion"] # Percentage * n_genes =  n_genes_min, the mimum number of gene trees in each rep 
 n_genes_min = n_genes * min_gene_porportion  # After reaching max_iteration_simphy, -only if num of genes > n_genes_min --> proceed  
+
+#--------------- Calculate substition rates ---------------#
+#= 
+  Based on speciestree.jl, the substitution rate is set to 0.0100947
+  substitution rate per coalescent unit = 0.019526049565237014 
+  Assume if there are 2Ne generations 
+  then the substitution rate per generation = 0.0100947 / CU / 2 * Ne
+=# 
+# Parameteres could be checked from speciestree.jl 
+global_sub_rate = 0.0100947 
+global_CU = 17.48 
+global_sub_rate_per_generation = global_sub_rate / global_CU / (2 * Ne) # substitution rate per generation
+
+
+
+
+
 
 #--------------- Set up configuration ---------------# 
 # Check if ratevar belongs to the following: 
@@ -140,6 +160,7 @@ conf_content = read(master_conf, String) # read the master config file into a st
 
 #Set up the parameters
 parameters = ""
+parameters *= "-sp f:2$Ne //Population size\n" 
 
 # To simulate different gene duplication and loss rates
 if dup_rate != 0 # if dup_rate is 0 then no -lb parameter 
@@ -147,7 +168,7 @@ if dup_rate != 0 # if dup_rate is 0 then no -lb parameter
 end
 if loss_rate != 0 # if loss_rate is 0 then no -ld paramater
   parameters *= "-ld f:$loss_rate // gene loss rate\n" 
-end
+end 
 
 # To simulate substitution rate variation
 if occursin("G", ratevar) # gene-family-speciic rate heterogenity : "G" or "GL" or "G*L"
@@ -183,6 +204,7 @@ simphy_conf_content = parameters * conf_content # combine parameters with master
 @everywhere global rootfolder = $rootfolder
 @everywhere global n_genes_min = $n_genes_min
 @everywhere global n_reps = $n_reps
+@everywhere global Ne = $Ne 
 
 #-----------------------------------------------#       
 #  run SimPhy + modify newick strings 
@@ -224,7 +246,7 @@ Output:
   -> Modify simphy-generated trees based on the criteria above and output to final_output_per_rep 
 """
 
-@everywhere function rerun_simphy_1rep_1int(batch::Int, simulation_rep::Int, seed::Int, iteration::Int, output_dir::String, simphy_conf_content::String, final_modified_trees_output::String, rootfolder::String) 
+@everywhere function rerun_simphy_1rep_1int(batch::Int, simulation_rep::Int, seed::Int32, iteration::Int, output_dir::String, simphy_conf_content::String, final_modified_trees_output::String, rootfolder::String) 
   # Goal 1: run simphy with n_rep = 1
   updated_parameters = """
   -cs $seed  // seed # Update the seed
@@ -274,7 +296,9 @@ Inputs:
   while iteration <= max_iteration_simphy
 
     # seed for this rep and this int 
-    current_seed = seed_array[simulation_rep, iteration] # see utilities.jl 
+    current_seed = seed_array[simulation_rep, iteration] # see utilities.jl
+    print(current_seed) 
+
     
     # this rep has enough genes already, skip and break the while-loop 
     if enough_genes_status

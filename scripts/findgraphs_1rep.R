@@ -1,9 +1,10 @@
-# Script to run findgraphs for one replicate
+# R script to run each individual replicate with n runs 
 
 library(admixtools)
 library(optparse)
 library(dplyr)
 library(tidyverse)
+library(Rcpp)
 
 option_list <- list(
   make_option(c("-i", "--input_dir"), type = "character", default = NULL,
@@ -21,20 +22,23 @@ option_list <- list(
   make_option("--runs", type = "integer", default = 100,
               help = "Number of times to run find_graphs"),
   make_option(c("-b", "--blgsize"), type = "integer", default = 300,
-              help = "Block sizes used in findgraphs"),
-  make_option(c("-r", "--simulation_rep"), type = "integer",
+              help = "Block sizes used in find_graphs"),
+  make_option(c("-r", "--rep_id"), type = "character",
               help = "Replication ID for printing and result saving"),
   make_option(c("-s", "--seed_file_path", type = "string",
                 help = "A path to the seed file to be used")),
   make_option("--output_graph_suffix", type = "character",
-                default = "_graphs.rds",
-                help = "Suffix to the output graphs files"),
+              default = "_graphs.rds",
+              help = "Suffix to the output graphs files"),
   make_option("--output_f2_suffix", type = "character",
-                default = "_f2.rds",
-                help = "Suffix to the output graphs files"),
+              default = "_f2.rds",
+              help = "Suffix to the output graphs files"),
   make_option("--output_summary_table_suffix", type = "character",
-                default = "_summary_table.txt",
-                help = "Suffix to the table outputs")
+              default = "_summary_table.txt",
+              help = "Suffix to the table outputs"),
+  make_option("--rootfolder", type = "character",
+              default = "__use_cwd__",
+              help = "rootfolder to save any warnings")
 )
 
 #-------------- Parse options --------------#
@@ -48,17 +52,21 @@ outgroup <- opt$outgroup
 num_admix <- opt$num_admix
 stop_gen <- opt$stop_gen
 runs <- opt$runs
-simulation_rep <- opt$simulation_rep
+rep_id <- opt$rep_id
 blgsize <- opt$blgsize
 seed_file_path <- opt$seed_file_path
 output_graph_suffix <- opt$output_graph_suffix
 output_f2_suffix <- opt$output_f2_suffix
 output_summary_table_suffix <- opt$output_summary_table_suffix
+rootfolder <- opt$rootfolder
+if (rootfolder == "__use_cwd__") {
+  rootfolder <- getwd()
+}
 
 input_prefix <- file.path(input_dir, prefix)
-output_graph_file <- file.path(output_dir, paste0("rep", simulation_rep, "_admix", num_admix, output_graph_suffix)) # nolint
-output_graph_f2 <- file.path(output_dir, paste0("rep", simulation_rep, "_admix", num_admix, output_f2_suffix))  # nolint
-output_summary_table <- file.path(output_dir, paste0("rep", simulation_rep, "_admix", num_admix, output_summary_table_suffix)) # nolint 
+output_graph_file <- file.path(output_dir, paste0("rep", rep_id, "_admix", num_admix, output_graph_suffix)) # nolint
+output_graph_f2 <- file.path(output_dir, paste0("rep", rep_id, "_admix", num_admix, output_f2_suffix))  # nolint
+output_summary_table <- file.path(output_dir, paste0("rep", rep_id, "_admix", num_admix, output_summary_table_suffix)) # nolint
 
 #------------ set up seeds --------------#
 seed_array_two_columns <- read.table(seed_file_path, header = TRUE)
@@ -68,12 +76,6 @@ if (num_admix == 0) { # if num_admix = 0, then use the first column
 } else { # if num_admix = 1, then use the second column
   seed_array <- seed_array_two_columns[, 2]
 }
-
-# # Determine block length from last line in .snp file
-# last_line_in_snp <- tail(read.csv(paste0(prefix,".snp"),
-#                           sep = "\t",header = FALSE),n = 1)
-# blgsize <- as.integer(strsplit(last_line_in_snp[[1]],
-#                                   split = " +")[[1]][4]) + 1)
 
 #-------------- Create f2 statistics --------------#
 f2 <- f2_from_geno(pref = input_prefix,
@@ -97,39 +99,44 @@ f2 <- f2_from_geno(pref = input_prefix,
 #' @return A named list ("graph_lst") where each element corresponds to a run
 #'         and contains a list of top-scoring graphs. Each graph is represented
 #'         as a list with two elements: "$graphs" (the igraph object),and
-#'         "$scores" (the log-likelihood score).
+#'         "$score" (the log-likelihood score).
 #'
 #' @examples
 #' result <- run_find_graphs_replicate(f2,num_admix = 1,stop_gen = 100,
 #'                                     initgraph = g,outgroup = "A",
 #'                                     runs = 100,rep = 1)
-#' result[["run1"]][[1]]$graphs  # Access the first graph from run 1
-#' result[["run1"]][[1]]$scores  # Get its score
-run_find_graphs_replicate <- function(f2, num_admix, stop_gen, outgroup, runs, simulation_rep, seed_array) { # nolint
+#' result[["run1"]][[1]]$graph  # Access the first graph from run 1
+#' result[["run1"]][[1]]$score  # Get its score
+run_find_graphs_replicate <- function(f2, num_admix, stop_gen, outgroup, runs, rep_id, seed_array) { # nolint
 
   graph_lst <- list()
 
   for (i in 1:runs) {
 
-    set.seed(seed_array[simulation_rep]) # set seed for specific
+    # rep_id is used to specify the output file name (string)
+    # rep is used to index seed array (int)
+    rep <- as.integer(rep_id)
+    set.seed(seed_array[rep]) # set seed for specific
 
-    message(paste0("Running find_graphs for rep ", simulation_rep, " at run ", i)) # nolint
+    message(paste0("Running find_graphs for rep ", rep_id, " at run ", i)) # nolint
 
     opt_results <- find_graphs(f2, numadmix = num_admix,
                               stop_gen = stop_gen, # nolint
                               outpop = outgroup)
+
     # Select top 5 graphs with lowest LL score
     Top5_graphs_per_run <- opt_results %>% dplyr::slice_min(score, n = 5, with_ties = TRUE) # nolint
     # create a list for top 5 graphs per run -> examples:
     # To extract the 1st graph top5_graphs_list_per_run[[1]]$graphs
     # To extract the 1st graph's score top5_graphs_list_per_run[[1]]$scores
     top5_graphs_list_per_run <- lapply(1:nrow(Top5_graphs_per_run), function(j) { # nolint
-          list(graphs = Top5_graphs_per_run$graph[[j]], # nolint
-               scores = Top5_graphs_per_run$score[j],
-               rank = j)}) # rank: rank of the graph based on score in each run
+          list(graph = Top5_graphs_per_run$graph[[j]], # nolint
+               score = Top5_graphs_per_run$score[j],
+               rank = j, # rank: rank of the graph based on score in each run
+               run_id = i)})
 
     graph_lst[[paste0("run", i)]] <- top5_graphs_list_per_run
-  cat("Finishing findgraphs for rep", simulation_rep, "with", runs, "runs.\n") # nolint
+  cat("Finishing findgraphs for rep", rep_id, "with", runs, "runs.\n") # nolint
   }
   return(graph_lst)
 }
@@ -139,64 +146,98 @@ graph_lst <- run_find_graphs_replicate(f2 = f2,
                                       stop_gen = stop_gen,
                                       outgroup = outgroup,
                                       runs = runs,
-                                      simulation_rep = simulation_rep,
+                                      rep_id = rep_id,
                                       seed_array = seed_array)
 
 #-------------- Remove duplicated graphs --------------#
-#' Remove topologically redundant graphs from a list of runs
+#' Add hash values to each graph in a list of graph search results
 #'
-#' @param graph_lst A list of runs,each containing a list of top-scoring graphs
-#'        with components "$graphs" and "$scores".
+#' This function loops over a nested list of results from find_graphs,
+#' It finds a hash for each graph using `graph_hash()`, and appends it
+#' as a $hash to each graph entry.
+#' Graphs with the same hash are believed to be topologically similar
 #'
-#' @return List of unique graphs with "$graph","$score","$run", and "$topo_key"
+#' @param graph_lst A nested list: each element corresponds to a run
+#' (e.g., "run1") and contains a list of graph results,
+#' each with `$graph`, `$score`, and `$rank`.
 #'
-#' @examples
-#' dedup_graphs <- deduplicate_graphs(graph_lst)
-#' dedup_graphs[[1]]$graph  # igraph object
-#' dedup_graphs[[1]]$score  # score
-#' dedup_graphs[[1]]$run    # run number
-deduplicate_graphs <- function(graph_lst) {
-  all_graphs <- list()
-  index <- 1
+#' @return The same `graph_lst` structure,
+#' but with an added `$hash` field for each graph.
 
-  for (run_name in names(graph_lst)) { # get repID-runID
-    run_graphs <- graph_lst[[run_name]]
-    run_number <- as.integer(gsub("run", "", run_name))
-
-    for (g in run_graphs) {
-      # graph_lst[[runs]] --> Each run saves a list of 5(+) graph object
-      # all_graph --> all_graphs[[i]] stores a list of the graph object
-      all_graphs[[index]] <- list(
-        graph = g$graphs,
-        score = g$scores,
-        rank = g$rank,
-        run = run_number
-      )
-      index <- index + 1 # number of graphs across all runs in this rep
+add_hashes_to_graph_lst <- function(graph_lst) {
+  for (run_name in names(graph_lst)) {
+    for (i in seq_along(graph_lst[[run_name]])) {
+      graph_obj <- graph_lst[[run_name]][[i]]$graph
+      graph_hash_val <- graph_hash(graph_obj)
+      graph_lst[[run_name]][[i]]$hash <- graph_hash_val
     }
   }
-
-  get_topology_key <- function(graph) {
-    # create an unique string for each graph topology
-    edges <- igraph::as_edgelist(graph, names = TRUE)
-    edge_str <- apply(edges, 1, function(x) paste(x[1], x[2], sep = "->"))
-    paste(sort(edge_str), collapse = ";") # sort edges so we can compare
-  }
-
-  topo_keys <- sapply(all_graphs, function(x) get_topology_key(x$graph))
-  unique_indices <- !duplicated(topo_keys)
-  unique_graphs <- all_graphs[unique_indices]
-
-  for (i in seq_along(unique_graphs)) {
-    # store topology key as metadata
-    unique_graphs[[i]]$topo_key <- topo_keys[unique_indices][i]
-  }
-
-  return(unique_graphs)
+  return(graph_lst)
 }
 
-#' Organize Worst Residual LL-scores Outputs
+#' Remove duplicate graphs based on hash and likelihoood scores
 #'
+#' This removes graphs with duplicate topology (same has from graph_hash)
+#' across runs, while checking for consistency in likelihood scores.
+#' If two graphs have the same hash (they are believed to be topologically
+#' identitcal) but scores that differ more than a tolerance, an error will
+#' be raised.
+#'
+#' @param graph_lst A list of graphs (output from 'run_find_graphs_replicate'),
+#' potentially with duplicates.
+#' @param score_tol Numeric. Allowed difference in log-likelihood scores for
+#' graphs with identical topology. Default = 1e-6.
+#'
+#' @return A new graph_lst with duplicates removed
+#' @notes This function is called within ''
+remove_duplicate_graphs <- function(graph_lst, rootfolder, score_tol = 1e-6) {
+  
+  graph_lst <- add_hashes_to_graph_lst(graph_lst)
+
+  hash_seen <- list()
+  unique_graph_lst <- list()
+
+  # Save warnings to file
+  warning_log_path <- file.path(rootfolder, "findgraph_warnings.txt")
+  warning_file <- file(warning_log_path, open = "at")
+
+  for (run_name in names(graph_lst)) {
+    for (graph_info in graph_lst[[run_name]]) {
+      h <- graph_info$hash
+      score <- graph_info$score
+      rank <- graph_info$rank
+
+      if (!h %in% names(hash_seen)) {
+        graph_info$run_id <- run_name
+        hash_seen[[h]] <- list(score = score, graph_info = graph_info)
+        unique_graph_lst[[length(unique_graph_lst) + 1]] <- graph_info
+      } else {
+        prev_score <- hash_seen[[h]]$score
+        if (abs(prev_score - score) > score_tol) {
+          warning_msg <- paste0(
+            "WARNING: Graph from rep ", rep_id, "mrun ", run_name,
+            " with rank ", rank,
+            " has identical hash with different scores: ",
+            prev_score, " vs ", score,
+            " (difference = ", abs(prev_score - score), ")."
+          )
+          writeLines(warning_msg, con = warning_file)
+          warning(warning_msg)
+        } else {
+          msg <- paste0("For ", run_name, " rank ", rank,
+                        " graph is duplicated and removed.")
+          message(msg)
+        }
+      }
+    }
+  }
+  # Only save the warning_log if there is some warning else no save
+  if (!is.null(warning_file)) close(warning_file) 
+  return(unique_graph_lst)
+}
+
+
+#-------------- Run qpgraphs & Organize Outputs --------------#
 #' This processes a list of graphs, calculates the worst residuals for each,
 #' and outputs the results to a specified file.
 #'
@@ -206,25 +247,31 @@ deduplicate_graphs <- function(graph_lst) {
 #'
 #' @return A list of unique graphs after processing.
 #'        wirte the summary table into a summary table
-#'
-#' @examples
-#' \dontrun{
-#' unique_graphs <- organize_wr_outputs(graph_lst, f2, "output_summary.txt")
-#' }
-organize_wr_outputs <- function(graph_lst, f2, output_file_path){
-  unique_graphs <- deduplicate_graphs(graph_lst)
+run_qpgraph <- function(unique_graphs, f2, output_file_path){
+
   results_list <- vector("list", length(unique_graphs))
 
   for (i in seq_along(unique_graphs)) {
+
     graph_info <- unique_graphs[[i]]
     graph <- graph_info$graph
     ll_score <- graph_info$score
     rank <- graph_info$rank
-    run_id <- graph_info$run
+    run_id <- graph_info$run_id
+
+    # de-bugging:
+    # cat("---- Processing graph", i, "----\n")
+    # cat("run_id:", graph_info$run_id, "\n")
+    # cat("rank:", graph_info$rank, "\n")
+    # cat("hash:", graph_info$hash, "\n")
+    # cat("score:", graph_info$score, "\n")
+    # cat("graph class:", class(graph_info$graph), "\n\n")
 
     result <- qpgraph(f2, graph, return_fstats = TRUE)
-    wr <- abs(result$worst_residual) 
-    # This value doesn't have the sign, so use result$f4 %>% slice_max(abs(z), with_ties = F) to get the sign 
+
+    wr <- result$worst_residual # returns abs(wr)
+    graph_info$wr <- wr # store this value as well
+    unique_graphs[[i]] <- graph_info # update unique graphs
 
     WR_smaller_than_3 <- wr <= 3
 
@@ -238,15 +285,16 @@ organize_wr_outputs <- function(graph_lst, f2, output_file_path){
     )
   }
 
-  results_df <- do.call(rbind, results_list) 
+  results_df <- do.call(rbind, results_list)
 
   write.table(results_df, file = output_file_path, row.names = FALSE)
   
   return(unique_graphs)
 }
 
-unique_graphs <- organize_wr_outputs(graph_lst = graph_lst,
-                    f2 = f2,
+unique_graphs <- remove_duplicate_graphs(graph_lst, rootfolder)
+unique_graph_with_residual <- run_qpgraph(unique_graphs = unique_graphs,
+                    f2 = f2, # nolint
                     output_file_path = output_summary_table)
 
 #--- Save deduplicated graphs & f2 statistics for this rep ---#

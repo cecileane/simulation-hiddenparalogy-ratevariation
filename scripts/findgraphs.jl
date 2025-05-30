@@ -58,7 +58,7 @@ function parse_commandline()
       "--blgsize"
         help = "Block size used in findgraphs"
         arg_type = Int
-        default = 200
+        default = 1000
       "--outgroup"
         help = "Outgroup population name used in findgraphs, default is homo sapiens"
         arg_type = String
@@ -136,6 +136,7 @@ for ind in 1:index_length
   fingraph_folder = setup_rep_output_folders(folder_path_list, ind, "findgraph")
   push!(findgraph_folderlist, fingraph_folder)
 end 
+
 check_existing_dir(findgraph_folderlist) # see utilies.jl. 
 
 #-----------------------------------------------#       
@@ -189,7 +190,7 @@ check_existing_dir(findgraph_folderlist) # see utilies.jl.
     
     # Goal 2:  Convert VCF to eigenstrat using codes from https://github.com/mathii/gdc  
     eigenstrat_file = joinpath(findgraph_folder, "eigenstrat_rep$(rep_id)") 
-    run(`python scripts/vcf2eigenstrat_modified_py3.py -v $(vcf_file) -o $(eigenstrat_file)`)
+    run(`python third_party_scripts/vcf2eigenstrat.py -v $(vcf_file) -o $(eigenstrat_file)`)
 
     # Goals 3: output .ind files is re-assigned a unique pop to each taxon
     eigenstrat_ind_file = "$(eigenstrat_file).ind"
@@ -217,7 +218,7 @@ end
 
   prefix = "eigenstrat_rep$rep_id"
 
-  run(`Rscript ./scripts/findgraphs_1rep.R -i $findgraph_folder -o $findgraph_folder -p $prefix -k $num_admix --stop_gen $stop_gen --outgroup $outgroup --runs $runs -b $blgsize -r $simulation_rep -s $seed_array_findgraphs_path --output_graph_suffix $output_graph_suffix --output_f2_suffix $output_f2_suffix --output_summary_table_suffix $output_summary_table_suffix`) 
+  run(`Rscript ./scripts/findgraphs_1rep.R -i $findgraph_folder -o $findgraph_folder -p $prefix -k $num_admix --stop_gen $stop_gen --outgroup $outgroup --runs $runs -b $blgsize -r $rep_id -s $seed_array_findgraphs_path --output_graph_suffix $output_graph_suffix --output_f2_suffix $output_f2_suffix --output_summary_table_suffix $output_summary_table_suffix`) 
   
 end 
 
@@ -228,23 +229,39 @@ function summarize_findgraphs_results(simulation_rep::Int, findgraph_folderlist:
   findgraph_folder = findgraph_folderlist[simulation_rep]
   rep_id = pad_number(simulation_rep + rep_start - 1, n_reps)
 
-  tables = Dict(0 => "rep$(simulation_rep)_admix0$output_summary_table_suffix",
-                  1 => "rep$(simulation_rep)_admix1$output_summary_table_suffix")
-  
-  result = Dict("rep_id" => rep_id, "best_K" => "None", "reject_H0" => false)
+  tables = Dict(
+      0 => "rep$(rep_id)_admix0$output_summary_table_suffix",
+      1 => "rep$(rep_id)_admix1$output_summary_table_suffix"
+  )
+
+  wr_found = Dict(0 => false, 1 => false)
 
   for k in sort(collect(keys(tables)))
-    table_path = joinpath(findgraph_folder, tables[k])
-    df = CSV.read(table_path, DataFrame, delim='\t')
-    valid_graphs = df[df.WR_smaller_than_3 .== true .&& df.is_outgroup_correct .== true, :]
-    if nrow(valid_graphs) > 0
-        result["best_K"] = k
-        result["reject_H0"] = true
-        break
-    end
+      table_path = joinpath(findgraph_folder, tables[k])
+      df = CSV.read(table_path, DataFrame; delim=' ', ignorerepeated=true, quotechar='"')
+      valid_graphs = df[df.WR_smaller_than_3 .== true, :]
+
+      if nrow(valid_graphs) > 0
+          wr_found[k] = true
+      end
   end
-  return result
-end 
+
+  best_k = if wr_found[0]
+      0
+  elseif wr_found[1]
+      1
+  else
+      ">1"
+  end
+
+  return Dict(
+      "rep_id" => rep_id,
+      "best_k" => best_k
+  )
+
+end
+
+
 
 #-----------------------------------------------#       
 #           Run and time the process
@@ -266,12 +283,18 @@ function main()
   end
 
   @timeit to "Organize all results" begin 
+
+    results = DataFrame(rep_id = String[], best_k = Any[]) 
+
     for simulation_rep in 1:index_length 
-      result = summarize_findgraphs_results(simulation_rep, findgraph_folderlist, rep_start, n_reps, output_summary_table_suffix)
-      output_file = joinpath(outfolder, "findgraphs_summary_results.csv") 
-      CSV.write(output_file, result)
+        result = summarize_findgraphs_results(simulation_rep, findgraph_folderlist, rep_start, n_reps, output_summary_table_suffix) 
+        push!(results, (rep_id = result["rep_id"], best_k = result["best_k"]))
     end 
-  end 
+    output_file = joinpath(outfolder, "findgraphs_summary_results.csv")
+    CSV.write(output_file, results)
+
+end
+
 
 end 
 
@@ -287,10 +310,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
   Arguments used for simulating this output dataset: 
   master seed = $master_seed, unique master_seed for this parameter setting 
   Seed for findgraph= $seed_findgraphs, used to generate seed array (replicate x 2) used for findgraphs
-  Find graph specific patameters: 
+  'findgraphs' specific patameters: 
   Number of runs to run findgraphs = $runs
   Block size (blgsize) used in findgraphs = $blgsize 
   Number of generations to stop running findgraphs = $stop_gen
+  Processor information: 
   Number of processors used = $n_processors;
   Server for running the script = $host_name.stat.wisc.edu
 
