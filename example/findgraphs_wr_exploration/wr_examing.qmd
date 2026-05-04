@@ -1,0 +1,96 @@
+---
+title: "Examining findgraph graphs (admix0 & admix1)"
+format: html
+---
+
+## Setup
+
+```{r set up}
+library(admixtools)
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+```
+
+```{r}
+# Load data for a given rep and parameter setting.
+# Sets h0_graphs, h1_graphs, f2, rep_id, parameter_setting, input_dir globally.
+load_rep_data <- function(rep_id, parameter_setting) {
+  input_dir <- file.path("../..", "output", parameter_setting, rep_id, "findgraph")
+  h0_graphs         <<- readRDS(file.path(input_dir, paste0(rep_id, "_admix0_unique_graphs.rds")))
+  h1_graphs         <<- readRDS(file.path(input_dir, paste0(rep_id, "_admix1_unique_graphs.rds")))
+  f2_data           <<- readRDS(file.path(input_dir, paste0(rep_id, "_f2.rds")))
+  rep_id            <<- rep_id
+  parameter_setting <<- parameter_setting
+  input_dir         <<- input_dir
+  cat(sprintf("Loaded: %s / %s\n", parameter_setting, rep_id))
+  cat("  h0 graphs:", length(h0_graphs), " | h1 graphs:", length(h1_graphs), "\n")
+}
+```
+
+# function to get the worst residual and how many residuals 
+
+```{r}
+get_wr_summary <- function(h0_graph, h1_graph, f2_data) {
+
+  qp_h0 <- qpgraph(f2_data, h0_graph$graph, return_fstats = TRUE)
+  qp_h1 <- qpgraph(f2_data, h1_graph$graph, return_fstats = TRUE)
+
+  res_h0 <- qp_h0$f4
+  res_h1 <- qp_h1$f4
+
+  wr_h0 <- max(abs(res_h0$z))
+  wr_h1 <- max(abs(res_h1$z))
+
+  n_res_h0 <- nrow(res_h0)
+  n_res_h1 <- nrow(res_h1)
+
+  n_res_z_h0 <- length(res_h0$z)
+  n_res_z_h1 <- length(res_h1$z)
+
+  df <- data.frame(
+    wr_h0 = wr_h0,
+    wr_h1 = wr_h1,
+    n_res_h0 = n_res_h0,
+    n_res_h1 = n_res_h1,
+    n_res_z_h0 = n_res_z_h0,
+    n_res_z_h1 = n_res_z_h1
+  )
+
+  return(list(
+    summary = df,
+    qp_h0 = qp_h0,
+    qp_h1 = qp_h1
+  ))
+}
+```
+
+# DUP0.0-LOS0.0-RVG-N_ind1-SF0.5-genelen1000 | rep04
+```{r}
+load_rep_data("rep04", "DUP0.0-LOS0.0-RVG-N_ind1-SF0.5-genelen1000")
+df_rep04 <- get_wr_summary(h0_graphs[[1]], h1_graphs[[1]], f2_data) 
+print(df_rep04$summary)
+
+df_rep04$qp_h0$f4 
+df_rep04$qp_h0$worst_residual 
+```
+
+
+# DUP0.0-LOS0.0-RVG-N_ind1-SF0.5-genelen1000 | rep05
+```{r}
+load_rep_data("rep05", "DUP0.0-LOS0.0-RVG-N_ind1-SF0.5-genelen1000")
+df_rep05 <- get_wr_summary(h0_graphs[[1]], h1_graphs[[1]], f2_data) 
+```
+
+
+# DUP0.0-LOS0.0-RVN-N_ind1-SF1.0-genelen1000 | rep05
+```{r}
+load_rep_data("rep05", "DUP0.0-LOS0.0-RVN-N_ind1-SF1.0-genelen1000")
+get_wr_summary(h0_graphs[[1]], h1_graphs[[1]], f2_data) 
+```
+
+# DUP0.0001-LOS0.0001-RVG-N_ind2-SF1.0-genelen1000 | rep01 
+```{r}
+load_rep_data("rep01", "DUP0.0001-LOS0.0001-RVG-N_ind2-SF1.0-genelen1000")
+get_wr_summary(h0_graphs[[1]], h1_graphs[[1]], f2_data) 
+```
+
+The conclusion is that the worst residual is always 784 for admix0 and 784 for admix1. 

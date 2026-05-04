@@ -1,0 +1,168 @@
+---
+title: "FindGraphs Results Visualization"
+format: html
+execute:
+  warning: false
+  message: false
+---
+
+```{r setup}
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(stringr)
+library(latex2exp)
+visual_output <- "visualization_results/findgraph" 
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path)) 
+source("../scripts/visual_utilities.R")
+```
+
+## Load and Parse Data
+```{r load-parse}
+df <- read_csv("../results/findgraph_summary.csv") %>%
+  mutate(
+    dup_loss_rate = as.numeric(str_extract(paramname_root, "(?<=DUP)[0-9]*\\.?[0-9]+(?:[eE][-+]?[0-9]+)?")),
+    RV = factor(str_extract(paramname_root, "(?<=RV)[A-Z]+"),
+                levels = c("N", "G", "L", "GL")),
+    genelen = as.integer(str_extract(paramname_root, "(?<=genelen)[0-9]+")),
+    SF = as.numeric(str_extract(paramname_root, "(?<=SF)[0-9]*\\.?[0-9]+")),
+    N_ind = as.integer(str_extract(paramname_root, "(?<=N_ind)[0-9]+")),
+    n_ind = N_ind,
+    pct_H0 = H0Accepted / total_replicates * 100,
+    pct_H1 = H1Accepted / total_replicates * 100,
+    pct_BT1 = BT1Accepted / total_replicates * 100,
+    pct_H0_wr_3.7 = H0Accepted_WR_3.7 / total_replicates * 100, 
+    pct_H1_wr_3.7 = H1Accepted_WR_3.7 / total_replicates * 100,
+    pct_BT1_wr_3.7 = BT1Accepted_WR_3.7 / total_replicates * 100 
+  )
+head(df)
+print(df$pct_H0_wr_3.7)
+```
+
+## model choice by Rate Variation and Duplication/Loss Rate
+```{r plot-hypothesis-acceptance-grid}
+#| fig-width: 14
+#| fig-height: 8
+source("../scripts/visual_utilities.R")
+# For findgraphs data
+p <- plot_hypothesis_acceptance_grid(df, 
+  value_col_prefix = "pct_",
+  h_greater_col = "pct_BT1",
+  output_dir = "../visualization_results/findgraph",
+  plot_title = "find_graphs model choice when worst f4 residual Z-score <= 3.0", 
+  output_filename = "findgraphs_model_choice_WR3.0.png"
+  )
+print(p)
+
+P_WR_3.7 <- plot_hypothesis_acceptance_grid(df, 
+  h0_col = "pct_H0_wr_3.7",
+  h1_col = "pct_H1_wr_3.7",
+  h_greater_col = "pct_BT1_wr_3.7",
+  output_dir = "../visualization_results/findgraph",
+  plot_title = "find_graphs model choice when worst f4 residual Z-score <= 3.7",
+  output_filename = "findgraphs_model_choice_WR_3.7.png") 
+```
+
+
+```{r plot-hypothesis-acceptance-H0-by-rate-variation}
+#| fig-width: 12
+#| fig-height: 6
+
+# Plot H=0 (tree) acceptance percentage by rate variation
+p_h0 <- plot_hypothesis_acceptance_H0_by_rate_variation(
+  df,
+  h0_col = "pct_H0",
+  output_dir = "../visualization_results/findgraph",
+  output_filename = "findgraphs_typeI_WR_3.0",
+  # plot_title = "findgraphs type I error rate under WR Z-score threshold = 3.0"
+  plot_title = NULL
+  )
+
+p_h0_wr3.7 <- plot_hypothesis_acceptance_H0_by_rate_variation(
+  df,
+  h0_col = "pct_H0_wr_3.7",
+  output_dir = "../visualization_results/findgraph",
+  output_filename = "findgraphs_typeI_WR_3.7",
+  plot_title = "findgraphs type I error rate under WR threshold = 3.7")
+
+# Display the plot
+print(p_h0)
+print(p_h0_wr3.7)
+``` 
+
+
+## True Graph Recovery by Duplication/Loss Rate
+# plot this based on if the replicate recover the true tree based on all graphs found 
+
+```{r}
+source("../scripts/visual_utilities.R")
+p_recovery_aggregated <- plot_true_graph_recovery_lines_aggregated(df, 
+  h0_col = "count_H0_best_is_true_tree",
+  h1_col = "count_H1_best_displays_true_tree",
+  h1_noF_col = "count_H1_best_displays_true_tree_noF",
+  output_dir = "../visualization_results/findgraph",
+  y_range = c(70, 102), 
+  # plot_title = "probability of displaying the true topology by find_graphs",
+  plot_title = NULL,
+  output_filename = "findgraph_best_graph_true_tree_recovery_aggregated.png"
+)
+# print(p_recovery_aggregated)
+```
+
+# Plot graph recovery for H=1 only
+```{r}
+#| fig-width: 12
+#| fig-height: 6
+
+# Plot H=1 only recovery rates (% finding true tree)
+# p_h1_only_pct <- plot_true_graph_recovery_H1_only(df,
+#   h1_col = "pct_true_tree_H1", # Here this is the percentage of all graphs recovered the true tree 
+#   output_dir = "../visualization_results/findgraph",
+#   output_filename = "true_graph_recovery_H1_only_all_graphs.pdf")
+
+# print(p_h1_only_pct)
+```
+
+```{r}
+#| fig-width: 12
+#| fig-height: 6
+
+# Plot H=1 only recovery rates (best graph counts)
+p_h1_only_count <- plot_true_graph_recovery_H1_only(df,
+  h1_col = "count_H1_best_displays_true_tree", # Here this is the count of best graphs that display the true tree 
+  output_dir = "../visualization_results/findgraph",
+  plot_title = "findgraphs true graph recovery under H=1 (top tree only)", 
+  y_range = c(70, 102), 
+  output_filename = "findgraph_true_graph_recovery_H1_only_best_graph.pdf")
+print(p_h1_only_count)
+```
+
+```{r plot-true-graph-recovery}
+#| fig-width: 16
+#| fig-height: 8
+
+# Plot true graph recovery across all parameter combinations
+# p2 <- plot_true_graph_recovery_lines(df,
+#   h0_col = "pct_true_tree_H0",
+#   h1_col = "pct_true_tree_H1",
+#   h1_noF_col = "pct_true_tree_H1_noF",
+#   output_dir = "../visualization_results/findgraphs",
+#   output_filename = "true_graph_recovery_lines.pdf"
+# )
+
+# # Display the plot
+# print(p2)
+```
+
+```{r}
+# Plot true graph recovery across all parameter combinations
+# p3 <- plot_true_graph_recovery_lines(df,
+#   h0_col = "count_H0_best_is_true_tree",
+#   h1_col = "count_H1_best_displays_true_tree",
+#   h1_noF_col = "count_H1_best_displays_true_tree_noF",
+#   output_dir = "../visualization_results/findgraph",
+#   output_filename = "true_graph_best_graph_recovery_lines.pdf"
+# )
+# print(p3)
+```

@@ -1,0 +1,137 @@
+
+```{r}
+---
+title: "Simulation Results Visualization"
+format: html
+execute:
+  warning: false
+  message: false
+---
+
+```{r setup}
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(stringr)
+```
+
+## Load and Parse Data
+
+```{r load-csv}
+df <- read_csv("results/summary_concatenated.csv") 
+outdir <- "visualization_results/simulation"
+if (!dir.exists(outdir)) {
+  dir.create(outdir, recursive = TRUE)
+} 
+```
+
+```{r parse-data}
+# Parse parameter_setting column
+df <- df %>%
+  mutate(
+    dup_loss_rate = as.numeric(str_extract(parameter_setting, "(?<=DUP)[0-9.e+-]+(?=-)")),
+    RV = str_extract(parameter_setting, "(?<=RV)[A-Z]+"),
+    N_inds = as.integer(str_extract(parameter_setting, "(?<=N_ind)[0-9]+")),
+    SF = as.numeric(str_extract(parameter_setting, "(?<=SF)[0-9.]+(?=(-|$))")),
+    genelen = as.integer(str_extract(parameter_setting, "(?<=genelen)[0-9]+"))
+  )
+
+# Display parsed columns and check unique values
+df %>% 
+  select(parameter_setting, dup_loss_rate, RV, N_inds, SF, genelen) %>%
+  head(10)
+
+# Check unique values for each parameter
+cat("Unique dup_loss_rate:", unique(df$dup_loss_rate), "\n")
+cat("Unique SF:", unique(df$SF), "\n")
+cat("Unique RV:", unique(df$RV), "\n")
+cat("Unique N_inds:", unique(df$N_inds), "\n")
+```
+
+## Gene Events and Hidden Paralogy
+This cell below plots 
+
+```{r plot_events}
+# Prepare data for plotting
+plot_data <- df %>%
+  select(dup_loss_rate, SF, RV, N_inds,
+         pert_false_HP, pert_weak_HP, pert_strong_HP) %>%
+  pivot_longer(cols = starts_with("pert_"), 
+               names_to = "metric", 
+               values_to = "percentage") %>%
+  mutate(
+    dup_loss_rate = factor(dup_loss_rate),
+    SF = factor(SF),
+    RV = factor(RV),
+    N_inds = factor(N_inds),
+    metric = factor(metric, levels = c(
+      "pert_false_HP", "pert_weak_HP", "pert_strong_HP"
+    )),
+    metric_label = recode(metric,
+      "pert_false_HP" = "false HP",
+      "pert_weak_HP" = "weak HP",
+      "pert_strong_HP" = "strong HP"
+    ),
+    # Create ILS label
+    ILS_label = recode(SF,
+      "0.5" = "low ILS",
+      "1" = "high ILS"
+    ),
+    # Create individual per taxon label
+    N_inds_label = paste(N_inds, "individual per taxon"),
+    # Create combined shape factor (4 levels: 2 N_inds × 2 SF)
+    shape_group = interaction(N_inds_label, ILS_label, sep = ", "),
+    # Recode RV labels with specific order for color assignment
+    RV_label = factor(recode(RV,
+      "G" = "gene",
+      "L" = "lineage",
+      "N" = "none"
+    ), levels = c("gene", "lineage", "none"))
+  )
+
+# Create combined plot with facet_grid
+p_combined <- ggplot(plot_data, aes(x = dup_loss_rate, y = percentage, 
+                                     color = RV_label, shape = shape_group)) +
+  geom_point(size = 4, alpha = 0.7, position = position_jitter(width = 0.2, height = 0)) +
+  facet_grid(~ metric_label, scales = "fixed") +
+  scale_color_manual(values = c("gene" = "#619CFF", 
+                                 "lineage" = "salmon", 
+                                 "none" = "#00BA38")) +
+  labs(title = "hidden paralogy across simulation conditions",
+       x = "dup/loss rate",
+       y = "percentage",
+       color = "substitution rate variation",
+       shape = "") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom",
+        legend.box = "vertical")
+
+ggsave(file.path(outdir, "percentage_events_plot_combined.pdf"), plot = p_combined, width = 10, height = 5, units = "in")
+print(p_combined)
+
+```
+
+## Summary Statistics: Hidden Paralogy by Duplication/Loss Rate
+It seems that SF and RateVar will not change HP statistics, so we summarize HP stats by N_inds and dup_loss_rate. (N_inds will not change ratevar as well). 
+```{r summary-hp}
+summary_df <- df %>%
+  group_by(dup_loss_rate) %>%
+  summarise(
+    n_genes_mean = round(mean(n_genes, na.rm = TRUE),1),
+    n_iterations = round(mean(n_iterations, na.rm = TRUE),1), 
+    False_HP_mean = round(mean(pert_false_HP, na.rm = TRUE),1),
+    False_HP_sd = round(sd(pert_false_HP, na.rm = TRUE),2),
+    Weak_HP_mean = round(mean(pert_weak_HP, na.rm = TRUE),1),
+    Weak_HP_sd = round(sd(pert_weak_HP, na.rm = TRUE),2),
+    Strong_HP_mean = round(mean(pert_strong_HP, na.rm = TRUE),1),
+    Strong_HP_sd = round(sd(pert_strong_HP, na.rm = TRUE),2),
+    pert_gene_tree_noDupLoss_mean = round(mean(pert_trees_experiencing_nothing, na.rm = TRUE),1),
+    pert_gene_tree_noDupLoss_sd = round(sd(pert_trees_experiencing_nothing, na.rm = TRUE),2),
+    .groups = "drop", 
+  ) %>%
+  arrange(dup_loss_rate)
+print(summary_df, width = Inf)
+```
+

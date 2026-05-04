@@ -1,0 +1,42 @@
+Check if F lineage is within the AGT zone 
+Based on the paper: Discordance of Species Trees with Their Most Likely Gene Trees (https://journals.plos.org/plosgenetics/article?id=10.1371/journal.pgen.0020068) 
+
+
+```{julia}
+# Define a(x)
+function a(x)
+    return log( 2/3 + ((3*exp(2x) - 2) / (18*(exp(3x) - exp(2x)))) )
+end
+
+# Define b(x)
+function b(x)
+    return log( 2/3 + ((5*exp(2x) - 2) / (6*(3*exp(3x) - 2*exp(2x)))) )
+end
+
+# number of AGTs given x and y
+function num_AGTs(x, y)
+    ax = a(x)
+    bx = b(x)
+    print("a(x) = $ax, b(x) = $bx\n")
+
+    if y ≥ ax
+        return 0
+    elseif y ≥ bx
+        return 1
+    else
+        return 3
+    end
+end
+```
+
+```{julia} 
+x = 0.18 
+y = 0.17 
+num_AGTs(x, y) 
+```
+
+```{julia}
+x = 0.15
+y = 0.17
+num_AGTs(x, y) 
+```

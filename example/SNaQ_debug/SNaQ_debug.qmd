@@ -1,0 +1,175 @@
+---
+title: "Robinson-Foulds Distance Calculation: SimPhy Gene Trees vs True Species Tree"
+format: html
+jupyter: julia-1.10
+---
+
+## Robinson-Foulds Distance Calculation: SimPhy Gene Trees vs True Species Tree
+
+```{julia}
+using PhyloNetworks
+using DataFrames
+using CSV 
+using Statistics 
+using PhyloPlots
+include("../../scripts/utilities.jl")
+```
+
+
+## Overview
+- Under H = 0: All SNaQ trees found match the true species tree (RF = 0)
+- Under H = 1: Some networks' displayed trees should differ from true tree
+- Issue: Cases where both `RF_net1_1_true` AND `RF_net1_2_true` are non-zero are anomalous
+
+When `RF_net1_1_true = 0` (true tree found in H1 major tree), we expect `RF_net1_2_true` should NOT be zero (minor tree differs). But if both are non-zero, both displayed trees differ from the true tree - this needs investigation.
+
+```{julia}
+df = CSV.read("/u/b/i/bingl/private/simulation-reptiles/output/DUP0.0-LOS0.0-RVGL-N_ind1-SF1.0/SNaQ-DUP0.0-LOS0.0-RVGL-N_ind1-SF1.0-summary.csv", DataFrame)
+
+# H0 finds true tree 
+H0_true = filter(row -> row.RF_net0_true == 0.0, df) 
+
+# Both displayed trees differ from true tree
+both_diff = filter(row -> (row.RF_net1_1_true != 0.0) && (row.RF_net1_2_true != 0.0), df)
+
+# Only major tree matches true tree
+major_matches = filter(row -> (row.RF_net1_1_true == 0.0) && (row.RF_net1_2_true != 0.0), df)
+
+# Only minor tree matches true tree
+minor_matches = filter(row -> (row.RF_net1_1_true != 0.0) && (row.RF_net1_2_true == 0.0), df)
+
+println("H=0 finds true: $(nrow(H0_true))")
+println("H=0 finds true; H=1 doesn't find the true: $(nrow(both_diff))")
+println("Major matches: $(nrow(major_matches))")
+println("Minor matches: $(nrow(minor_matches))")
+```
+
+```{julia}
+# Examine specific anomalous cases
+anomaly_cases = first(both_diff, 5).repID
+```
+
+```{julia}
+# Function to load and display H1 network
+function examine_h1_network(repID, paramname="DUP0.0-LOS0.0-RVGL-N_ind1-SF1.0")
+    rep_H1_folder = "/u/b/i/bingl/private/simulation-reptiles/output/$paramname/rep$repID/snaqfolder/H1_output"
+    rep_H0_folder = "/u/b/i/bingl/private/simulation-reptiles/output/$paramname/rep$repID/snaqfolder/H0_output"
+
+    net_file = joinpath(rep_H1_folder, "H1.networks")
+    tree_file = joinpath(rep_H0_folder, "H0.out")
+    true_species_tree = readnewick("(A,((((B,C),(D,E)),F),(G,H)));") 
+
+    if isfile(net_file)
+
+        net = readnewick(net_file)
+        tree_H0 = readnewick(tree_file)
+
+        displayed_trees = displayedtrees(net, 0.0)
+        rf0 = mudistance_semidirected(tree_H0, true_species_tree, preorder=true)
+        rf1 = mudistance_semidirected(displayed_trees[1], true_species_tree, preorder=true)
+        rf2 = mudistance_semidirected(displayed_trees[2], true_species_tree, preorder=true)
+        
+        println("H0 Tree (RF=$rf0)")
+        println("H1 Major Tree (RF=$rf1)")
+        println("H1 Minor Tree (RF=$rf2)")
+        (tree_H0, displayed_trees, rf0, rf1, rf2)
+    else
+        return nothing
+    end
+end
+```
+
+```{julia}
+function remove_branch_length_from_tree(net) 
+    tips = tipLabels(net) 
+    sorted_tips = sort(tips) 
+    rootatnode!(net,"A") 
+    newick = writeTopology(net) 
+    replace(newick, r"[0-9\+\-\.\:]+" => "")
+end
+```
+
+# Test three replicates where the displayed_trees under h = 0 does not recover the tree tree (rep = 008, 012, 013)
+
+```{julia}
+# Examine replicate 008 
+result = examine_h1_network("008") 
+
+if result !== nothing
+    tree_H0, displayed_trees, rf0, rf1, rf2 = result
+    println("RF distance for H = 0: $rf0") 
+    println("RF distance for H = 1 major: $rf1") 
+    println("RF distance for H = 1 minor: $rf2") 
+
+    println("H=0 tree: ", remove_branch_length_from_tree(tree_H0))
+    println("H=1 major tree: ", remove_branch_length_from_tree(displayed_trees[1]))
+    println("H=1 minor tree: ", remove_branch_length_from_tree(displayed_trees[2]))
+
+end
+```
+
+```{julia}
+result = examine_h1_network("011") 
+
+if result !== nothing
+    tree_H0, displayed_trees, rf0, rf1, rf2 = result
+    println("RF distance for H = 0: $rf0") 
+    println("RF distance for H = 1 major: $rf1") 
+    println("RF distance for H = 1 minor: $rf2") 
+
+    println("H=0 tree: ", remove_branch_length_from_tree(tree_H0))
+    println("H=1 major tree: ", remove_branch_length_from_tree(displayed_trees[1]))
+    println("H=1 minor tree: ", remove_branch_length_from_tree(displayed_trees[2]))
+end 
+
+``` 
+
+```{julia} 
+result = examine_h1_network("012") # This replicate shows
+
+if result !== nothing
+    tree_H0, displayed_trees, rf0, rf1, rf2 = result
+    println("RF distance for H = 0: $rf0") 
+    println("RF distance for H = 1 major: $rf1") 
+    println("RF distance for H = 1 minor: $rf2") 
+
+    println("H=0 tree: ", remove_branch_length_from_tree(tree_H0))
+    println("H=1 major tree: ", remove_branch_length_from_tree(displayed_trees[1])) # This matches the real tree 
+    println("H=1 minor tree: ", remove_branch_length_from_tree(displayed_trees[2])) # This has a large discrepency 
+end 
+```
+
+```{julia} 
+result = examine_h1_network("023") # This replicate shows
+
+if result !== nothing
+    tree_H0, displayed_trees, rf0, rf1, rf2 = result
+    println("RF distance for H = 0: $rf0") 
+    println("RF distance for H = 1 major: $rf1") 
+    println("RF distance for H = 1 minor: $rf2") 
+
+    println("H=0 tree: ", remove_branch_length_from_tree(tree_H0))
+    println("H=1 major tree: ", remove_branch_length_from_tree(displayed_trees[1])) # This matches the real tree 
+    println("H=1 minor tree: ", remove_branch_length_from_tree(displayed_trees[2])) # This has a large discrepency 
+end 
+```
+
+It seems that it is always F got misplaced under H = 1. 
+
+# Test a replicate where the major tree shows the true tree 
+
+```{julia}
+result = examine_h1_network("013") # This replicate shows
+
+if result !== nothing
+    tree_H0, displayed_trees, rf0, rf1, rf2 = result
+    println("RF distance for H = 0: $rf0") 
+    println("RF distance for H = 1 major: $rf1") 
+    println("RF distance for H = 1 minor: $rf2") 
+
+    println("H=0 tree: ", remove_branch_length_from_tree(tree_H0))
+    println("H=1 major tree: ", remove_branch_length_from_tree(displayed_trees[1])) # This matches the real tree 
+    println("H=1 minor tree: ", remove_branch_length_from_tree(displayed_trees[2])) # This has a large discrepency 
+end 
+```
+

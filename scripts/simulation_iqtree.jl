@@ -4,8 +4,8 @@ this script does:
 1. Simulate gene trees based on the grand species tree using SimPhy 
     * After simulation, newick strings are modified to mimic hidden paralogy. 
       Tree not meeting the criteria (see below) are not used for downstream pipeline 
-        Thus, simphy are re-run (<= max_iterations times) to get enough gene_trees. 
-        Error raises if not enough trees (< lower_threshold) simulated 
+        Thus, simphy are re-run (<= max_iteration_simphy times) to get enough gene_trees. 
+        Error raises if not enough trees (< n_genes_min) simulated 
 2. Simulate molecular sequences using Seq-Gen based on gene trees output from SimPhy
 3. Estmate gene trees using iqtree and infer species trees using Astral 
 
@@ -17,20 +17,23 @@ example: run this below
 julia scripts/simulation.jl
 
 output: it will create folder 'output' in the root of the repo with inside:
-- sim-phy-outfiles: Simulated gene trees and configuration files 
-- seq-gen-outfiles: Simulated molecular sequences 
-- iqtree-outfiles: Estimated gene trees 
-- astral-outfiles: Inferred species tree
+-rep ID: Each folder is labeled as repID 
+  Inside the repID folder: 
+  - sim-phy-outfiles: Simulated gene trees and configuration files 
+  - seq-gen-outfiles: Simulated molecular sequences 
+  - iqtree-outfiles: Estimated gene trees 
+  - astral-outfiles: Inferred species tree
 =#
 
-using ArgParse 
-include("utilities.jl")
+using Distributed  
+using ArgParse
+using TimerOutputs
+@everywhere include("utilities.jl")
+const to = TimerOutput() 
 
 function parse_commandline()
   s = ArgParseSettings() 
   @add_arg_table s begin 
-
-    # Specify parameters for SimPhy: 
     "--dup_rate"
       help = "Gene duplication rate: specify the gene duplication rate, if 0, then no duplication"
       arg_type = Float64
@@ -40,7 +43,10 @@ function parse_commandline()
       arg_type = Float64
       required = true
     "--ratevar" 
-      help = "'N': No rate variation';\n 'G: Gene specific rate variation';\n 'L': Lineage specific rate variation;\n 'GL' or 'G*L': genexlineage rate variation"
+      help = """'N': No rate variation';
+        'G: Gene specific rate variation'; 
+        'L': Lineage specific rate variation;
+        'GL' or 'G*L': genexlineage rate variation"""
       arg_type = String
       required = true
     "--n_reps"
@@ -51,42 +57,65 @@ function parse_commandline()
       help = "Number of genes" 
       arg_type = Int
       required = true
-    "--seed_simphy"
-      help = "Seed for simphy"
-      arg_type = Int
-      required = true
     "--n_inds" 
       help = "Number of individuals/accessions per species (Default = 1)"  
       arg_type = Int
       default = 1
-    "--max_iteration"
+    "--Ne"
+      help = "Effective population size (Default = 1000)"
+      arg_type = Int
+      default = 1000
+    "--max_iteration_simphy"
       help = "Maximum iteration to re-run simphy to get enough gene trees"
       arg_type = Int
       default = 100 
-    "--lower_threshold"
-      help = "Number of simulated gene trees in each rep >= lower_threshold (0 to 1) * n_genes"
+    "--min_gene_porportion"
+      help = "Number of simulated gene trees in each rep >= min_gene_proportion (0 to 1) * n_genes"
       arg_type = Float64
       default = 0.8 # let set the default as 0.8 hard coded 
   end 
-  return parse_args(s)
+  return parse_args(s) 
 end
 
+#-----------------------------------------------#       
+#         Initialization
+#-----------------------------------------------#
+#--------------- Parse arguments ---------------# 
 parsed_args = parse_commandline()
-
-# Parameter settings for SimPhy
 dup_rate = parsed_args["dup_rate"] # A number indicates rate of gene duplication rates (0 = no dup)
 loss_rate = parsed_args["loss_rate"] # A number indicates rate of gene loss rates (0 = no loss)
 ratevar = parsed_args["ratevar"] # "N", "G", "L" or "GL" or "G*L" to include genexlineage rate variation 
 n_reps = parsed_args["n_reps"] # number of replicates 
 n_genes = parsed_args["n_genes"] # number of genes 
-seed_simphy = parsed_args["seed_simphy"] # seeds for SimPhy 
 n_inds = parsed_args["n_inds"] # Number of individuals per taxa -- default = 1
-max_iteration = parsed_args["max_iteration"] # Maximum number of iteration of re-running simphy 
-lower = parsed_args["lower_threshold"] # Percentage * n_genes = lower threshold number of gene trees in each rep 
-lower_threshold = n_genes * lower # If num of simulated trees < lower_threshold, an error raises 
+Ne = parsed_args["Ne"] # Effective population size, default = 1000 
+max_iteration_simphy = parsed_args["max_iteration_simphy"] # Maximum number of iteration of re-running simphy 
+min_gene_porportion = parsed_args["min_gene_porportion"] # Percentage * n_genes =  n_genes_min, the mimum number of gene trees in each rep 
+n_genes_min = n_genes * min_gene_porportion  # After reaching max_iteration_simphy, -only if num of genes > n_genes_min --> proceed  
 
+#--------------- Calculate substition rates ---------------#
+#= 
+  Based on speciestree.jl, the substitution rate is set to 0.0100947
+  substitution rate per coalescent unit = 0.019526049565237014 
+  Assume if there are 2Ne generations 
+  then the substitution rate per generation = 0.0100947 / CU / 2 * Ne
+=# 
+# Parameteres could be checked from speciestree.jl 
+
+# Global substitution rate multiplier: 
+global_sub_rate = 0.341315346400343 
+global_CU = 17.48 
+global_sub_rate_per_generation = global_sub_rate / (global_CU * (2 * Ne))
+# Substitution rate multiplier for each branch: 
+
+
+
+
+
+
+#--------------- Set up configuration ---------------# 
 # Check if ratevar belongs to the following: 
-valid_ratevars = ["N", "G", "L", "GL", "GxL"] 
+valid_ratevars = ["N", "G", "L", "GL", "GxL", "G*L"] 
 if !(ratevar in valid_ratevars) 
   error("Invalid value for --ratevar: $ratevar. Valid options are: $(join(valid_ratevars, ", "))")
 end
@@ -99,48 +128,42 @@ end
 # set all configuration parameters here 
 rootfolder = pwd()
 paramname_root = "DUP$dup_rate-LOS$loss_rate-RV$ratevar-N_ind$n_inds"
-outfolder = "output/$paramname_root"
-mkpath(outfolder)
-simphyfolder = joinpath(outfolder, "sim-phy-outfiles")
-seqgenfolder = joinpath(outfolder, "seq-gen-outfiles")
-iqtreefolder_tmp_root = "iqtree-outfiles"
-iqtreefolder  = joinpath(outfolder, iqtreefolder_tmp_root)
-astralfolder_tmp_root = "astral-outfiles"
-astralfolder = joinpath(outfolder, astralfolder_tmp_root)
-# temporary folders that need to be 1 level from the repo root folder, for iqtree.pl,
-# later moved into their proper place down the folder hierarchy
-function tmp_iqtreeastral_folders(params, rep)  
-  return ("$iqtreefolder_tmp_root-$params-$rep", "$astralfolder_tmp_root-$params-$rep")
-end
+outfolder = joinpath(rootfolder, "output", paramname_root) 
 
-# Set up paths -> re-running with same parameters and not cleaning output/ will raise an error 
-mkdir(simphyfolder)
-mkdir(seqgenfolder)
-mkdir(iqtreefolder)
-mkdir(astralfolder)
+#--------------- set up seeds ---------------# 
+params_dict_for_seed_setting = get_dict_for_seed_setting(paramname_root)
+master_seed = generate_master_seed(params_dict_for_seed_setting) # master seed used for this script
 
-# save all parameters and write into the output dir
-arguments = """
-Arguments used for this output dataset: 
-duplication rate = $dup_rate;
-loss rate = $loss_rate; 
-rate variation = $ratevar; 
-number of replicates = $n_reps; 
-nnumber of genes = $n_genes; 
-master seed for SimPhy= $seed_simphy, this will be further used to generate random seed array;  
-number of individuals per taxon = $n_inds; 
-max_iteration = $max_iteration, maximum iteration to re-run simphy; 
-lower_threshold = $lower_threshold, num of simulated gene trees >= lower_threshold 
-"""
-argument_files = joinpath(outfolder, "arguments-$paramname_root.log")
-write(argument_files, arguments)
+software_names = ["simphy", "seqgen", "iqtree"] 
+# set up seeds for all softwares 
+seed_dic = generate_software_seeds(master_seed, software_names) # see utility.jl 
+seed_simphy = seed_dic["simphy"] 
+seed_seqgen = seed_dic["seqgen"]
+seed_iqtree = seed_dic["iqtree"]
+# astral is a deterministic program with no need to specify a seed 
 
+#--------------- set up folders ---------------# 
+# The below function checks if a path exists, if yes, the function will ask user's input tp decide if to remove the path 
+check_existing_dir([outfolder]) # see utilities.jl --> input needs to be a list
+mkpath(outfolder) # create a new one if there is no pre-existing outfolder
+
+folder_path_list = [] # create folder path 
+for n in 1:n_reps # All outputs goes to each rep file 
+  rep_number_string = pad_number(n, n_reps)
+  rep_folder_path = joinpath(outfolder, "rep$rep_number_string")
+  push!(folder_path_list, rep_folder_path)
+end 
+
+#-----------------------------------------------#       
+#         set up SimPhy parameters
+#-----------------------------------------------#
 # Modify the master simphy config file based on arguments and then save it to new config file
 master_conf = joinpath(rootfolder,"simphy-configs/", "simphysim-conf-master")
 conf_content = read(master_conf, String) # read the master config file into a string 
 
 #Set up the parameters
 parameters = ""
+parameters *= "-sp f:$Ne //Population size\n" 
 
 # To simulate different gene duplication and loss rates
 if dup_rate != 0 # if dup_rate is 0 then no -lb parameter 
@@ -148,7 +171,7 @@ if dup_rate != 0 # if dup_rate is 0 then no -lb parameter
 end
 if loss_rate != 0 # if loss_rate is 0 then no -ld paramater
   parameters *= "-ld f:$loss_rate // gene loss rate\n" 
-end
+end 
 
 # To simulate substitution rate variation
 if occursin("G", ratevar) # gene-family-speciic rate heterogenity : "G" or "GL" or "G*L"
@@ -159,7 +182,8 @@ end
 if occursin("L", ratevar) # add tree with variation across lineages
   parameters *= "-s (A:3.44*0.0100947,((((B:0.88*0.0042057,C:0.88*0.0036776):1.71*0.0078509,(D:0.93*0.0235933,E:0.93*0.0199793):1.66*0.0079913):0.17*0.0068836,F:2.76*0.0067212):0.18*0.0098089,(G:0.5*0.0797969,H:0.5*0.1796924):2.44*0.0190487):0.5*0.0694588); // tree with lineage variation\n"
 else 
-  parameters *= "-s (A:3.44,((((B:0.88,C:0.88):1.71,(D:0.93,E:0.93):1.66):0.17,F:2.76):0.18,(G:0.5,H:0.5):2.44):0.5); // tree without lineage variation\n"
+  # parameters *= "-s (A:3.44*0.019526049565237014,((((B:0.88*0.019526049565237014,C:0.88*0.019526049565237014):1.71*0.019526049565237014,(D:0.93*0.019526049565237014,E:0.93*0.019526049565237014):1.66*0.019526049565237014):0.17*0.019526049565237014,F:2.76*0.019526049565237014):0.18*0.019526049565237014,(G:0.5*0.019526049565237014,H:0.5*0.019526049565237014):2.44*0.019526049565237014):0.5*0.019526049565237014); // tree without lineage variation\n"
+  parameters *= "-s (A:3.44*$global_sub_rate_per_generation,((((B:0.88*$global_sub_rate_per_generation,C:0.88*$global_sub_rate_per_generation):1.71*$global_sub_rate_per_generation,(D:0.93*$global_sub_rate_per_generation,E:0.93*$global_sub_rate_per_generation):1.66*$global_sub_rate_per_generation):0.17*$global_sub_rate_per_generation,F:2.76*$global_sub_rate_per_generation):0.18*$global_sub_rate_per_generation,(G:0.5*$global_sub_rate_per_generation,H:0.5*$global_sub_rate_per_generation):2.44*$global_sub_rate_per_generation):0.5*$global_sub_rate_per_generation); // tree without lineage variation\n"
   # If ratevar doesn't contain L (G and N), then add tree without variations across lineages 
 end
 
@@ -171,11 +195,28 @@ end
 # Store all parameters into one string, which will be updated in the below loop
 simphy_conf_content = parameters * conf_content # combine parameters with master config
 
+print(simphy_conf_content) # print the content to check if everything is correct
+
+#-----------------------------------------------#       
+#  Push global params to all processors
+#-----------------------------------------------#
+@everywhere global folder_path_list = $folder_path_list
+@everywhere global seed_simphy = $seed_simphy
+@everywhere global seed_seqgen = $seed_seqgen
+@everywhere global seed_iqtree = $seed_iqtree
+@everywhere global max_iteration_simphy = $max_iteration_simphy
+@everywhere global n_genes = $n_genes
+@everywhere global simphy_conf_content = $simphy_conf_content
+@everywhere global rootfolder = $rootfolder
+@everywhere global n_genes_min = $n_genes_min
+@everywhere global n_reps = $n_reps
+@everywhere global Ne = $Ne 
+
 #-----------------------------------------------#       
 #  run SimPhy + modify newick strings 
 #-----------------------------------------------#
 #= The below function has two goals: 
-    1. simulate gene trees using Simphy 
+    1. simulate gene trees using Simphy (rep = 1 and loop through n_reps)
     2. modify newick strings to mimic hidden paralogy 
   If the gene tree has
   * more than one repeated gene copy: it is obvious that gene duplication happened
@@ -190,55 +231,13 @@ simphy_conf_content = parameters * conf_content # combine parameters with master
   hidden paralogy. The below code will only change the tip names in the
   new gene tree files. 
   * This newick string modification might remove some trees from the pipeline. 
-    a. If the resulting num of gene trees <= n_genes (target), we re-run simphy with <= max_iterations times to generate enough gene trees. 
-    b. If iteration > max_iteration, num of gene trees > lower_threshold -> pipeline continues 
-    c. If iteration > max_iteration, num of gene tress < lower_threshold -> pipeline breaks 
-  =# 
+    a. If the resulting num of gene trees <= n_genes (target), we re-run simphy with <= max_iteration_simphy times to generate enough gene trees. 
+    b. If iteration > max_iteration_simphy, num of gene trees > n_genes_min -> pipeline continues 
+    c. If iteration > max_iteration_simphy, num of gene tress < n_genes_min -> pipeline breaks 
+=#
 
 """
-  Goal 1: Initialize simphy with n_genes, n_reps, master_seed 
-  Goal 2: Loop through all reps to modify newick strings 
-  Goal 3: Move all modified newick strings to the final_dir directory (final_output/repID)
-  Inputs: 1. n_reps: Number of reps to run simphy (= global paras n_reps)
-          2. n_genes: Number of gene trees in each rep (=global paras n_genes)
-          3. master_seed: Master_seed specified as arguments of the script (=global seed_simphy)
-          4. output_dir: Output dir for simulated trees directly from simphy 
-          5. simphy_conf_cont: Simphy configuration contents (=global simphy_conf_cont)
-          6. rootfolder: Path to rootfolfer (=global rootfolder). 
-          7. final_output: Path to save modified newick trees 
-          8. mattching_pattern: Mattching pattern to search modified trees (here = "g_trees_noLocusID_Gene") -> see utilities.jl
-"""
-function start_simphy_Nreps(n_reps::Int, n_genes::Int, master_seed::Int, output_dir::String, simphy_conf_cont::String, rootfolder::String, final_output::String, matching_pattern::String)
-  
-  # Goal 1: Initilize simphy for the first time with n_reps, n_genes, master_seeds 
-  updated_parameters = """
-  -cs $master_seed  // seed
-  -rs $n_reps  // Number of replicates
-  -rl f:$n_genes  // Number of loci (genes) per replicate - f means a fixed value
-  """
-  updated_content = updated_parameters * simphy_conf_cont
-  new_conf_file = joinpath(output_dir, "simphysim-conf-initial") 
-  write(new_conf_file, updated_content)
-  run(`$rootfolder/executables/simphy -i $new_conf_file -o $output_dir`) 
-
-  # Goal 2: Loop through all reps to modify newick strings
-  for simulation_rep in 1:n_reps
-    rep_number_string = pad_number(simulation_rep, n_reps) # see utilities.jl 
-    simphy_rep_path = joinpath(output_dir, rep_number_string)
-    modify_newick_for_n_genes(simphy_rep_path, simphy_rep_path, n_genes, 0) # see utilities.jl 
-    
-    # Goal 3: Move all modified newick strings to the final_dir directory (final_output/repID)
-    final_output_per_rep = joinpath(final_output, "rep$rep_number_string")
-    mkpath(final_output_per_rep)
-    check_and_move_files(simphy_rep_path, matching_pattern, final_output_per_rep)
-  end
-  
-end 
-
-"""
-Goals： 
-  Goal 1: run simphy with n_rep = 1 and seed = seed-array[n,m] (see f"run_simulation" below) 
-  Goal 2: modify newick strings within one rep and move to the desired output dir 
+rerun_simphy_1rep_1int: Goal: Run simphy and modify string for one replicate and one particular interation 
 Inputs: 
   batch: Estimated batch size (num of gene trees) to re-run simphy 
   simulation_rep: Each replicate ID 
@@ -248,8 +247,12 @@ Inputs:
   simphy_conf_cont: simphy configuration content (=global simphy_conf_cont)
   matching_pattern: mattching pattern to search modified trees (here = "g_trees_noLocusID_Gene") -> see utilities.jl
   final_output_per_rep: final dir to store modified newick strings 
+Output: 
+  -> Run simphy for one replicate and output simphy files into output_dir
+  -> Modify simphy-generated trees based on the criteria above and output to final_output_per_rep 
 """
-function rerun_simphy_1rep(batch::Int, simulation_rep::Int, seed::Int, iteration::Int, output_dir::String, simphy_conf_content::String, matching_pattern::String, final_output_per_rep::String) 
+
+@everywhere function rerun_simphy_1rep_1int(batch::Int, simulation_rep::Int, seed::Int32, iteration::Int, output_dir::String, simphy_conf_content::String, final_modified_trees_output::String, rootfolder::String) 
   # Goal 1: run simphy with n_rep = 1
   updated_parameters = """
   -cs $seed  // seed # Update the seed
@@ -262,127 +265,169 @@ function rerun_simphy_1rep(batch::Int, simulation_rep::Int, seed::Int, iteration
   run(`$rootfolder/executables/simphy -i $new_conf_file -o $output_dir`)
 
   # modify newick string within one rep 
-  simphy_rep_path = joinpath(output_dir, "1")
-  modify_newick_for_n_genes(simphy_rep_path, simphy_rep_path, batch, iteration)  # see utilities.jl 
-  # move resulting folder -- need to handle if the folder has no matching files 
-  check_and_move_files(simphy_rep_path, matching_pattern, final_output_per_rep)  
+  simphy_output = joinpath(output_dir, "1")
+  modify_newick_for_n_genes(simphy_output, final_modified_trees_output, batch, iteration)  # see utilities.jl 
+
 end 
 
 """
-Goals: 
-  -Goal 1: Run simphy with n_reps, n_gens, master_seed for the first time & modify the newick 
-  -Goal 2: For each rep, check if modified trees (num) >= target (n_genes). If not, re-run simphy with <= max_iteration times to get >= target gene trees. 
-        * After max_iterations, if num > lower_threshold -> continue the piepline 
-        * else, pipeline breaks and re-run with new parameters 
+run_simulation_1rep: 
+Goal: Ren simulation (running simphy, modify strings, set seed_array[n,m], write information) for one replicate when iteration <= max_iteration_simphy. 
+  This function calls the previous function to re-run until max_iteration_simphy reaches or the number of target genes reaches. 
 Inputs: 
-  -max_iteration: maximum iteration to re-run simphy (= global max_iteration)
-  -n_reps: Total number of replicate (=global n_reps)
-  -n_genes: Num of genes in each rep (= global n_genes) 
-  -master_seed: Master seed to generator n x m seed array and initialize simphy (=global seed_simphy & see F"seed_generator" in scripts/utilities.pl )
-  -simphyfolder: dir for all simphy outputs (=global simphyfolfer)
-  -simphy_conf_contnt: simphy configuration files (=global simphy_conf_content)
-  -rootfolder: path to the root dir (used to find root/executable/simphy)
-  -lower_threshold: the lower threshold of num of modified gene trees (if num < lower, an error raises and script stops)
+  max_iteration_simphy: Maximum iteration for simphy (default = 100)
+  simulation_rep: Replication ID
+  n_genes: Total number of genes to be simulated (target)
+  simphy_conf_cont: simphy configuration content (=global simphy_conf_cont)
+  rootfolder: rootfolder (the github repo)
+  n_genes_min: The minimum number of genes trees to be retained. 
+    -> If num of gene trees simulated < n_genes_min, the loop breaks and raise an error
+  seed_array: the seed array generated by the master random seed
+  folder_path_list: A list to store path to each rep  
 """
-function run_simulation(max_iteration::Int, n_reps::Int, n_genes::Int, master_seed::Int, simphyfolder::String, simphy_conf_content::String, rootfolder::String, lower_threshold::Float64)
 
-    # Goal 1: Run simphy with n_reps, n_gens, master_seed for the first time & modify the newick  
-    simphy_out_dir_initial = joinpath(simphyfolder, "initial_simphy") # store gene trees from initial running of simphy 
-    mkpath(simphy_out_dir_initial)
-    final_output_dir = joinpath(simphyfolder, "modified_tree_strings")
-    matching_pattern = "g_trees_noLocusID_Gene"
-    start_simphy_Nreps(n_reps, n_genes, master_seed, simphy_out_dir_initial, simphy_conf_content, rootfolder, final_output_dir, matching_pattern)
+@everywhere function run_simulation_1rep(max_iteration_simphy::Int, simulation_rep::Int, n_genes::Int, simphy_conf_content::String, rootfolder::String, n_genes_min::Float64, seed_array, folder_path_list)
 
-    # Goal 2: In each rep, check if modified trees (num) >= target (n_genes). If not, re-run  
-    tracking_info = [] 
-    enough_genes_status = falses(n_reps) # if a rep has enough genes, then skip it
-    seed_array = seed_generator(seed_simphy, n_reps, max_iteration, simphyfolder) # generate n_reps x max_iteration random seed array 
+  # Set up dir paths 
+  simphyfolder = setup_rep_output_folders(folder_path_list, simulation_rep, "genetrees_simphy") # each rep has a genetrees_simphy dir to store all outputs from simphy. 
+  modified_genetree_folder = setup_rep_output_folders(folder_path_list, simulation_rep, "genetrees_singlecopy") # each rep has a genetrees_singlecopy dir to store all outputs from modify_newick (utilities.jl)
+  mkpath(simphyfolder)
+  mkpath(modified_genetree_folder)
 
-    for simulation_rep in 1:n_reps
-      info = "" # info for rep will be appened to tracking_info 
-      iteration = 1 
-      rep_number_string = pad_number(simulation_rep, n_reps) # see utilities.jl 
-      final_output_per_rep = joinpath(final_output_dir, "rep$rep_number_string") # folder has been created when running "start_simphy_Nreps" 
-      total_trees = 0 # Track total number of gene trees in this rep  
-      simphy_output_rerun = joinpath(simphyfolder, "re-run", "rep$rep_number_string") # all outputs from re-running simphy stores in simphyfolder/re-run/repID
-      mkpath(simphy_output_rerun)  
+  # Initializing 
+  info = "" # info for rep will be appened to tracking_info 
+  iteration = 1 # Interation starts from 0 
+  total_trees = 0 # Track total number of gene trees in this rep  
+  enough_genes_status = false
 
-      while iteration <= max_iteration
+  while iteration <= max_iteration_simphy
 
-        current_seed = seed_array[n_reps, iteration] # see utilities.jl
-        
-        # this rep has enough genes already, skip and break the while-loop 
-        if (enough_genes_status[simulation_rep]) 
-          info = String("This rep gets enough genes! Loop breaks at iteration $iteration. ")
-          break
-        end
-        
-        files = readdir(final_output_per_rep) 
-        num = count(file -> occursin(r"g_trees_noLocusID_.*", file), files) # For this rep, count num of gene trees 
-        total_trees = num # Update the total number of trees 
+    # seed for this rep and this int 
+    current_seed = seed_array[simulation_rep, iteration] # see utilities.jl
+    print(current_seed) 
 
-        if num < n_genes 
-          # re-running simphy for each rep 
-          simphy_output_rerun_perInt = joinpath(simphy_output_rerun, "Int$iteration") 
-          mkpath(simphy_output_rerun_perInt) # dir to strore outputs from re-running simphy 
-          batch = calculate_batch(num, n_genes) # see utilities.jl 
-          rerun_simphy_1rep(batch, simulation_rep, current_seed, iteration, simphy_output_rerun_perInt, simphy_conf_content, matching_pattern, final_output_per_rep)
+    
+    # this rep has enough genes already, skip and break the while-loop 
+    if enough_genes_status
+      info = String("This rep gets enough genes! Loop breaks at iteration $iteration. ")
+      break
+    end
+    
+    # count num of gene trees in the output dir 
+    files = readdir(modified_genetree_folder) 
+    num = count(file -> occursin(r"g_trees_noLocusID_.*", file), files) # For this rep, count num of gene trees 
+    total_trees = num # Update the total number of trees 
 
-          iteration += 1 # increase one iter
-        else
-          enough_genes_status[simulation_rep] = true
-        end
-      end 
+    if num < n_genes 
+      # re-running simphy for each rep 
+      simphyfolder_int = joinpath(simphyfolder, "Int$iteration")
+      mkpath(simphyfolder_int) # each int has its own folder inside simphyfolder
+      batch = calculate_batch(num, n_genes) # see utilities.jl 
+      rerun_simphy_1rep_1int(batch, simulation_rep, current_seed, iteration, simphyfolder_int, simphy_conf_content, modified_genetree_folder, rootfolder)
 
-      # Check if lower_threshold is met and write the tracking info 
-      if total_trees >= n_genes
-        num_more_trees = total_trees - n_genes  
-        if (enough_genes_status[simulation_rep]) 
-          str = ("Rep$simulation_rep: the number of gene trees reaches the target. There are $num_more_trees more compared to the target $n_genes. Total number of gene trees: $total_trees. ")
-          info = str * info 
-        else 
-          info = String("Rep $simulation_rep: max_iteration reaches. The number of gene trees reaches the target. There are $num_more_trees more compared to the target $n_genes. Total number of gene trees: $total_trees. ")
-        end
-      elseif total_trees >= lower_threshold 
-        num_less_trees = n_genes - total_trees 
-        num_more_than_lower = total_trees - lower_threshold
-        info = String("Rep $simulation_rep: max_iteration reaches. There are $num_less_trees missing compared to the target $n_genes, while simulating $num_more_than_lower more gene trees higher than lower_threshold. Total number of gene trees: $total_trees. ")
-      else
-        num_less_than_lower = lower_threshold - total_trees 
-        info = String("Rep $simulation_rep: max_iteration reaches but simulating  $num_less_than_lower less than lower_threshold. Simulation stopd. Check parameters and re-run the simulation. Total number of gene trees: $total_trees. ")
-        error("Number of genes doesn't meet expectation. Check simulation_info.log and re-run simulation with updated parameters") # The script stops if # gene trees in i rep doesn't reach the lower_threshold 
+      iteration += 1 # increase one iter
+    else
+      enough_genes_status = true
+    end
+  
+    # Check if n_genes_min is met and write the tracking info 
+    if total_trees >= n_genes
+      num_more_trees = total_trees - n_genes
+      if enough_genes_status 
+        str = ("""
+        --------------- Rep$simulation_rep --------------------
+        Number of gene trees reaches the target. 
+        There are $num_more_trees more compared to the target $n_genes. 
+        Total number of gene trees: $total_trees. 
+        """)
+        info = str * info 
+      else 
+        info = """
+        --------------- Rep$simulation_rep --------------------
+        Maximum iteration $max_iteration_simphy reaches and the bumber of gene trees reaches the target. 
+        There are $num_more_trees more compared to the target $n_genes. 
+        Total number of gene trees: $total_trees. """
       end
-      push!(tracking_info, info)
+
+      elseif total_trees >= n_genes_min
+        num_less_trees = n_genes - total_trees 
+        num_more_than_lower = total_trees - n_genes_min
+        info = """
+          --------------- Rep$simulation_rep --------------------
+          Maximum iteration $max_iteration_simphy reaches BUT there are $num_less_trees less trees than the target $n_genes. 
+          $num_more_than_lower more gene trees HIGHER than n_genes_min.
+          Total number of gene trees: $total_trees. """
+      else
+        num_less_than_lower = n_genes_min - total_trees 
+        info = """
+          --------------- Rep$simulation_rep --------------------
+          Maximum iteration $max_iteration_simphy reaches BUT $num_less_than_lower less than n_genes_min. Simulation stopd. 
+          Check parameters and re-run the simulation. Total number of gene trees: $total_trees. """ 
+        # error("Number of genes doesn't meet expectation. Check simulation_info.log and re-run simulation with updated parameters") # The script stops if # gene trees in i rep doesn't reach the n_genes_min
+      end
     end
 
-    # Write the tracking information into a log file 
-    tracking_file_path = joinpath(simphyfolder, "simulation_tracking_file.log")
-    open(tracking_file_path, "a") do io
-        write(io, join(tracking_info, "\n"))
-    end 
+  return info
 end 
 
-# Run the function above 
-run_simulation(max_iteration, n_reps, n_genes, seed_simphy, simphyfolder, simphy_conf_content, rootfolder, lower_threshold)
+"""
+run_simulation: 
+Goal: -> 1) run simulation with n_rep and < max_iteration_simphy, 
+      -> 2) Individual simulation_rep is procssed by different processor
+Input: 
+  max_iteration_simphy: Maximum iteration for simphy (default = 100)
+  n_reps: Total number of replicates
+  n_genes: Total number of genes to be simulated (target)
+  seed_simphy: The master seed to generate seed_array (see utility.jl)
+  simphy_conf_cont: simphy configuration content (=global simphy_conf_cont)
+  rootfolder: rootfolder (the github repo)
+  n_genes_min: The minimum number of genes trees to be retained. 
+    -> If num of gene trees simulated < n_genes_min, the loop breaks and raise an error
+  folder_path_list: A list to store path to each rep  
+"""
+ 
+function run_simulation(max_iteration_simphy::Int, n_reps::Int, n_genes::Int, seed_array_simphy::Array, simphy_conf_content::String, rootfolder::String, n_genes_min::Float64, folder_path_list::Vector)
+
+  # For simphy simulation, each replicate and each iteration gets a unique seed based on seed_array_simphy generated from seed_simphy
+
+  tracking_info_list= pmap(simulation_rep -> run_simulation_1rep(max_iteration_simphy, simulation_rep, n_genes, simphy_conf_content, rootfolder, n_genes_min, seed_array_simphy, folder_path_list), 1:n_reps)
+  tracking_info = vcat(tracking_info_list...)
+
+  # Write tracking info to file
+  tracking_file_path = joinpath(outfolder, "simulation_tracking_file.log")
+  open(tracking_file_path, "a") do io
+      write(io, join(tracking_info, "\n"))
+  end 
+end 
 
 #-----------------------------------------------#       
 #  simulate molecular sequences using seq-gen
 #-----------------------------------------------#
-# run seq-gen on each replicate and each gene
-for simulation_rep in 1:n_reps  
+#= Goal: run seq-gen on each replicate and each gene
+  Inputs: 
+  -Simulation_rep: Replication ID
+  -folder_path_list: A list to store path to each rep 
+  Outputs: 
+  -store concate_alignment_rep{rep_id}.fasta into repID/seqgenfolder/
+=# 
+
+@everywhere function run_seqgen_1rep(simulation_rep::Int, folder_path_list::Vector, seed_array_seqgen::Array) 
+
+  current_seed = seed_array_seqgen[simulation_rep, 1]
+
   rep_number_string = pad_number(simulation_rep, n_reps) # see utilities.jl 
-  input_dir = joinpath(simphyfolder, "modified_tree_strings","rep$rep_number_string") 
-  output_dir = joinpath(seqgenfolder, "rep$rep_number_string") 
+  input_dir = setup_rep_output_folders(folder_path_list, simulation_rep, "genetrees_singlecopy") 
+  output_dir = setup_rep_output_folders(folder_path_list, simulation_rep,  joinpath("seqgenfolder", "nexus_folder")) # Need a separate folder for all nexus because in iqtree.jl, iqtree is running on all listed files in seqgendir
   mkpath(output_dir)
 
   genetreefiles = readdir(input_dir)
   for input_file_name in genetreefiles 
-    # replace .trees to .nex --> specify seq-gen output 
     output_file_name = replace(input_file_name, r"\.trees$" => ".nex") 
     input_file_path = joinpath(input_dir, input_file_name)
     output_file_path = joinpath(output_dir, output_file_name)
-    run(`bash scripts/seq-gen.sh $rep_number_string $input_file_path $output_file_path`) 
+    run(`bash scripts/seq-gen.sh $rep_number_string $input_file_path $output_file_path $current_seed`) 
   end 
+
 end
 
 #-----------------------------------------------#       
@@ -390,30 +435,127 @@ end
 #-----------------------------------------------#
 #=  Goal 1: concatenate .nex output from seq-gen into a .fasta 
     Goal 2: Store intermediate individual gene (.fasta) in the input folder  
+  Inputs: 
+  -Simulation_rep: Replication ID
+  -folder_path_list: A list to store path to each rep 
+  Outputs: 
+  -store concate_alignment_rep{rep_id}.fasta into repID/seqgenfolder/
 =# 
-for simulation_rep in 1:n_reps
-  rep_number_string = pad_number(simulation_rep, n_reps) # utilities.jl
-  input_nexus_dir = joinpath(seqgenfolder,"rep$rep_number_string")
-  output_fasta_dir = joinpath(seqgenfolder)
-  run(`python scripts/concatenate_seq.py $input_nexus_dir $output_fasta_dir`) 
+@everywhere function concatenate_nexus_1rep(simulation_rep::Int, folder_path_list::Vector)
+  rep_number_string = pad_number(simulation_rep, n_reps)
+  seqgenfolder = setup_rep_output_folders(folder_path_list, simulation_rep, "seqgenfolder") # output folder. Save the concated fasta one layer above nexus_folder 
+  input_nexus_folder = joinpath(seqgenfolder, "nexus_folder")
+  run(`python3 scripts/concatenate_seq.py $input_nexus_folder $seqgenfolder $rep_number_string`) 
 end
 
 #-----------------------------------------------#       
 #  simulate iqtree and astral using seq-gen
 #-----------------------------------------------#
+# Specify iqtree and astral temp folder path: 
+iqtreefolder_tmp_root = "iqtreefolder"
+iqtreefolder  = joinpath(outfolder, iqtreefolder_tmp_root)
+astralfolder_tmp_root = "astralfolder"
+astralfolder = joinpath(outfolder, astralfolder_tmp_root)
+
+@everywhere global astralfolder_tmp_root = $astralfolder_tmp_root
+@everywhere global iqtreefolder_tmp_root = $iqtreefolder_tmp_root 
+
+# temporary folders that need to be 1 level from the repo root folder, for iqtree.pl,
+# later moved into their proper place down the folder hierarchy
+# Important to have $params-$rep to identify the exact rep and parameter set  
+@everywhere function tmp_iqtreeastral_folders(params, rep)  
+  return ("$iqtreefolder_tmp_root-$params-$rep", "$astralfolder_tmp_root-$params-$rep") 
+end 
+
 # run iqtree on each gene of each rep: use iqtree.pl on each rep
-for simulation_rep in 1:n_reps
-  rep_number_string = pad_number(simulation_rep, n_reps) # utilities.jl 
+@everywhere function run_iqtree_perl_1rep(simulation_rep::Int, folder_path_list::Vector, paramname_root::String, seed_array_iqtree::Array)
+  
+  current_seed = seed_array_iqtree[simulation_rep, 1] # get the current seed for this replicate 
+
+  rep_number_string = pad_number(simulation_rep, n_reps) # utilities.jl
+  seqgenfolder = setup_rep_output_folders(folder_path_list, simulation_rep, joinpath("seqgenfolder", "nexus_folder"))
   tmpiqtreedir, tmpastraldir =  tmp_iqtreeastral_folders(paramname_root, rep_number_string)
-  run(`perl ./scripts/iqtree.pl --seqdir=$seqgenfolder/rep$rep_number_string --iqtreedir=$tmpiqtreedir --astraldir=$tmpastraldir`)
+
+  run(`perl ./scripts/iqtree.pl --seqdir=$seqgenfolder --iqtreedir=$tmpiqtreedir --astraldir=$tmpastraldir --seed_iqtree=$current_seed`)
+
 end
 
 # iqtree.pl requires folders that are 1 level from where the script is run.
 # below: move these folders to their proper place
-for simulation_rep in 1:n_reps
+@everywhere function mv_iqtree_astral_folder_1rep(simulation_rep::Int, folder_path_list::Vector, paramname_root::String)
+  output_folder = setup_rep_output_folders(folder_path_list, simulation_rep, "")
   rep_number_string = pad_number(simulation_rep, n_reps) # utilities.jl  
   tmpiqtreedir, tmpastraldir =  tmp_iqtreeastral_folders(paramname_root, rep_number_string)
-  run(`mv $tmpiqtreedir  $iqtreefolder`)
-  run(`mv $tmpastraldir $astralfolder`)
+  run(`mv $tmpiqtreedir $output_folder/iqtreefolder`) # move temp iqtree folder to repID and rename it as iqtreefolder 
+  run(`mv $tmpastraldir $output_folder/astralfolder`) # move temp astral folder to repID and rename it as astralfolder 
+end 
+
+#-----------------------------------------------#       
+#  Run the pipeline and time the process
+#-----------------------------------------------# 
+function main() 
+  # Runn major parts and time the outputs 
+
+  @timeit to "Running Simphy and modify newick strings" begin
+    seed_array_simphy = seed_generator(seed_simphy, n_reps, max_iteration_simphy, outfolder, "random_seed_simphy.txt")
+    run_simulation(max_iteration_simphy, n_reps, n_genes, seed_array_simphy, simphy_conf_content, rootfolder, n_genes_min, folder_path_list)
+  end 
+
+  @timeit to "Running Seq-Gen" begin 
+    seed_array_seqgen = seed_generator(seed_seqgen, n_reps, 1, outfolder, "random_seed_seqgen.txt")
+    pmap(simulation_rep -> run_seqgen_1rep(simulation_rep,folder_path_list, seed_array_seqgen), 1:n_reps) 
+  end 
+
+  @timeit to "Concatecate seq-gen sequences to fasta" begin
+    pmap(simulation_rep -> concatenate_nexus_1rep(simulation_rep, folder_path_list), 1:n_reps)
+  end 
+
+  @timeit to "Running iqtree + astral" begin 
+    seed_array_iqtree = seed_generator(seed_iqtree, n_reps, 1, outfolder, "random_seed_iqtree.txt")
+    pmap(simulation_rep -> run_iqtree_perl_1rep(simulation_rep, folder_path_list, paramname_root, seed_array_iqtree), 1:n_reps)
+    pmap(simulation_rep -> mv_iqtree_astral_folder_1rep(simulation_rep, folder_path_list, paramname_root), 1:n_reps) 
+  end
+
+  println("Simulation for $paramname_root is DONE!")
+
+end 
+
+if abspath(PROGRAM_FILE) == @__FILE__
+  main()
+
+  n_processors = nprocs() # Include this information 
+  # The number of processors is -p specified in the script + 1
+  # For example julia -p 4 simulation_iqtree.jl --args ..., this will show 5 processes 
+  host_name = gethostname() # host name for server 
+
+  # save all parameters and write into the output dir
+  arguments = """
+  #--------------SimPhy, SeqGen, IQtree, Astral------------------#
+  Arguments used for simulating this output dataset: 
+  duplication rate = $dup_rate;
+  loss rate = $loss_rate; 
+  rate variation = $ratevar; 
+  number of replicates = $n_reps; 
+  number of genes = $n_genes; 
+  master seed = $master_seed, this will be further used to generate three seeds for simphy, seqgen, and iqtree;
+  seed_simphy = $seed_simphy, used to generate seed array (replicate x iteration) used for Simphy; 
+  seed_seqgen = $seed_seqgen, used to generate seed array (replicate x 1) used for seqgen; 
+  seed_iqtree = $seed_iqtree, used to generate seed array (replicate x 1) used for iqtree; 
+  number of individuals per taxon = $n_inds; 
+  max_iteration_simphy = $max_iteration_simphy, maximum iteration to re-run simphy; 
+  n_genes_min = $n_genes_min, num of simulated gene trees >= n_genes_min else pipeline stops; 
+  Number of processors used = $n_processors;
+  Server for running the script = $host_name.stat.wisc.edu
+
+  Running time shown below: 
+  """
+  argument_file = joinpath(outfolder, "arguments-$paramname_root.log")
+  write(argument_file, arguments)
+  open(argument_file, "a") do io
+    show(io, to)  # Write timer output
+  end
+
 end
+
+
 

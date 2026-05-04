@@ -1,0 +1,196 @@
+---
+title: "Exploring differnet types of hidden paralogy"
+date: "2025-11-02"
+engine: julia
+---
+
+```{julia}
+using PhyloNetworks
+using CSV
+using DataFrames 
+using PhyloPlots
+
+# Include utility functions 
+current_dir = @__DIR__
+println("current_dir: $current_dir")
+
+root_dir = joinpath(current_dir, "..", "..")     
+println("root_dir: $root_dir") 
+
+utility_path = joinpath(root_dir, "scripts", "utilities.jl") 
+include(utility_path)
+```
+
+### Exploring the senarios of different hidden paralogy
+In utilities.jl, we first filtered out gene trees that are: 
+
+1. Mutiple gene copies per accessions 
+    For example if n_inds = 1, then each taxa should have exactly one or less than one accessions, but each accession should have at maximum one gene copy (lost due to gene loss) 
+    If n_inds = 2, then each taxa should have less than or equal to two accessions, but the each accession should have at maximum one gene copy. 
+
+    This is because we want to simulation hidden paralogy, if one taxa has more than one gene copy, then paralogy is not hidden
+
+2. Any gene trees with less than 4 taxa 
+    In this case the gene tree is not informative enough. 
+
+After filtering, we examined the **remainning** gene trees and they can be classified into **three categories**: 
+
+1. Gene trees experiencing gene loss only (No gene duplication happened) 
+
+2. Gene trees experiencing gene duplication and gene loss. After gene duplication, gene loss happened so that each taxa still just have one gene copy, but this copy might be or might not be the original gene copy. Typically we would consider this senario as genes with hidden paralogy but there are **three senarioes** under this category (see below). 
+
+3. Gene trees experiencing nothing (No gene loss and gene duplication) 
+
+After running simulation.jl, this will generates three csv files illsurating which gene tree file belongs to those three categories. 
+For genes experiencing gene loss and gene duplications, hidden paralogy is likely to happen. There are **three senarioes** for any genes expericing gene duplication and gene loss. 
+#### Senario 1: False Hidden Paralogy 
+By definition, if a gene goes through gene duplication and gene loss so that the extra gene copy got lost. This could be classified as hidden paralogy. However, when after gene duplication, gene loss happened so that the duplicated gene copy got lost immediately. 
+
+The second senario of false hidden paralogy happened when the gene duplicated and then the original gene copt got lost. In this case, the tree topopogy is the same as the species while meanwhile the branch length of the locus tree is the same as the species tree. We classify this as false hidden paralogy as well. 
+
+#### Senarios 2: Weak Hidden Paralogy 
+The gene loss happened after gene duplication but the topology of the locus tree is the same as the species tree, while the branch length after speciation to A and B is different. In this case, we called this weak hidden paralogy. 
+### Senario 3: Strong hidden paralogy 
+
+Senario 3 is when strong hidden paralogy is shwon where the topology of locus tree is changed. 
+
+
+#### Explore this senario based on locus tree
+
+Now show a demo of comparing the locus tree to figure out the types of hidden paralogy. This demo does not contain a standalone example folder because it need to involve many different files. To demostrate this, run the below codes step by step. 
+
+First, navigate to the root folder (root of this repo) and run below codes in terminal:  
+
+```{bash}
+julia -p 10 scripts/simulation.jl --dup_rate 1e-4 --loss_rate 1e-4 --ratevar N --n_reps 10 --n_genes 10 --n_inds 1 --SF 1 
+```
+This will generates the simulation in the root folder. Then run postprossing script to generate some summary for this parameter setting: 
+
+```{bash}
+julia -p 10 scripts/simulation_postprocess.jl --dup_rate 1e-4 --loss_rate 1e-4 --ratevar N --n_inds 1 --SF 1 --n_reps 10 
+```
+The below script will show a demo to compare with the results shown below and shown through our pipeline. 
+
+#### Find a few example for False Hidden Pralogy: 
+```{julia}
+paramname_root = set_up_paramname_root(1e-4, 1e-4, "N", 1, 1.0) # set up the root name for parameter files from utilities.jl
+data_dir = joinpath(root_dir, "output", paramname_root)
+postprocess_file = joinpath(data_dir, "RF_true_genetrees_and_species_tree_$(paramname_root).csv")
+
+if isfile(postprocess_file)
+    df = CSV.read(postprocess_file, DataFrame)
+    println("Successfully loaded DataFrame with $(nrow(df)) rows and $(ncol(df)) columns")
+    first(df, 15)
+end 
+```
+
+### Examine false Hidden Paralogy 
+Based on the output above, examine the two trees here: 
+
+1. rep01/genetrees_singlecopy/g_trees_noLocusID_Gene16_Int1.trees  
+
+2. rep02/genetrees_singlecopy/g_trees_noLocusID_Gene08_Int1.trees 
+
+#### False hidden paralogy senario 1: 
+All the suffix of tips (eg: A_0, B_0, etc) are the same although gene duplication and loss happened during evolution history. 
+```{julia}
+# tree: rep01/genetrees_singlecopy/g_trees_noLocusID_Gene16_Int1.trees   
+# Find the locus tree instead of the gene tree: 
+sp_tree = readnewick(joinpath(data_dir, "rep01", "genetrees_simphy", "Int1", "1", "s_tree.trees"))
+locus_trees = readmultinewick(joinpath(data_dir, "rep01", "genetrees_simphy", "Int1", "1", "l_trees.trees"))
+ex1_locus_tree = locus_trees[16] # locus tree for gene 16 
+plot(ex1_locus_tree, useedgelength=true)
+plot(sp_tree, useedgelength=true)
+```
+
+It is very clear that the above example is a hidden paralogy case where F got duplicated and then lost. The topology and branch length of the locus tree is not changed compared to the species tree. 
+#### False hidden paralogy senario 2: 
+The suffix of tips could differ (eg: A_1, B_0, etc), but eventually there is no difference between the locus tree and the species tree in both topology and branch length. 
+
+```{julia}
+# tree: rep02/genetrees_singlecopy/g_trees_noLocusID_Gene08_Int1.trees    
+# Find the locus tree (in genetrees_simphy) instead of the gene tree:
+sp_tree = readnewick(joinpath(data_dir, "rep02", "genetrees_simphy", "Int1", "1", "s_tree.trees"))
+locus_trees = readmultinewick(joinpath(data_dir, "rep02", "genetrees_simphy", "Int1", "1", "l_trees.trees"))
+ex2_locus_tree = locus_trees[8] # locus tree for gene 8
+
+plot(ex2_locus_tree, useedgelength=true)
+plot(sp_tree, useedgelength=true)
+```
+
+It is very obvious that in the above case, although the locus tree have different tree copies, there is no change to the species tree (with remaining taxa) in terms of branch length and topology. 
+
+The results match with the results from our pipeline showing that those two trees are false hidden paralogy. 
+## Examine examples for weak hidden paralogy 
+
+Let's examine some examples for weak hidden paralogy. Unfortunately, the previous parameter setting has no weak hidden paralogy case and we will re-simulate some examples and show our demo below. 
+
+Navigate to the major root directory and run the below codes: 
+
+```
+julia -p 10 scripts/simulation.jl --dup_rate 1e-4 --loss_rate 1e-4 --ratevar L --n_inds 1 --SF 1 --n_genes 10 --n_reps 10 
+
+julia -p 10 scripts/simulation_postprocess.jl --dup_rate 1e-4 --loss_rate 1e-4 --ratevar L --n_inds 1 --SF 1 --n_reps 10 
+```
+```{julia}
+paramname_root = set_up_paramname_root(1e-4, 1e-4, "L", 1, 1.0) # set up the root name for parameter files from utilities.jl
+data_dir = joinpath(root_dir, "output", paramname_root)
+postprocess_file = joinpath(data_dir, "RF_true_genetrees_and_species_tree_$(paramname_root).csv")
+
+if isfile(postprocess_file)
+    df = CSV.read(postprocess_file, DataFrame)
+    println("Successfully loaded DataFrame with $(nrow(df)) rows and $(ncol(df)) columns")
+    first(df, 15)
+end 
+```
+
+```{julia}
+# Find where weak_HP in df == "Y" 
+weak_HP_indices = findall(df.weak_HP .== "Y")  
+df[weak_HP_indices, :] 
+```
+
+```{julia}
+# Examine the first example first: rep03/genetrees_singlecopy/g_trees_noLocusID_Gene1_Int9.trees 
+# Find the locus tree (in genetrees_simphy) instead of the gene tree:
+sp_tree = readnewick(joinpath(data_dir, "rep03", "genetrees_simphy", "Int9", "1", "s_tree.trees"))
+locus_trees = readmultinewick(joinpath(data_dir, "rep03", "genetrees_simphy", "Int9", "1", "l_trees.trees"))
+ex1w_locus_tree = locus_trees[1] # locus tree for gene 8
+
+plot(ex1w_locus_tree, useedgelength=true)
+plot(sp_tree, useedgelength=true)
+```
+
+In the above case, the branch length leading to B and C changed after gene duplication and loss events. However, regardless of some taxa loss, there is no change to the overall topology. This is a weak hidden paralogy case. 
+```{julia}
+# rep09/genetrees_singlecopy/g_trees_noLocusID_Gene07_Int0.trees	0.666667 
+# Find the locus tree (in genetrees_simphy) instead of the gene tree:
+sp_tree = readnewick(joinpath(data_dir, "rep09", "genetrees_simphy", "Int0", "1", "s_tree.trees"))
+locus_trees = readmultinewick(joinpath(data_dir, "rep09", "genetrees_simphy", "Int0", "1", "l_trees.trees"))
+ex2w_locus_tree = locus_trees[7] # locus tree for gene 8
+
+plot(ex2w_locus_tree, useedgelength=true)
+plot(sp_tree, useedgelength=true)
+```
+
+In the above case, the branch length leading to D and E changed after gene duplication and loss events. However, regardless of some taxa loss, there is no change to the overall topology. This is a weak hidden paralogy case. 
+## Strong hidden paralogy  
+Now let's examine some strong hidden paralogy cases: 
+```{julia}
+strong_HP_indices = findall(df.strong_HP .== "Y")  
+df[strong_HP_indices, :]  
+```
+
+```{julia}
+# Examine the first example first: 
+# rep02/genetrees_singlecopy/g_trees_noLocusID_Gene09_Int1.trees 
+# Find the locus tree (in genetrees_simphy) instead of the gene tree:
+sp_tree = readnewick(joinpath(data_dir, "rep02", "genetrees_simphy", "Int1", "1", "s_tree.trees"))
+locus_trees = readmultinewick(joinpath(data_dir, "rep02", "genetrees_simphy", "Int1", "1", "l_trees.trees"))
+ex2s_locus_tree = locus_trees[9] # locus tree for gene 9 
+
+plot(ex2s_locus_tree, useedgelength=true)
+plot(sp_tree, useedgelength=true)
+```
+
+This is obviously a strong hidden paralogy where the overall topology of the locus tree is different from the original species tree. 

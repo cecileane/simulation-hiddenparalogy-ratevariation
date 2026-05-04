@@ -1,0 +1,109 @@
+---
+title: "SNaQ Results Visualization"
+format: html
+execute:
+  warning: false
+  message: false
+---
+
+```{r setup}
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(stringr)
+visual_output <- "visualization_results/snaq" 
+
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path)) 
+source("../scripts/visual_utilities.R")
+```
+
+## Load and Parse Data
+```{r load-parse}
+df <- read_csv("../results/SNaQ_summary.csv") %>%
+  mutate(
+    dup_loss_rate = as.numeric(str_extract(parameter_setting, "(?<=DUP)[0-9.]+")),
+    RV = factor(str_extract(parameter_setting, "(?<=RV)[A-Z]+"),
+                levels = c("N", "G", "L", "GL")),
+    SF = as.numeric(str_extract(parameter_setting, "(?<=SF)[0-9.]+")),
+    n_ind = as.integer(str_extract(parameter_setting, "(?<=N_ind)[0-9]+")),
+    genelen = as.factor(str_extract(parameter_setting, "(?<=genelen)[0-9]+")),
+    pct_H0 = `H=0Accepted`,
+    pct_H1 = `H=1Accepted`,
+    pct_H_greater = `H>1Accepted`
+  ) %>%
+  filter(!is.na(RV))
+```
+
+## Hypothesis Acceptance by Rate Variation and Duplication/Loss Rate
+```{r plot-hypothesis-acceptance-grid}
+#| fig-width: 14
+#| fig-height: 8
+source("../scripts/visual_utilities.R") 
+# For SNaQ data
+p <- plot_hypothesis_acceptance_grid(df, 
+  value_col_prefix = "pct_",
+  h_greater_col = "pct_H_greater",
+  output_dir = "../visualization_results/snaq",
+  output_filename = "SNaQ_model_choice.png",
+  plot_title = "SNaQ model choice")
+# Display the plot
+print(p)
+```
+
+
+## H=0 Hypothesis Acceptance by Duplication/Loss Rate
+```{r plot-hypothesis-acceptance-H0-by-rate-variation}
+#| fig-width: 12
+#| fig-height: 6
+
+# Plot H=0 (tree) acceptance percentage by rate variation
+p_h0 <- plot_hypothesis_acceptance_H0_by_rate_variation(
+  df,
+  h0_col = "pct_H0",
+  output_dir = "../visualization_results/snaq",
+  output_filename = "SNaQ_hypothesis_typeIerror_H0.pdf",
+  y_range = c(-1, 6),
+  plot_title = "SNaQ type-I error rate by duplication/loss rate")
+
+# Display the plot
+print(p_h0)
+```
+
+
+## True Graph Recovery by Duplication/Loss Rate
+```{r}
+source("../scripts/visual_utilities.R") 
+p_recovery_aggregated <- plot_true_graph_recovery_lines_aggregated(df, 
+  output_dir = "../visualization_results/snaq",
+  y_range = c(60, 102),
+  output_filename = "SNaQ_true_graph_recovery_lines_aggregated.png",
+  plot_title = NULL)
+print(p_recovery_aggregated)
+```
+
+```{r}
+#| fig-width: 12
+#| fig-height: 6
+# Plot H=1 only recovery rates
+p_h1_only <- plot_true_graph_recovery_H1_only(df,
+  output_dir = "../visualization_results/snaq",
+  output_filename = "SNaQ_true_graph_recovery_H1_only.pdf",
+  plot_title = "SNaQ true graph recovery under H=1")
+
+# Display the plot
+print(p_h1_only)
+```
+
+
+```{r plot-true-graph-recovery}
+#| fig-width: 16
+#| fig-height: 8
+
+# Plot true graph recovery across all parameter combinations
+# p2 <- plot_true_graph_recovery_lines(df,
+#   output_dir = "../visualization_results/snaq",
+#   output_filename = "SNaQ_true_graph_recovery_lines.pdf")
+# # Display the plot
+# print(p2)
+``` 

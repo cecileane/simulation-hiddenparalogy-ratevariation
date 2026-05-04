@@ -1,0 +1,127 @@
+---
+title: "Combined Results Visualization"
+format: html
+execute:
+  warning: false
+  message: false
+---
+
+```{r setup}
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(stringr)
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path)) 
+visualization_output <- "../visualization_results/combined" 
+snaq_input_dir <- "../snaq_summary"
+findgraph_input_dir <- "../findgraph_summary"
+source("../scripts/visual_utilities.R")
+
+# Load summary data frames for functions that take pre-loaded data
+parse_params <- function(df, param_col) {
+  df %>% mutate(
+    dup_loss_rate = as.numeric(str_extract(.data[[param_col]], "(?<=DUP)[0-9]*\\.?[0-9]+(?:[eE][-+]?[0-9]+)?")),
+    RV    = factor(str_extract(.data[[param_col]], "(?<=RV)[A-Z]+"), levels = c("N", "G", "L")),
+    SF    = as.numeric(str_extract(.data[[param_col]], "(?<=SF)[0-9]*\\.?[0-9]+")),
+    N_ind = as.integer(str_extract(.data[[param_col]], "(?<=N_ind)[0-9]+")),
+    n_ind = N_ind
+  )
+}
+
+snaq_df      <- read_csv("../results/SNaQ_summary.csv")      %>% parse_params("parameter_setting")
+findgraph_df <- read_csv("../results/findgraph_summary.csv") %>%
+  parse_params("paramname_root") %>%
+  mutate(
+    pct_H0        = H0Accepted / total_replicates * 100,
+    pct_H0_wr_3.7 = H0Accepted_WR_3.7 / total_replicates * 100
+  )
+```
+
+# Combined Plot of minor Gamma SNaQ vs findgraph
+Minor gamma values aggregated across all parameter settings (n_inds, ILS, duplication/loss rates)
+with substitution rate variation color coding (gene, lineage, none).
+
+```{r combined_snaq_findgraph_minor_gamma, fig.width=14, fig.height=6}
+
+# Create combined 2-panel plot
+p_minor_gamma <- plot_combined_snaq_findgraph_aggregated(
+  snaq_input_dir = snaq_input_dir,
+  findgraph_input_dir = findgraph_input_dir,
+  output_dir = visualization_output,
+  output_filename = "combined_snaq_findgraph_aggregated",
+  max_y = 500
+)
+print(p_minor_gamma)
+```
+
+# Combined Plot of minor Gamma SNaQ vs findgraph for each parameter setting (n_inds, ILS, duplication/loss rates)
+Minor gamma values faceted by parameter settings (n_inds, ILS, duplication/loss rates)
+with substitution rate variation color coding (gene, lineage, none).
+
+```{r combined_snaq_findgraph_minor_gamma_by_tree_display, fig.width=14, fig.height=18}
+source("../scripts/visual_utilities.R")
+# Create combined 2-panel plot by tree display visualization
+result <- plot_combined_snaq_findgraph_by_tree_display(
+  snaq_input_dir = snaq_input_dir,
+  findgraph_input_dir = findgraph_input_dir,
+  output_dir = visualization_output,
+  output_filename = "combined_snaq_findgraph_by_tree_display",
+  max_y = 350,
+  max_y_by_ratevar = list(none = 250, gene = 350, lineage = 100)
+)
+print(result)
+```
+
+
+# Combined H=1 True Graph Recovery: SNaQ vs findgraphs
+
+```{r combined_h1_recovery, fig.width=16, fig.height=9}
+# SNaQ uses find_true_net1 (% replicates where H=1 finds true graph, across all graphs)
+# findgraphs uses pct_true_tree_H1 (same metric)
+p_h1_recovery <- plot_combined_true_graph_recovery_H1_only(
+  snaq_df      = snaq_df,
+  findgraph_df = findgraph_df,
+  h1_col_snaq      = "find_true_net1",
+  h1_col_findgraph = "pct_true_tree_H1", # among all trees recovered by findgraphs 
+  output_dir       = visualization_output,
+  output_filename  = "combined_snaq_findgraph_h1_alltrees_for_findgraphs_recovery",
+  y_range          = c(75, 105),
+  plot_title       = "H=1 True Graph Recovery: SNaQ vs findgraphs"
+)
+print(p_h1_recovery)
+```
+
+```{r combined_h1_best_graph_recovery, fig.width=16, fig.height=9}
+# Best-graph version: findgraphs uses count_H1_best_displays_true_tree
+source("../scripts/visual_utilities.R") 
+p_h1_best <- plot_combined_true_graph_recovery_H1_only(
+  snaq_df      = snaq_df,
+  findgraph_df = findgraph_df,
+  h1_col_snaq      = "find_true_net1",
+  h1_col_findgraph = "count_H1_best_displays_true_tree",
+  output_dir       = visualization_output,
+  output_filename  = "combined_snaq_findgraph_h1_best_graph_recovery",
+  y_range          = c(60, 102),
+  plot_title       = NULL
+)
+print(p_h1_best)
+```
+
+# Combined Type I Error Rate (H≥1 Accepted): SNaQ vs findgraphs
+```{r combined_h0_acceptance, fig.width=16, fig.height=9}
+source("../scripts/visual_utilities.R")
+p_h0_combined <- plot_combined_hypothesis_acceptance_H0(
+  snaq_df               = snaq_df,
+  findgraph_df          = findgraph_df,
+  h0_col_snaq           = "pct_H0",
+  h0_col_findgraph_wr30 = "pct_H0",
+  h0_col_findgraph_wr37 = "pct_H0_wr_3.7",
+  output_dir            = visualization_output,
+  output_filename       = "combined_snaq_findgraph_type1_error",
+  y_range               = c(-5, 105),
+  plot_title            = NULL
+)
+print(p_h0_combined)
+```
+

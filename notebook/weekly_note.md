@@ -1,8 +1,446 @@
+# Updates changes in the beginning of Fall 2025 
+
+Bugs fixed during running simulations: 
+1. Log files cannot print concatenated file output --> fixed 
+2. Biggest issue: During simulation, if there are lots of gene trees not passing then the quota of file number will quickly exceed. I tried different methods including having debug model, etc, but even during one simulation process if there are many gene trees not passing, the process will stop due to lack of quota. --> Therefore, I dynamically remove the excessive files during the simulation process. 
+
+To save space, 
+1. All major scripts, simulation_iqtree.jl , findgraph.jl and snaq.jl have debug_mode. If this mode is activated, then intermediate files will be saved or otherwise intermediate files will be removed after finishing 
+
+Summary files: 
+1. summary.jl can be run to generate summary for simulation and findgraph outputs 
+
+Based on what is talked last time: 
+1. findgraphs now have two methods to determine which graphs got saved (all configurable)
+2. findgraphs now can take n_inds = 2 
+
+# Week july 14th to 
+Top thing to do: 
+1) Write a function to calculate the WR of the true species tree using pqgraph. --> done
+
+1. Fianlize log file. 
+2. Rewrite the concatenate_fasta.py to make sure the tips are re-ordered in aphebetically order with 00, 01 (predictable order) -- Done. 
+3. Findgraph runs qpgraph already so no need to run qpgraph to calculate WR 
+4. Generate a high-level description of the pipeline (change the README.md file) --> Done. 
+  -> Goal of the entire project 
+  -> Which is the each folder (have README.md for all details for the pipeline files)
+  -> When every script is used 
+5. Instead of keeping the best 5 graphs, set a threshold compared to the best ll score, keep graphs within the threshold from the best ll (H = 0). A theshold in AICs = a threshold in ll especially for trees. 
+  Comparing the AICs (BICs) = comparing -2 * log likelihood since num of paras are the same. 
+
+  To keep graphs: 
+  1) keeping 5 graphs is very arbitrary 
+  2) Have a function to look at the ll scores and set a threshold for ll score (with a minimul number of N graphs).  
+  Do this to each run individually and then combine runs and apply this strategy again. 
+
+
+# Week before July 14th: 
+1. Change the ind and geno file so that the outgroup is up front 
+  Look at Lauren's code (-i) 
+  --> This -i used in vcf_to_eigenstrate.py doesn't work, as indicated in Lauren's notes
+      First, f2_from_geno doesn't have an outgroup 
+      Second, .ind files will just assign population ID without changing the order. 
+      The order depends on the order of the column headers in the vcf file. 
+      This means that including an .ind file won't really change the order. 
+  --> Solution: 
+      I then realized the column headers' order in .vcf file depends on the concatenated file order. 
+      I changed my python script which concatenate nexus file and changed to fasta file. 
+      Now, all concatenated files have the first sequence starting from A_0, A_1, ... so that pop A will always be the top header in the .VCF file. 
+      Therefore, this solved the issue. 
+  --> Another issue left is that the WR for Dup_rate = 0, loss_rate = 0, ratevar = N, L, G. 30 - 130. 
+       
+2. Double search if this issue is on Admixtools2 github and possibly open an issue 
+  --> no, but I kind of understand why this happened. 
+  When calling SNPs, the software snp-sites treats the first sequence in the .fasta file as the reference file. Therefore, the reference sequence gets all snp sites as 0 (same as the reference). Based on f2-from-geno (in the source code, this function calls `extract_f2` https://rdrr.io/github/uqrmaie1/admixtools/man/extract_f2.html) This function says outgroup = ”Keep only SNPs which are heterozygous in this population“. Pop A is our outgroup. The first sequence during SNP calling, let's say it's C, will always have 0 since it is treated as the refernece. 
+
+  seqgen - snp-sites - vcf2eigenstrate - admixtools (f2_from_geno)
+
+3. Read SNaQ BS --> Understand what the BS value truy mean 
+  **Think of a way to summarize SNaQ results** 
+  Instead of using boostrapping, run Hmax = 0, Hmax = 1, Hmax = 2 with 100 runs each 
+  scores = [loglik(net0), loglik(net1), loglik(net2)] 
+
+  If $loglik(net0) \approx loglik(net1) \approx loglik(net2)$, then Hmax = 0 
+  If $loglik(net0) > loglik(net1) \approx loglik(net2)$, then Hmax = 1 
+  If $loglik(net0) > loglik(net1) > loglik(net2)$ then Hmax > 1 
+
+  However, how to set up a threshold is a problem 
+
+
+# Week before July 4th: 
+1. Change dogstring to standard format -- done 
+2. Run simulation with different settings -- done 
+
+# Week before Jun 30th: 
+1. Change simphy to gene tree simulation 
+2. start running trails 
+3. Change simphy multipliers 
+
+# Week June 6: 
+1. Change SnaQ_1rep to make sure it fits the newest SnaQ 
+2. speciestree.jl script might not work in PhyloNetwork new package, change this script to make sure ot is compatible to the newest phylonetworks 
+3. Change 2Ne = 2000 in all scripts 
+4. Change all my lines to 80 characters --> Done 
+5. Print the run_simphy_1rep print out into a DataFrames File instead of printing long text, save this as a csv file. --> This information could be useful to change the duplicate rate, making the DF to be computer-readable to make sure we can share with reviewers and helping us determine dup_rate. Also, list the reasons why a gene is filtered out (number of individuals with multiple copies, number of individuals of zero copies, number of individual with one copy, etc) ---> must-do, should be enough. --> Done.
+6. Change snaq.jl to make sure it can take master seed 
+7. Remove taking trees as the arguments --> Done 
+8. Make detailed documentation file 
+
+Save a separate file with saved information about the number of total genes simulated for each simphy replicate 
+
+List all the information 
+
+# The week before June 10th: 
+To do: 
+1. Make sure SnaQ can handle multi-accession data -- Done  
+--> Question about summarizing tree tips
+  Should the species tree and gene trees used in SnaQ only have one accession per tip? 
+--> I used option 1. Need further testing to check the running time. 
+Option 1: 
+Each gene tree has two individuals and tell SnaQ a mapping file to tell SnaQ which individual belongs to which species. I tell SnaQ to give us one-tip per species. SnaQ will force any tips belonging to the species, and then the external branch length could be inferred under MSC. The process of running SnaQ is much slower. Given that our species number of smaller, SnaQ should be fine. 
+Option2: When using the function countingenetree, which will counts the number of genes in each quartet, and we can tell the function to only look at the quartets in each species while ignoring quartets between species. The quartet table should ignore the individual names and sumamrize the data based on the species level. Then we pretend that we have data in species level and we feed to SnaQ. 
+1.1.0 phylonetworks and SnaQ 1.0 --> Use the newest packages and the new document. 
+
+2. Simulation plan: 
+
+Average substition rate: 0.2% to 2% per gene per million years. Simphy requiires the dup_rate = events/generation 
+If 0.2% to 2% /gene/million-years and assume each generation is 1 year, there are one million generations per million year (generation time = 1 year): 
+0.02 / 1 million generation = 2e-8 per gene per generation, and since there are about 1000 genes, so 2e-4 events per generation. 
+
+The original loci came from ultraconserved loci, which has a sampling bias --> Pick a duplication rate which not reflecting the real duplication across the whole genome. 
+
+If loss_rate = 0 while duplicate > 0, we will throw all the genes so not useful 
+Pick a loss_rate equal to the duplicate_rate only, because on average loss of gene copy and gain of gene copy is about equal 
+
+dup_rate = 4e-4, 0
+loss_rate = 2e-4, 0 (loss_rate cannot be bigger than dup_rate based on simphy) 
+ratevar = GL, L, G, N 
+n_inds = 1 or 2 
+
+Choices of duplication rate depends 
+
+6880 generations, 2Ne = 2000 
+
+assume that we have 3 duplications from the tip to the root 
+3 duplications / 6880 generations = 4e-4 # Try this first as a starting point. This should be the maximum value but cannot go higher than this, probbaly 1e-4 
+
+3. fix the bug in simulation_iqtree --> This needs to talk 
+After further checking, I think the substition multiplier doesn't work well. My proposed plan: 
+
+1) Use Simphy to simulate gene tree (output unit in number of generations)
+2) To use the substition rate / per / generation we calculate to get gene trees used for seq-gen:
+  For lineage heterogenity: Use branch-specific substition rate / per / generation  
+  For other: Use global branch-specific substition rate / per / generation   
+
+#--------------------------------------# 
+# The week before May 30th: 
+To do: 
+1. Carefully learn MCM 
+2. Read SimPhy mannual and set up the substitution rate in correct format 
+
+# Meeting on May 2nd: 
+To do: 
+1. Check speciestree.jl file to double check the branch length problem 
+2. Double check (generation time and population size) paramaters under simphy --> we might not need it at all 
+  Does it assume a haploid or diploid populations --> assume haploid 
+  If simphy requires generation time or population size, we need to set them to our original number 
+3. Check bialleic site 
+
+Topics: 
+1. updates on the project 
+2. third chapter undecided 
+3. Summer plan + no interns (desperately need some guidance)
+
+To do from last week: 
+1. Check why getting inf wr? 
+  --> I have a feeling it's because the 
+2. change the stop in findgraphs_1rep to warnning and save as a log file -> Done 
+4. reject k = 0 and reject k = 1 (no best_k) -> Done. I actully keep best_k, which oc
+
+# Meeting on April 11th: 
+Updates for progress: 
+1. License to incorporate modified vcf2eigenstrat file --> Done. 
+2. Use 'hash' function to identify same networks --> Done
+3. Basic workflow 
+4. Change worse_residuals to include signs --> Might not be that necessary? 
+5. Fix the previous error: 
+  - Using Rcpp package --> Not working 
+  - Using a previous admixtools version 
+
+Why getting inf wr? 
+1. Check intermediate files --> check f2 blocks and each block should have its own list of f2 values 
+2. dim(f2) --> gives the number of genes simulated --> Yes, this is correct 
+4. res from f2 (f2_from_geno) --> check graph_f2_function to see the difference between expected and observed f2 for each graph --> 
+
+# Meeting on April 4th 
+1. Build master seeds based on parameter setting --> Done 
+2. Figure out the snp error 
+3. Check if the different seed setting in simulation_iqtree.jl could work --> Done and details about seed documentation is added to the documentation.md files. 
+4. Finish findgraph workflow
+
+Meetings: 
+1. Downgrade the admixtools version --> try 2.0.9 Lauren used v.2.0.4 
+2. Download Rcpp packages -> Done. 
+3. Use a "hash" function to idnetify the topologically same networks 
+  Take the igraph and input the graph into julia 
+    change igraph between julia networks and adj_matrix 
+    Check two graphs with hash --> if two graphs with the same hashs, they tend to have LL scores. So double check if the LL score is the same. 
+4. Change result$worst_residuals to include the sign 
+5. License 
+
+To do list: 
+1. Use hash to remove duplicate graphs (miscfxns.jl) 
+2. Calculate worst_residuals 
+
+# Meeting on March 14th 
+1. Parameters setting: each paraemeter gets a prime number and the baseline is always 1, and the master seed is the product of all. Document that the master used is specific to the used of the parameter setting. 
+2. Fingure out the error: 
+  -> Have toy dataset with first 10 SNPs, and then change the value in the toy .geno dataset to see what happened 
+  -> In the R package, search the error message to see what part of the code is doing this.
+
+
+# March 7 to March 14: 
+To-do list for this week: 
+1. Write find_graph codes --> Question about .geno files 
+2. Think/write codes for SNaQ handling multiple individuals per taxa 
+  -> Not done 
+3. Think of a workflow for the overall process: 
+    a. identify where seed could be implemented while not implemented already 
+        -> iqtree 
+        -> astral 
+        -> seq-gen
+4. Random thoughts: polypoidy and f statistics 
+
+To do list after meeting: 
+1. Just use 1000 genes --> Need to remember this 
+2. Rename paras: 
+        max_iteration replaced with max_iteration_simphy --> Done. 
+        lower_threshold replaced with n_genes_min --> Done. 
+3. print host name in the .log in simulation_iqtree.jl and snaq_submit.jl --> Done. 
+4. For snaq: --> Need to remember this 
+    snaq_runs_H0 = 10 (bootnet runs)
+    sanq_runs_H1 = 10 (bootnet runs)
+    boostrapping replicate = 100 (for H0 and H1)
+
+5. Make sure SNaQ could handle more than more individual per taxa 
+If we are having more than 1 inds, check snaq tutorial. 
+
+6. Use stablerng instead of the unstable rng because random number generator changes from Julia version to verion --> Done. 
+
+7. Make a workflow of the overall simulation process --> Listed anywhere when using seeds 
+  1. Potentially have a graph 
+  2. List everything 
+  3. Think of a plan of a master seeds, which is different for every step but still could be repeated 
+
+Notes: 
+SNaQ: 
+If tells SNaQ to run multi-process, for example rep = 10 and runs = 10. SNaQ will only distribute runs, so if we have 10 runs then we never exceeds 10 runs. 
+
+For each time running the script, only give 10 processors and run with rep_start to rep_end. Or, we can have take the default processors from nproc() to runs. 
+
+Always have a few free processors. 
+
+5.  
+    In seed_generator --> Use stable RNG or know which version of Julia to be used. 
+    Because rng changed from julia version to version 
+    rng = Xoshiro(master_seed)
+    seeds = rand(rng, Int, n, m) # generates n x m seed array  
+
+6. seqgen seeds
+
+
+Meeting agenda: 
+1. Show estimation time 
+2. Go through SnaQ codes and discuss the multi-process pipeline 
+  -> quickly check the seed selecting method 
+
+
+# Feb 28 to March 7 
+Notes: The new PhyloNetworks v.1.0.0 doesn't have SnaQ so no writeCFTable function, so downgrade the PhyloNetworks to a previous version PhyloNetworks v0.16.4 and PhyloPlot v.1.0.1 Information see: https://groups.google.com/g/phylonetworks-users/c/sNxwXxhmDb4 --> This solved the issues for SnaQ 
+
+To do: 
+--> Estimated running time for different steps of my pipeline. 
+    1. Estimate simulation_iqtree.jl, see output/
+    2. Estimate for snaq_submit.jl --> see the code. 
+--> Write find_graph codes --> doing 
+
+-Having this project as a talk in the Evolution 
+  -> Too early to show 
+-How about the find_graph workflow? 
+
+---> find_graphs coding 
+Which graph could be comparing. 
+
+---> Sort the graph based on score, so k = 1 should have the best score. 
+---> Or we can compare the grand truth tree to all good graphs with k = 1, but it won't represent the reality. 
+---> However, this method has a biased sample. This means that we inferred the best graphs based on the data. Now, we are using the best-inferred graphs to fit the data. This is very circurlar, because we are using something estimated from the dataset itself to test how good they fit to the dataset. This could be the reason why in the discussion of Maier et al. they didn't talk about using their boostrap method to compare models between different complexity levels. Instead, they used the threshold in WR to compare with models with different complexity. 
+
+---> We should do the boostrapping method, to compare the best tree with graph with k = 1. 
+Save a threshold of 3, what if threshold of 4 --> save all the WR 
+
+---> Just do the boostrap for the best tree and the best graph with k = 1.  
+
+
+# Feb 14 to Feb 19
+To-do list: 
+-Multi-process simulation_iqtree.jl --> Half done. Check the speed between using iqtree's own multi-processing and the speed in multi-processing in each rep. Multi-process the last part of simulation_iqtree.jl -> Done. 
+-Multi-process snaq builing -> Need to fianlize 
+-Finish literature review and send the notes. -> done. 
+
+Updates about find_graph workflow: 
+I created a workflor_findgraph.md in $root/notebook. Plan to have a detailed literature review over the weekends and send the workflow with reference earlier next week through Slack. 
+
+Question 1: 
+In Crawford paper, the average length for each UCE is 406 bp. Now, our seq-gen simulation is hard-coded to be 1000 base pair. I am wondering if we should change to 406bp since this is the estimate from emprical studies. --> keep as 1000 bp. 
+--> Check this README.md 
+
+Question 2: 
+Multi-processing. After running simulation_iqtree.jl with n_genes = 1145 and n_reps = 100, and it has been pretty slow. Since most of the processes are independent in n_reps, I think I should multi-process the process. I have a problem of sending my global arguments to all workers. 
+
+  Issue 1: Global parameters sometimes cannot be passed to all workers. 
+  Issue 2: Functions in utilities.jl sometimes cannot be passed to all workers. 
+
+a. shorten all my lines to less than 80 characters. 
+b. change all argumenst for simphy to a configuration file 
+c. pass arguments in .jl under julia interactive 
+
+ARGS = ["--dup_rate 0", "--loss_rate 0", "--ratevar N", "--seed_simphy 12345", "--n_reps 10", "--n_genes 10", "--threads 4"]
+
+1) Test simulation pipeline: 
+When dup_rate = 0, loss_rate = 0, ratevar = N, seed for simphy 12345 
+julia -p 8 scripts/simulation_iqtree.jl --dup_rate 0 --loss_rate 0 --ratevar N --n_reps 100 --n_genes 1145 --seed_simphy 12345 
+
+julia -p 8 scripts/simulation_iqtree.jl --dup_rate 0 --loss_rate 0 --ratevar N --n_reps 10 --n_genes 10 --seed_simphy 12345 
+
+When dup_rate = 0, loss_rate = 0, ratevar = G, seed for simphy 12345 
+julia -p 8 scripts/simulation_iqtree.jl --dup_rate 0 --loss_rate 0 --ratevar G --n_reps 100 --n_genes 1145 --seed_simphy 12345 
+
+After checking, I don't think simphy and seq-gen could be multi-threaded but 
+
+To do when test the pipeline: 
+1) iqtree.pl should be multi-threaded 
+
+# Feb 7 -- Feb 14 
+1) License issue: https://github.com/mathii/gdc/blob/master/LICENSE has Apache License 2.0. 
+I should include the text about the license into my MIT license. The licsense should indicate that The majority of this repository is licensed under the MIT License. However, some parts of this project include code under the Apache License 2.0.
+For details, see `LICENSES/APACHE-2.0.txt`. 
+
+Check if how previous repo did this -- example. 
+
+2) How to find the best k for findgraph: 
+  Based on the emprical studies and after talking with Lauren, my proposed workflow
+
+  Workflow 1 (reference needed): 
+    1) Run findgraphs from k = 0 to k = 1 for multiple times N
+    2) Filter M (check emprical studies) best topologies from each N runs at each K level -- based on log-likelihood 
+      -estimate f-2 statistics first 
+      --> How to determine M? -> Lauren chose M=5. In "On the limits of", they mentioned not to choose the first graph but chose the first a few as the best graphs. 
+       -Compile all runs into a single replicate 
+       -"On the limits of ..." 
+       -Lauren chose a set of best graphs with the 10 log-likehood
+
+    3) For the remaining M topologies at K's level, check WR. If WR smaller than certain level, then choose that. 
+      --> How to determine WR? 
+       -|WR| < 3 --> From "On the limits of ..." 
+
+    DeltaK method --> The best log-likehood drop. 
+
+    Write all the stuff in a markdown documents and push to the git repo 
+
+  Check the paper who cited Mainer et al. paper to see how they used their emprical data. 
+
+  Why or why not to use boostrap? If to use boostrap, which step should I apply? 
+  M and certain lebel of WR should be bsed on emprical studies  
+  
+  Whether to use boostrapping -- Undertsand how they did this. 
+    1. Time to run in my own dataset (then decide if to use this or not); Maier et al. paper (On the limits of ..., especially Appendix 2E for boostrapping procedure figure 3A, 3B, Supplementary materials 1.B.3; check how they analyzed their emprical data). 
+  
+  If k is bigger than 0, then I can reject the null hypothesis. K=0 to K=1 (cite https://journals.plos.org/plosgenetics/article?id=10.1371/journal.pgen.1010931#sec015). 
+  
+  Workflow 2: 
+    2) Run findgraphs from k = 0 to k = 2 with N times 
+    3) Find if there is a big improvment in log-liklihood score 
+      --If yes, choose the smallest k level with a big improvmennt in log-likelihood score 
+      --If no, follow the process in workflow 1 to determine the best fit graphs 
+
+3) Change SnaQ to run boostrap --> Done 
+
+4) Notes about AIC/BIC in Maier et al. (2023): The authors note that applying AIC and BIC is not straightforward for AGs, because the number of independent parameters in an AG is topology-dependent. It is not solely determined by the number of groups, drift edges, or admixture events. This issue means that previous studies that used AIC/BIC thresholds to reject models were often overly aggressive, assuming the models had the same number of degrees of freedom when in fact they did not​ 
+
+Thus, instead of relying strictly on AIC and BIC, the authors employ a cross-validation-based likelihood scoring approach. This method: 1. Uses different blocks of SNPs for model fitting and evaluation. 2. Prevents overfitting by ensuring that complex models do not simply fit better because they have more parameters. 
+
+Thus, AIC and BIC should not be used when examining the best graph in our study. 
+
+
+Emprical paper list: 
+1) https://www.nature.com/articles/s41586-024-08531-5
+The method for this paper is much complicated and has a lot of prior knowledge based on the data, language, geography itself. I don't think the way this paper finds the best model(s) could be used in our study. They used qpWave/qpAdm methods to identify a group of feasible models based on criteria (having P > 0.05, all standard errors ≤0.1, and admixture proportions ≤2 standard errors from 0 and 1). Later, they examined each model and how or if the model could be feasible in their supplementary material 2 (around pp300 to the end). Such work involes a lot of prior knowledge for the data itself. I don't think they specifically address the issue of determining the number of admixture. 
+
+2) https://doi.org/10.1126/science.adn2094: They used TreeMix. They run treemix with number of migration events from m = 0 to m = 8. At each m, they calculated the residual for F-statistics and the changes to log likelihood (deltaM) between each m. At m=2 (Figure S12), Δm was observed to shift thus indicating that successive migration edges were not substantially improving the model likelihood (Figure S13). 
+
+Then, at m=2, they run treemix with the boostrap mode with 100 bootstrap. They summarized the resulting topologies from m=2 when running treemix to get a boostrap values. They mentioned that there is outliers in the log likelihood just for m=2. 
+
+Think of how to determine the number of reticulation events using find_graphs 
+  1) Run findgraphs with k (number of admixture) = 0, 1, 2, (or 3?). Each run generates multiple well-fitting admixture graphs (AGs) with different topologies. 
+  2) For the set of best-fit AGs given k, find the log-likelihood score and the worst f-statistics residuals (he largest absolute difference between observed and predicted f-statistics), both of which should be minimized. 
+  3) Find out the is AGs with particular K improve the score. The K which improved the scores should be treated as the real K. 
+For example, if both log-likelihood and worst f-statistics residuals improve a lot from k=0 to k=1, then k = 1. 
+
+Potentially other methods: 
+1) Using AIC or BIC between models with different Ks, which could panalize models with more complexity.
+2) Have subset of SNPs and run bootstrap. However, unlike SnaQ, findgraphs could not have BS support for the branch particularly the admixture. However, bootstrap could be run to have a CI for log-likelihood (LL) and f-statistics residuals. In this case, this method could only validate whether the LL and residuls are statistical robust and if the model is over-fitting. This might not be able to help with choosing k. 
+
+I think this is an interesting question. The original findgraphs paper is very vague about how to choose optimal K. This could even be a good separate project to work on. 
+
+# Feb 3 
+1) Start running the pipeline (n_reps = 100, n_genes = #the same to the emprical data) 
+      - 100 reps would be good to test if the true type I eror rate is 0.05 (organize notes later)
+      - Have an estimation about how long to run the pipeline 
+2) Check how to incorporate copyright/license (https://github.com/mathii/gdc/blob/master/LICENSE) into the code/repo 
+3) Think of my own license (MIT -- check online)
+4) Read find_graph/admixture and think of a. paramater setting; b. evidence for reticulation 
+5) Run iqtree with boostrap and then have boostrap for snaq 
+
+# Jan 31 to Feb 7 
+
+Questions for Meeting on Jan 31: 
+1) Approach to do find_graph (see notes below)
+2) Write codes to extract the best network from snaq outputs 
+3) Boostrap for snaq --> First, do we need to have boostrapping? Second, the pipeline used to have boostrap gene trees uding RAxML and use the bslist file to run snaq boostrapoing. However, because running boostrap gene trees is very slow, we changed to iqtree without boostrap. Based on: https://github.com/JuliaPhylo/PhyloNetworks.jl/wiki/Bootstrap-analysis, we need boostrap gene trees to run boostraping. If we want to run snaq boostrap, then we probably need to run iqtree boostrapping as well, which might slow down the whole process (?). 
 
 # Jan 23 to Jan 30 
+To do list: 
+1) Clarify the max_iteration and lower_threshold -- Done
+2) Ogranize notes for merging git branches and deleting git branches --Done. I have re-done the process -- merging the working branch to main. The commit on Jan 29 is committed to the 
+3) Re-organize folder structure --Done
+4) Changed to emacs editor -- Done
+5) Start thinking of Find_graphs 
+Based on Lauren's code, her project simulates SNPs directly from simphy gene trees. Here, I am wondering what would be the best approach to do this. Two approaches: 
+      a. Get N SNPs from the simphy gene trees (what Lauren has done)
+      b. SNP calling from seqgen alignments to get SNPs
+
+Other things that have been done:
+1) Add a function to check preexisting files and allow user input to decide if to rm the files or not (see utilities.jl)
+
+Notes from meeting on Jan 23: 
 1) In simulation_iqtree.jl, after max_iter, if lower_threshold (change to a more informative name, min_gene_porportion) not met, ignore the replicate intead of stopping the pipeline. 
 2) Re-organize the output folder structure so that the top layer is each rep. Inside each rep, there are outputs from genetrees_simphy, iqtree, astral, seq-gen, genetrees_singlecopy folders.  
 3) Revise documentation: After running max_iter, if still not hitting min, then ignore the rep
+
+Check this each time before merging branches! 
+Steps for merging git branches: 
+S0: Make sure everything is saved and commited on the working branch. 
+S1: git checkout to the branch we want to grow (typically main).
+S2: Use git log to show the abbreciated structure of all commit: 
+        git log --oneline --graph --decorate --all
+        This above code checks where the HEAD is. The HEAD shows the branch we want to grow. If we want to grow in the main branch, then (HEAD is on origin/main) 
+S3: Squash all commits and merge them into origin/main
+        git merge --squash "branch" Here, branch is the one we want to merge into origin/main
+S4: Use "git status" to check and use "git commit" to commit 
+        Note here: The commit message should summarize what have done in the branch that is squashed into main 
+S5: Delete remote and local branches 
+        Romate branches could be deleted in Github webpage
+        Local branches could be deleted using git branch -d
 
 # Jan 16 to Jan 22
 To do list: 

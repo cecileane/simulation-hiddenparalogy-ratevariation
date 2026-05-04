@@ -1,8 +1,6 @@
--sg f:0.00001 //Generation time - look back at this
--sp f:10000 //Population size?
 -gt f:0 //Genome-wide horizontal gene transfer (sampled once for each species tree, and applied for all locus trees) we want no horizontal gene transfer look into what value should go here
--hg f:10 //Heterogeneity sampled for every gene tree branch using the same Gamma distribution with shape = rate = 10
 -om 1 //Tree mapping output
 -od 1 //Database
 -op 1 //Output with the general sampled options (describes the simulation run)
 -oc 1 //Activates the backup of the original command line and configuration file (we recommend to always activate this option)
+-rs 1 // Number of replicates -> 1 for each replicate per interation

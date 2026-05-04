@@ -1,0 +1,137 @@
+---
+title: "HF Internal Branch Length Analysis"
+format: html
+jupyter: julia-1.10
+---
+
+```{julia}
+using PhyloNetworks 
+using CSV, DataFrames
+using PhyloPlots
+
+# Include utility functions 
+current_dir = pwd() 
+println("current_dir: $current_dir")
+
+root_dir = joinpath(current_dir, "..", "..")     
+println("root_dir: $root_dir") 
+
+utility_path = joinpath(root_dir, "scripts", "utilities.jl") 
+include(utility_path)
+```
+
+### We want to calculate the average internal branch length for each locus tree 
+This is how we generate the example data: 
+
+```
+julia -p 10 scripts/simulation.jl --dup_rate 1e-4 --loss_rate 1e-4 --ratevar L --n_inds 1 --SF 1 --n_genes 10 --n_reps 10 
+```
+
+```{julia}
+# set up the root name for parameter files from utilities.jl
+data_dir = joinpath(root_dir, "output", paramname_root)
+paramname_root = set_up_paramname_root(1e-4, 1e-4, "L", 1, 1.0) # set up the root name for parameter files from utilities.jl
+data_dir = joinpath(root_dir, "output", paramname_root)
+check_file = joinpath(data_dir, "genetrees_taxa_and_internal_branch_DUP0.0001-LOS0.0001-RVL-N_ind1-SF1.0.csv")
+
+# read CSV into a DataFrame
+if isfile(check_file)
+    df_stats = CSV.read(check_file, DataFrame)
+    first(df_stats, min(10, nrow(df_stats)))
+end 
+```
+
+We want to check if the results generated from our pipeline is accurate. Let's check for rep 01 gene trees (first sample and the 10th sample). Three things needed to be checked: 
+    1. Is the number of taxa shown in the result file correct? 
+    2. Is the internal branch length for locus tree calculated correct? 
+    3. Is the internal branch length for gene tree calculated corrtec? 
+
+```{julia}
+# Get the first tree: 
+ex1_str = "rep01/genetrees_singlecopy/g_trees_noLocusID_Gene08_Int1.trees"
+gene_tree_file_ex1 = joinpath(data_dir, ex1_str)
+gene_tree_ex1 = readnewick(gene_tree_file_ex1) 
+plot(gene_tree_ex1, useedgelength=true)
+
+# find locus tree 
+locus_tree_ex1 = readnewick(readlines(joinpath(data_dir, 
+                        "rep01/genetrees_simphy/Int1/1/l_trees.trees"))[8]) 
+
+
+# remove the lost tips first from locus tree 
+to_remove = [t for t in tiplabels(locus_tree_ex1) if startswith(t, "Lost")]
+for tip in to_remove # only locus tree needs to remove lost tips
+    deleteleaf!(locus_tree_ex1, tip)
+end 
+plot(locus_tree_ex1, useedgelength=true)  
+
+# print out the number of taxa 
+println("Number of taxa in locus tree: $(length(tiplabels(locus_tree_ex1)))")
+println("Number of taxa in gene tree: $(length(tiplabels(gene_tree_ex1)))")  
+```
+
+```{julia}
+function calculate_internal_branch_lengths(locus_tree::PhyloNetworks.HybridNetwork, 
+                                        gene_tree::PhyloNetworks.HybridNetwork)
+    # calculate internal branch lengths for locus tree 
+    internal_branch_lengths_per_locus_tree = Float64[] 
+    # calculate internal branch lengths for gene tree 
+    internal_branch_lengths_per_gene_tree = Float64[] 
+
+    removedegree2nodes!(locus_tree) # remove degree 2 nodes first  
+    removedegree2nodes!(gene_tree) # remove degree 2 nodes first 
+
+    for edge in locus_tree.edge # internal branch lengths for locus tree 
+        if !isexternal(edge) 
+            push!(internal_branch_lengths_per_locus_tree, edge.length)
+        end     
+    end
+    for edge in gene_tree.edge # internal branch lengths for gene tree 
+        if !isexternal(edge) 
+            push!(internal_branch_lengths_per_gene_tree, edge.length)
+        end
+    end
+    avg_locus_branch_length = mean(internal_branch_lengths_per_locus_tree)
+    avg_gene_branch_length = mean(internal_branch_lengths_per_gene_tree) 
+    return avg_locus_branch_length, avg_gene_branch_length 
+end
+```
+
+```{julia}
+avg_locus_branch_length, avg_gene_branch_length = calculate_internal_branch_lengths(locus_tree_ex1, gene_tree_ex1) 
+println("Average internal branch length for locus tree: $avg_locus_branch_length")
+println("Average internal branch length for gene tree: $avg_gene_branch_length") 
+```
+
+The above calculation is consistent with our results from the pipeline. 
+
+```{julia}
+# Get the first tree: 
+ex2_str = "rep01/genetrees_singlecopy/g_trees_noLocusID_Gene44_Int1.trees"
+gene_tree_file_ex2 = joinpath(data_dir, ex2_str)
+gene_tree_ex2 = readnewick(gene_tree_file_ex2) 
+plot(gene_tree_ex2, useedgelength=true)
+
+# find locus tree 
+locus_tree_ex2 = readnewick(readlines(joinpath(data_dir, 
+                        "rep01/genetrees_simphy/Int1/1/l_trees.trees"))[44]) 
+
+# remove the lost tips first from locus tree 
+to_remove = [t for t in tiplabels(locus_tree_ex2) if startswith(t, "Lost")]
+for tip in to_remove # only locus tree needs to remove lost tips
+    deleteleaf!(locus_tree_ex2, tip)
+end 
+plot(locus_tree_ex2, useedgelength=true)  
+
+# print out the number of taxa 
+println("Number of taxa in locus tree: $(length(tiplabels(locus_tree_ex2)))")
+println("Number of taxa in gene tree: $(length(tiplabels(gene_tree_ex2)))")  
+```
+
+```{julia}
+avg_locus_branch_length_2, avg_gene_branch_length_2 = calculate_internal_branch_lengths(locus_tree_ex2, gene_tree_ex2) 
+println("Average internal branch length for locus tree: $avg_locus_branch_length_2")
+println("Average internal branch length for gene tree: $avg_gene_branch_length_2") 
+```
+
+The second example also corresponds with the results from our pipeline. 

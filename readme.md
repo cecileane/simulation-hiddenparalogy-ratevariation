@@ -105,7 +105,7 @@ Taxon names could be simplified for the simulation!
 using PhyloNetworks
 using PhyloPlots
 treestring = "(Homo:3.44,((((Crocodylus:0.88,alligator_mississippiensis:0.88)100.0:1.71,(Taeniopygia:0.93,Gallus:0.93)93.2:1.66)0.0:0.17,Chrysemys:2.76)0.0:0.18,(Anolis:0.5,Pantherophis:0.5):2.44)0.0:0.5);"
-tree = readTopology(treestring)
+tree = readnewick(treestring)
 plot(tree, :R, showEdgeLength=true, useEdgeLength=true);
 ```
 
@@ -157,6 +157,7 @@ Conclusions:
   * HKY (-m option) with transition/transversion ratio kappa = 4.143 (option -t)
   * base frequencies 0.316,0.182,0.183,0.319 (-f option)
   * shape alpha = 0.356 (-a option) for the Gamma distribution of rates across sites
+
 - to simulate each gene with its own substitution model, use HKY with:
   * kappa from LogNormal(μ=1.4215, σ=0.2798)
   * frequencies from Dirichlet(66.59, 38.41, 38.61, 67.12)
@@ -184,4 +185,13 @@ using the same methods we used for real data (or a subset?)
 - results of network methods (e.g. SNaQ) with h=0: idem.
 - results of network methods with h=1:
   what is the support for a reticulation? gammas?
+
+## License
+
+This repository is primarily licensed under the MIT License (see `LICENSE`).
+
+**Third-Party Code:**  
+The script `third_party/vcf2eigenstrat.py` is derived from a project by Iain Mathieson and is licensed under the Apache License 2.0.  
+See `third_party/LICENSE-APACHE-2.0.txt` for details.
+
 

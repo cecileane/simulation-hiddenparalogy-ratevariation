@@ -38,26 +38,31 @@ my $currentdir = `pwd`;
 chomp $currentdir; # remove new line at the end of the current path 
 my $boot = 1; # boot=0 is not implemented, in fact!
 my $numboot = 100;
-my $numCores = 6;
+my $seed_iqtree;
+my $numCores = 1; # The script got multi-processed through simulation_iqtree.jl 
 my $seqdir;   # directory where sequences are
 my $phylipdir;
 my $iqtreedir;
-my $astraldir;
+# my $astraldir;
 my $convertphylip = 1;
 my $doastral = 1;  
-# my $astral = $currentdir . '/executables/astral.5.7.8.jar'; 
-my $astral = $currentdir . '/executables/astral'; # un-weighted astral from ASTER is fine but it calculates PP instead of BS 
+# my $astral = $currentdir . '/executables/astral.5.7.8.jar'; # Old astral version 
+# my $astral = $currentdir . '/executables/astral-pro3'; # Astral-pro output trees in substitution unit 
+# my $astral = $currentdir . '/executables/wastral'; 
+# Above: weights input gene trees based on branch length and output branch length in CU and PP
 my $iqtree = $currentdir . '/executables/iqtree2';
 
 # -------------- read arguments from command-line -----------------------
 GetOptions( 'numboot=i' => \$numboot,
+        'seed_iqtree=i' => \$seed_iqtree,
 	    'boot!' => \$boot,
 	    'numCores=i' => \$numCores,
 	    'seqdir=s' => \$seqdir,
 	    'iqtreedir=s' => \$iqtreedir,
-	    'astraldir=s' => \$astraldir,
+	    # 'astraldir=s' => \$astraldir,
 	    'convert2phylip!' => \$convertphylip,
-	    'doastral!' => \$doastral,
+	    # 'doastral!' => \$doastral,
+        'numCores=i' => \$numCores
     );
 
 die "seqdir not defined or not a directory" if (!(defined $seqdir) or !(-d $seqdir));
@@ -76,9 +81,9 @@ die ("iqtreedir should be only 1 level up\n") if ($iqtreedir =~ /\//);
 make_path $iqtreedir unless(-d $iqtreedir);
 my $logfile = "$iqtreedir/iqtree.pl.log";
 
-die "a directory for ASTRAL output should be specified with the --astraldir option" if ($doastral and (not defined $astraldir));
-$astraldir = "astral" if !defined($astraldir);
-make_path $astraldir if !(-d $astraldir);
+# die "a directory for ASTRAL output should be specified with the --astraldir option" if ($doastral and (not defined $astraldir));
+# $astraldir = "astral" if !defined($astraldir);
+# make_path $astraldir if !(-d $astraldir);
 
 system("date > $logfile");
 system("hostname >> $logfile");
@@ -159,7 +164,8 @@ if ($convertphylip) {
 #  Run Iqtree  -- No boostrap to increase speed #
 #-----------------------------------------------#
 # Below codes run iqtree using each individual file. 
-# Notice: This code doesn't work for now since we changed the file names for seq-gen outputs 
+# Notice: 
+# This code doesn't work for now since we changed the file names for seq-gen outputs 
 # open FHlog, ">> $logfile" or die "Cannot open log file $logfile: $!\n";
 # chdir($iqtreedir) or die ("can't go to iqtree directory $iqtreedir\n");
 # for my $ig (0 .. $#genes){
@@ -178,9 +184,9 @@ if ($convertphylip) {
 # This code is also robust to different file names. 
 open FHlog, ">> $logfile" or die "Cannot open log file $logfile: $!\n";
 chdir($iqtreedir) or die ("can't go to iqtree directory $iqtreedir\n");
-my $iqtree_input = "$currentdir/$seqdir";
-my $iqtreecmd = "$iqtree -S $iqtree_input -m HKY+G -T 2 -pre gene"; # hard-coded for now 
-# In botany server, this could only be run with 2 cores. Increasing cores would cause a memery issues. The maximum cores to be used is 2 or otherwise iqtree will fail. 
+my $iqtree_input = "$seqdir";
+# The below iqtree command is hard-coded 
+my $iqtreecmd = "$iqtree -S $iqtree_input -m HKY+G -T $numCores --seed $seed_iqtree -pre gene -B 1000"; 
 
 system($iqtreecmd);
 chdir($currentdir);
@@ -188,9 +194,42 @@ system("date >> $logfile");
 close FHlog;
 
 #-----------------------------------------------#
+#  create mapping file                          #
+#-----------------------------------------------#
+# create a mapping file between input files and output trees
+
+my $treefile   = "$iqtreedir/gene.treefile";   # single file with all trees
+my $mappingOUT = "$iqtreedir/mapping.csv";
+
+open(my $mfh, ">", $mappingOUT) or die "Cannot open $mappingOUT: $!\n";
+print $mfh "phy_file,tree\n";   # CSV header
+
+# collect all phy files in sorted order
+my @phyfiles = sort glob("$seqdir/*.phy");
+
+# open the treefile
+open(my $tfh, "<", $treefile) or die "Cannot open $treefile: $!\n";
+
+my $i = 0;
+while (my $tree = <$tfh>) {
+    chomp $tree;
+    if ($i > $#phyfiles) {
+        warn "More trees in $treefile than phy files in $seqdir!\n";
+        last;
+    }
+    my $phyfile = $phyfiles[$i];
+    print $mfh "$phyfile : \"$tree\"\n";   # quote tree to protect commas
+    $i++;
+}
+
+close $tfh;
+close $mfh;
+
+print "Mapping file written to $mappingOUT\n";
+
+#-----------------------------------------------#
 #  restructure output files                     #
 #-----------------------------------------------#
-
 # delete intermediate files ending in ckp.gz (checkpoint files) created by IQ-tree: 
 my @files_checkpoint = glob("$iqtreedir/*.ckp.gz");
 if (@files_checkpoint ) {
@@ -214,33 +253,78 @@ if (@files_bionj) {
     unlink @files_bionj or warn "Failed to delete .bionj files: $!";
     print "Successfully removed the .bionj files.\n";
 }
+
+# delete intermediate files ending in .parstree created by IQ-tree: 
+my @files_parstree = glob("$iqtreedir/*.parstree");
+if (@files_parstree) {
+    print "Deleting .parstree files in $iqtreedir...\n";
+    unlink @files_parstree or warn "Failed to delete .parstree files: $!";
+    print "Successfully removed the .mldist files.\n";
+}
+
+# delete intermediate files ending in .nex created by IQ-tree: 
+my @files_nex = glob("$iqtreedir/*.nex");
+if (@files_nex) {
+    print "Deleting .nex files in $iqtreedir...\n";
+    unlink @files_nex or warn "Failed to delete .nex files: $!";
+    print "Successfully removed the .nex files.\n";
+}
+
+# delete intermediate files ending in .nex created by IQ-tree: 
+my @files_pl_log = glob("$iqtreedir/*.pl.log");
+if (@files_pl_log) {
+    print "Deleting .pl.log files in $iqtreedir...\n";
+    unlink @files_pl_log or warn "Failed to delete .pl.log files: $!";
+    print "Successfully removed the .pl.log files.\n";
+}
+
+# delete intermediate files ending in .nex created by IQ-tree: 
+my @files_log = glob("$iqtreedir/*.log");
+if (@files_log) {
+    print "Deleting .log files in $iqtreedir...\n";
+    unlink @files_log or warn "Failed to delete log files: $!";
+    print "Successfully removed the log files.\n";
+}
+
+# delete intermediate files ending in .nex created by IQ-tree: 
+my @files_iqtree = glob("$iqtreedir/*.iqtree");
+if (@files_iqtree) {
+    print "Deleting .iqtree files in $iqtreedir...\n";
+    unlink @files_iqtree or warn "Failed to delete .iqtree files: $!";
+    print "Successfully removed the .iqtree files.\n";
+}
+
 # Now the output files include .iqtree, .treefile, and .log files 
 # create file listing all best trees: one line per gene
-my $iqtreeOUT = "$iqtreedir/BestTrees.tre";
+my $iqtreeOUT = "$iqtreedir/besttrees.tre";
 `cat $iqtreedir/gene*.treefile > $iqtreeOUT`;
 
-# ----------------------------------------------#
-#   astral analysis                             #
-# ----------------------------------------------#
+exit(0); 
 
-$astraldir = "astral" if !defined($astraldir);
-#my $bsfile =  "$astraldir/BSlistfiles";
-my $astralLOG =  "$astraldir/astral.screenlog";
-my $astralOUT =  "$astraldir/astral.tre";
+# # ----------------------------------------------#
+# #   astral analysis                             #
+# # ----------------------------------------------#
+# $astraldir = "astral" if !defined($astraldir);
+# #my $bsfile =  "$astraldir/BSlistfiles";
+# my $astralLOG =  "$astraldir/astral.screenlog";
+# my $astralOUT =  "$astraldir/astral.tre";
 
-# `ls -d $bootpath/* > $bsfile`;
+# # `ls -d $bootpath/* > $bsfile`;
 
-# my $astralcmd = "java -jar $astral -i $raxmlOUT -b $bsfile -r $numboot -o $astralOUT > $astralLOG 2>&1";
-my $astralcmd = "$astral -i $iqtreeOUT -u 1 -o $astralOUT > $astralLOG 2>&1"; 
+# # Below is for astral.5.7.8.jar
+# # my $astralcmd = "$astral -i $iqtreeOUT -b $bsfile -r $numboot -o $astralOUT > $astralLOG 2>&1";
 
-open FHlog, ">> $logfile";
-if ($doastral){
-    print FHlog "running astral:\n";
-} else {
-    print FHlog "astral could be run with:\n";
-}
-print FHlog "$astralcmd\n";
-close FHlog;
-if ($doastral){
-    system($astralcmd);
-}
+# # Below is for weighted-astral (wastral) and astral-pro (astral-pro3)
+# my $astralcmd = "$astral -i $iqtreeOUT -u 1 -o $astralOUT > $astralLOG 2>&1"; 
+ 
+# open FHlog, ">> $logfile";
+# if ($doastral){
+#     print FHlog "running astral:\n";
+# } else {
+#     print FHlog "astral could be run with:\n";
+# }
+# print FHlog "$astralcmd\n";
+# close FHlog;
+# if ($doastral){
+#     system($astralcmd);
+# }
