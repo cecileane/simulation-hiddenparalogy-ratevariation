@@ -68,7 +68,7 @@ function main()
     all_data = DataFrame()
     
     for (i, file) in enumerate(summary_files)
-        println("Processing file $(i)/$(length(summary_files)): $(basename(file))")
+        println("Processing $(i)/$(length(summary_files)): $(basename(file))")
         try
             df = CSV.read(file, DataFrame)
             if i == 1
@@ -83,7 +83,7 @@ function main()
     
     if nrow(all_data) > 0
         CSV.write(output_path, all_data)
-        println("Successfully concatenated $(length(summary_files)) files into: $output_path")
+        println("Concatenated $(length(summary_files)) files → $output_path")
         println("Total rows in output: $(nrow(all_data))")
     else
         println("No data to write to output file.")

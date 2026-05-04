@@ -9,6 +9,6 @@ names_to_be_removed = ["raxml-outfiles", "astral-outfiles"]
 for folder in readdir()
     if any(occursin(name, folder) for name in names_to_be_removed)
         rm(folder; force = true, recursive = true)
-        println("Removed temporary files from $folder stored in the root folder")
+        println("Removed temp files from $folder in the root folder")
     end
 end

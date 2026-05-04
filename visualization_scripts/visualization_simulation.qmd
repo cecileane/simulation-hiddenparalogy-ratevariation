@@ -1,5 +1,4 @@
 
-```{r}
 ---
 title: "Simulation Results Visualization"
 format: html
@@ -14,23 +13,25 @@ library(tidyr)
 library(readr)
 library(ggplot2)
 library(stringr)
+library(patchwork)
+library(cowplot)
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path)) 
 ```
 
 ## Load and Parse Data
-
 ```{r load-csv}
-df <- read_csv("results/summary_concatenated.csv") 
-outdir <- "visualization_results/simulation"
+df <- read_csv("../results/summary_concatenated.csv") 
+outdir <- "../visualization_results/simulation"
 if (!dir.exists(outdir)) {
   dir.create(outdir, recursive = TRUE)
 } 
 ```
-
 ```{r parse-data}
 # Parse parameter_setting column
 df <- df %>%
   mutate(
-    dup_loss_rate = as.numeric(str_extract(parameter_setting, "(?<=DUP)[0-9.e+-]+(?=-)")),
+    dup_loss_rate = as.numeric(str_extract(parameter_setting,
+      "(?<=DUP)[0-9.e+-]+(?=-)")),
     RV = str_extract(parameter_setting, "(?<=RV)[A-Z]+"),
     N_inds = as.integer(str_extract(parameter_setting, "(?<=N_ind)[0-9]+")),
     SF = as.numeric(str_extract(parameter_setting, "(?<=SF)[0-9.]+(?=(-|$))")),
@@ -50,8 +51,6 @@ cat("Unique N_inds:", unique(df$N_inds), "\n")
 ```
 
 ## Gene Events and Hidden Paralogy
-This cell below plots 
-
 ```{r plot_events}
 # Prepare data for plotting
 plot_data <- df %>%
@@ -93,11 +92,12 @@ plot_data <- df %>%
 # Create combined plot with facet_grid
 p_combined <- ggplot(plot_data, aes(x = dup_loss_rate, y = percentage, 
                                      color = RV_label, shape = shape_group)) +
-  geom_point(size = 4, alpha = 0.7, position = position_jitter(width = 0.2, height = 0)) +
+  geom_point(size = 4, alpha = 0.7,
+             position = position_jitter(width = 0.2, height = 0)) +
   facet_grid(~ metric_label, scales = "fixed") +
-  scale_color_manual(values = c("gene" = "#619CFF", 
-                                 "lineage" = "salmon", 
-                                 "none" = "#00BA38")) +
+  scale_color_manual(values = c("gene" = "#039afe", 
+                                 "lineage" = "#fbc531", 
+                                 "none" = "#898686")) +
   labs(title = "hidden paralogy across simulation conditions",
        x = "dup/loss rate",
        y = "percentage",
@@ -108,18 +108,21 @@ p_combined <- ggplot(plot_data, aes(x = dup_loss_rate, y = percentage,
         legend.position = "bottom",
         legend.box = "vertical")
 
-ggsave(file.path(outdir, "percentage_events_plot_combined.pdf"), plot = p_combined, width = 10, height = 5, units = "in")
+ggsave(file.path(outdir, "percentage_events_plot_combined.pdf"),
+       plot = p_combined, width = 10, height = 5, units = "in")
 print(p_combined)
 
 ```
 
 ## Summary Statistics: Hidden Paralogy by Duplication/Loss Rate
-It seems that SF and RateVar will not change HP statistics, so we summarize HP stats by N_inds and dup_loss_rate. (N_inds will not change ratevar as well). 
+It seems SF and RateVar do not change HP statistics, so we summarize
+HP stats by N_inds and dup_loss_rate.
 ```{r summary-hp}
 summary_df <- df %>%
   group_by(dup_loss_rate) %>%
   summarise(
-    n_genes_mean = round(mean(n_genes, na.rm = TRUE),1),
+    n_genes_mean = round(mean(n_genes_mean, na.rm = TRUE),1),
+    n_genes_min = round(mean(n_genes_mean, na.rm = TRUE),1),
     n_iterations = round(mean(n_iterations, na.rm = TRUE),1), 
     False_HP_mean = round(mean(pert_false_HP, na.rm = TRUE),1),
     False_HP_sd = round(sd(pert_false_HP, na.rm = TRUE),2),
@@ -127,11 +130,418 @@ summary_df <- df %>%
     Weak_HP_sd = round(sd(pert_weak_HP, na.rm = TRUE),2),
     Strong_HP_mean = round(mean(pert_strong_HP, na.rm = TRUE),1),
     Strong_HP_sd = round(sd(pert_strong_HP, na.rm = TRUE),2),
-    pert_gene_tree_noDupLoss_mean = round(mean(pert_trees_experiencing_nothing, na.rm = TRUE),1),
-    pert_gene_tree_noDupLoss_sd = round(sd(pert_trees_experiencing_nothing, na.rm = TRUE),2),
+    pert_gene_tree_noDupLoss_mean = round(
+      mean(pert_trees_experiencing_nothing, na.rm = TRUE), 1),
+    pert_gene_tree_noDupLoss_sd = round(
+      sd(pert_trees_experiencing_nothing, na.rm = TRUE), 2),
     .groups = "drop", 
   ) %>%
   arrange(dup_loss_rate)
 print(summary_df, width = Inf)
 ```
+
+
+### RF metric graphs 
+
+```{r prepare-rf-data}
+# ── Sort rows by dup_loss_rate > RV > SF > N_inds ────────────────────────────
+df_heat <- df %>%
+  arrange(dup_loss_rate, RV, SF, N_inds) %>%
+  mutate(
+    RV_label   = factor(recode(RV, "G" = "gene", "L" = "lineage", "N" = "none"),
+                        levels = c("none", "gene", "lineage")),
+    SF_label   = factor(
+      ifelse(SF == 0.5, "low ILS (SF=0.5)", "high ILS (SF=1.0)"),
+      levels = c("low ILS (SF=0.5)", "high ILS (SF=1.0)")),
+    dup_label  = factor(paste0("DUP=", dup_loss_rate),
+                        levels = paste0("DUP=", sort(unique(dup_loss_rate)))),
+    N_label    = factor(paste0(N_inds, " ind/taxon"),
+                        levels = c("1 ind/taxon", "2 ind/taxon")),
+    row_id     = paste0(dup_loss_rate, "|", RV, "|", SF, "|", N_inds),
+    row_id     = factor(row_id, levels = rev(unique(row_id))) # DUP0 first
+  )
+```
+
+Point plots for two metric groups: gene tree discordance (true gene tree
+vs species tree) and gene tree estimation error (true vs estimated).
+Each point is one parameter combination, colored by RV, shaped by
+SF/N_inds. Faceted by HP category. NoF metrics excluded.
+
+```{r rf-point-plots, fig.width=14, fig.height=16}
+# ── 1. Prepare data for point plots ──────────────────────────────────────────
+# Select four HP category columns per group (exclude _all, noF columns)
+df_point_plot <- df_heat %>%
+  select(
+    dup_loss_rate, RV_label, SF_label, N_label,
+    mean_RF_genetree_vs_sptree_nothing,
+    mean_RF_genetree_vs_sptree_false_HP,
+    mean_RF_genetree_vs_sptree_weak_HP,
+    mean_RF_genetree_vs_sptree_strong_HP,
+    mean_RF_true_vs_est_genetree_nothing,
+    mean_RF_true_vs_est_genetree_false_HP,
+    mean_RF_true_vs_est_genetree_weak_HP,
+    mean_RF_true_vs_est_genetree_strong_HP
+  )
+
+# Pivot to long format
+df_point_long <- df_point_plot %>%
+  pivot_longer(
+    cols = starts_with("mean_RF_"),
+    names_to = "metric",
+    values_to = "RF"
+  ) %>%
+  mutate(
+    # Extract HP category from metric name
+    hp_category = case_when(
+      str_detect(metric, "_nothing$") ~ "no dup/loss",
+      str_detect(metric, "_false_HP$") ~ "false HP",
+      str_detect(metric, "_weak_HP$") ~ "weak HP",
+      str_detect(metric, "_strong_HP$") ~ "strong HP",
+      TRUE ~ "other"
+    ),
+    hp_category = factor(hp_category,
+      levels = c("no dup/loss", "false HP", "weak HP", "strong HP")),
+    
+    # Identify metric group for faceting
+    metric_group = ifelse(str_detect(metric, "genetree_vs_sptree"), 
+                          "gene tree discordance", 
+                          "Gene tree estimation error"),
+    
+    # Create shape and fill aesthetics based on visual_utilities.R
+    combo = case_when(
+      SF_label == "high ILS (SF=1.0)" & N_label == "1 ind/taxon" ~
+        "ILS = high, n = 1",
+      SF_label == "high ILS (SF=1.0)" & N_label == "2 ind/taxon" ~
+        "ILS = high, n = 2",
+      SF_label == "low ILS (SF=0.5)" & N_label == "1 ind/taxon" ~
+        "ILS = low, n = 1",
+      SF_label == "low ILS (SF=0.5)" & N_label == "2 ind/taxon" ~
+        "ILS = low, n = 2"
+    ),
+    combo = factor(combo, levels = c(
+      "ILS = high, n = 1", "ILS = high, n = 2",
+      "ILS = low, n = 1", "ILS = low, n = 2")),
+    fill_color = ifelse(
+      N_label == "1 ind/taxon", as.character(RV_label), "hollow"),
+    # Format x-axis labels: 0 → "no dup/loss", others → scientific notation
+    dup_loss_label = ifelse(
+      dup_loss_rate == 0, "no dup/loss",
+      sub("e-0", "e-", formatC(dup_loss_rate, format = "e", digits = 0))
+    )
+  ) %>%
+  # Remove dup_loss_rate = 0 for HP panels (no duplication events possible)
+  filter(!(hp_category %in% c("false HP", "weak HP", "strong HP") &
+           dup_loss_rate == 0)) %>%
+  mutate(
+    dup_loss_label = factor(dup_loss_label,
+      levels = c("no dup/loss",
+        sub("e-0", "e-",
+          formatC(sort(unique(dup_loss_rate[dup_loss_rate > 0])),
+                  format = "e", digits = 0))))
+  )
+
+# ── 2. Define colors and shapes ──────────────────────────────────────────────
+rv_colors_point <- c("none" = "#898686", "gene" = "#039afe",
+                     "lineage" = "#fbc531")
+fill_values <- c(rv_colors_point, "hollow" = "white")
+shape_values <- setNames(
+  c(21, 21, 24, 24),
+  c("ILS = high, n = 1", "ILS = high, n = 2",
+    "ILS = low, n = 1", "ILS = low, n = 2"))
+
+
+
+# ── 3. Create the "gene tree discordance" plot ───────────────────────────────
+plot_data_discordance <- df_point_long %>%
+  filter(metric_group == "gene tree discordance")
+
+p_discordance <- ggplot(plot_data_discordance,
+                        aes(x = dup_loss_label, y = RF,
+                            color = RV_label, shape = combo,
+                            fill = fill_color)) +
+  geom_point(position = position_jitter(width = 0.2, height = 0),
+             size = 4, stroke = 1) +
+  facet_wrap(~ hp_category, scales = "free_x", nrow = 1) +
+  scale_color_manual(values = rv_colors_point,
+                     name = "rate variation:",
+                     labels = c("none" = "none",
+                                "gene" = "across genes",
+                                "lineage" = "across lineages")) +
+  scale_fill_manual(values = fill_values, guide = "none") +
+  scale_shape_manual(values = shape_values,
+                     name = "ILS & individuals / taxon (n):    ") +
+  scale_y_continuous(limits = c(0.20, 0.40)) +
+  labs(
+    x = NULL,
+    y = "true gene vs species trees"
+  ) +
+  theme_bw(base_size = 18) +
+  theme(
+    legend.position   = "bottom",
+    axis.title        = element_text(size = 20, face = "bold"),
+    axis.text.x       = element_text(
+      angle = 45, hjust = 1, size = 16, face = "bold", color = "black"),
+    axis.text.y       = element_text(size = 16, face = "bold", color = "black"),
+    strip.text        = element_text(size = 20, face = "bold"),
+    strip.background  = element_rect(fill = "grey90"),
+    legend.text       = element_text(size = 16, face = "bold"),
+    legend.title      = element_text(size = 16, face = "bold")
+  ) +
+  guides(
+    color = guide_legend(override.aes = list(size = 5, stroke = 1.2), nrow = 1),
+    shape = guide_legend(override.aes = list(
+      size   = 5, stroke = 1.2,
+      fill   = c("grey55", "white", "grey55", "white")
+    ), nrow = 1)
+  )
+
+# ── 4. Create the "Gene tree estimation error" plot ──────────────────────────
+plot_data_estimation <- df_point_long %>%
+  filter(metric_group == "Gene tree estimation error")
+
+p_estimation <- ggplot(plot_data_estimation,
+                       aes(x = dup_loss_label, y = RF,
+                           color = RV_label, shape = combo,
+                           fill = fill_color)) +
+  geom_point(position = position_jitter(width = 0.2, height = 0),
+             size = 4, stroke = 1) +
+  facet_wrap(~ hp_category, scales = "free_x", nrow = 1) +
+  scale_color_manual(values = rv_colors_point,
+                     name = "rate variation:",
+                     labels = c("none" = "none",
+                                "gene" = "across genes",
+                                "lineage" = "across lineages")) +
+  scale_fill_manual(values = fill_values, guide = "none") +
+  scale_shape_manual(values = shape_values,
+                     name = "ILS & individuals / taxon (n):    ") +
+  scale_y_continuous(limits = c(0.05, 0.25)) +
+  labs(
+    x = NULL,
+    y = "true vs estimated gene trees"
+  ) +
+  theme_bw(base_size = 18) +
+  theme(
+    legend.position   = "bottom",
+    axis.title        = element_text(size = 20, face = "bold"),
+    axis.text.x       = element_text(
+      angle = 45, hjust = 1, size = 16, face = "bold", color = "black"),
+    axis.text.y       = element_text(size = 16, face = "bold", color = "black"),
+    strip.text        = element_text(size = 20, face = "bold"),
+    strip.background  = element_rect(fill = "grey90"),
+    legend.text       = element_text(size = 16, face = "bold"),
+    legend.title      = element_text(size = 16, face = "bold")
+  ) +
+  guides(
+    color = guide_legend(override.aes = list(size = 5, stroke = 1.2), nrow = 1),
+    shape = guide_legend(override.aes = list(
+      size   = 5, stroke = 1.2,
+      fill   = c("grey55", "white", "grey55", "white")
+    ), nrow = 1)
+  )
+
+# ── 5. Assemble combined figure with cowplot ──────────────────────────────────
+
+# Build a shared legend source: each guide gets its own boxed background via
+# guide_legend(theme = ...), mirroring the style in visual_combined.qmd.
+p_for_shared_legend <- p_discordance +
+  guides(
+    color = guide_legend(
+      name           = "rate variation:",
+      title.position = "top",
+      override.aes   = list(size = 5, stroke = 1.2),
+      nrow           = 3,
+      theme          = theme(
+        legend.background = element_rect(
+          color = "black", linewidth = 1.2, fill = "white"),
+        legend.margin     = margin(6, 10, 6, 10),
+        legend.text       = element_text(size = 13, face = "bold"),
+        legend.title      = element_text(size = 13, face = "bold")
+      )
+    ),
+    shape = guide_legend(
+      name           = "ILS & individuals / taxon (n):",
+      title.position = "top",
+      override.aes   = list(size  = 5, stroke = 1.2,
+                            fill  = c("grey55", "white", "grey55", "white"),
+                            color = "black"),
+      nrow           = 2,
+      theme          = theme(
+        legend.background = element_rect(
+          color = "black", linewidth = 1.2, fill = "white"),
+        legend.margin     = margin(6, 10, 6, 10),
+        legend.text       = element_text(size = 13, face = "bold"),
+        legend.title      = element_text(size = 13, face = "bold")
+      )
+    ),
+    fill = "none"
+  ) +
+  theme(
+    legend.position  = "bottom",
+    legend.box       = "horizontal",
+    legend.spacing.x = unit(1.0, "lines")
+  )
+
+# Single combined legend: rate variation (left box), ILS × N (right box)
+legend_row <- cowplot::get_legend(p_for_shared_legend)
+
+# Row 1 (top): discordance — suppress x-axis tick labels and ticks, no legend
+p_disc_clean <- p_discordance +
+  theme(
+    legend.position = "none",
+    axis.text.x     = element_blank(),
+    axis.ticks.x    = element_blank()
+  )
+
+# Row 2 (bottom): estimation error — keep x-axis tick labels, no legend
+p_est_clean <- p_estimation +
+  theme(legend.position = "none")
+
+# Row-label helper
+make_row_label <- function(label) {
+  ggplot(data.frame(x = 1, y = 1), aes(x = x, y = y)) +
+    labs(y = label) +
+    theme_void() +
+    theme(
+      axis.title.y = element_text(size = 18, face = "bold", angle = 90,
+                                   vjust = 0.5, hjust = 0.5)
+    )
+}
+
+label_disc <- make_row_label("gene tree discordance:")
+label_est  <- make_row_label("gene tree estimation error:")
+
+# Assemble each row: narrow label column + main plot
+row1 <- plot_grid(label_disc, p_disc_clean, nrow = 1, rel_widths = c(0.04, 1))
+row2 <- plot_grid(label_est,  p_est_clean,  nrow = 1, rel_widths = c(0.04, 1))
+
+# Stack rows then append shared boxed legends at the bottom
+p_combined_rf <- plot_grid(
+  row1, row2, legend_row,
+  ncol = 1,
+  rel_heights = c(0.8, 1, 0.25),
+  labels = c("A", "B", ""),
+  label_size = 20,
+  label_fontface = "bold"
+)
+
+print(p_combined_rf)
+
+pdf(file.path(outdir, "rf_point_plot_combined.pdf"), width = 10, height = 12)
+print(p_combined_rf)
+dev.off()
+```
+
+## RF Summary Table
+
+```{r rf-summary-table}
+library(knitr)
+
+# helper: compute mean/sd/median/n for a given grouping
+# n counts distinct parameter settings (not rows), since df_point_long has
+# multiple rows per setting (one per HP category after pivoting).
+summarise_RF <- function(data, ...) {
+  data %>%
+    group_by(...) %>%
+    summarise(
+      mean   = round(mean(RF,   na.rm = TRUE), 4),
+      sd     = round(sd(RF,     na.rm = TRUE), 4),
+      median = round(median(RF, na.rm = TRUE), 4),
+      n      = n_distinct(interaction(
+                 dup_loss_rate, RV_label, SF_label, N_label,
+                 drop = TRUE)),
+      .groups = "drop"
+    )
+}
+
+# ── By rate variation ─────────────────────────────────────────────────────────
+tbl_rv <- summarise_RF(df_point_long,
+  `metric group`  = metric_group,
+  `rate variation` = RV_label
+) %>% arrange(`metric group`, `rate variation`)
+
+# ── By ILS level ──────────────────────────────────────────────────────────────
+tbl_ils <- summarise_RF(df_point_long,
+  `metric group` = metric_group,
+  `ILS`          = SF_label
+) %>% arrange(`metric group`, `ILS`)
+
+# ── By HP category ────────────────────────────────────────────────────────────
+tbl_hp <- summarise_RF(df_point_long,
+  `metric group` = metric_group,
+  `HP category`  = hp_category
+) %>% arrange(`metric group`, `HP category`)
+
+# ── By dup/loss rate ──────────────────────────────────────────────────────────
+tbl_dup <- summarise_RF(df_point_long,
+  `metric group`  = metric_group,
+  `dup/loss rate` = dup_loss_label
+) %>% arrange(`metric group`, `dup/loss rate`)
+
+# ── By n ind/taxon ────────────────────────────────────────────────────────────
+tbl_n <- summarise_RF(df_point_long,
+  `metric group` = metric_group,
+  `n ind/taxon`  = N_label
+) %>% arrange(`metric group`, `n ind/taxon`)
+
+# ── By ILS x HP category ──────────────────────────────────────────────────────
+tbl_ils_hp <- summarise_RF(df_point_long,
+  `metric group` = metric_group,
+  `ILS`          = SF_label,
+  `HP category`  = hp_category
+) %>% arrange(`metric group`, `ILS`, `HP category`)
+
+# ── By ILS x strong HP vs non-strong HP ───────────────────────────────────────
+tbl_ils_strongHP <- df_point_long %>%
+  mutate(
+    hp_group = ifelse(
+      hp_category == "strong HP", "strong HP", "non-strong HP"),
+    hp_group = factor(hp_group,
+                      levels = c("non-strong HP", "strong HP"))) %>%
+  summarise_RF(`metric group` = metric_group,
+               `ILS`          = SF_label,
+               `HP group`     = hp_group) %>%
+  arrange(`metric group`, `ILS`, `HP group`)
+
+# ── Print each table ──────────────────────────────────────────────────────────
+kable(tbl_rv,  caption = "RF by rate variation (across all other factors)")
+kable(tbl_ils, caption = "RF by ILS level (across all other factors)")
+kable(tbl_hp,  caption = "RF by HP category (across all other factors)")
+kable(tbl_dup, caption = "RF by dup/loss rate (across all other factors)")
+kable(tbl_n,   caption = "RF by n ind/taxon (across all other factors)")
+kable(tbl_ils_hp,       caption = "RF by ILS x HP category")
+kable(tbl_ils_strongHP, caption = "RF by ILS x strong HP vs non-strong HP")
+
+# ── Save all to one CSV with a 'grouping factor' column ───────────────────────
+sel_cols <- c("`metric group`", "category", "level",
+              "mean", "sd", "median", "n")
+rf_summary_all <- bind_rows(
+  tbl_rv %>% mutate(category = "rate variation",
+    level = as.character(`rate variation`)) %>%
+    select(`metric group`, category, level, mean, sd, median, n),
+  tbl_ils %>% mutate(category = "ILS",
+    level = as.character(`ILS`)) %>%
+    select(`metric group`, category, level, mean, sd, median, n),
+  tbl_hp %>% mutate(category = "HP category",
+    level = as.character(`HP category`)) %>%
+    select(`metric group`, category, level, mean, sd, median, n),
+  tbl_dup %>% mutate(category = "dup/loss rate",
+    level = as.character(`dup/loss rate`)) %>%
+    select(`metric group`, category, level, mean, sd, median, n),
+  tbl_n %>% mutate(category = "n ind/taxon",
+    level = as.character(`n ind/taxon`)) %>%
+    select(`metric group`, category, level, mean, sd, median, n),
+  tbl_ils_hp %>% mutate(category = "ILS x HP category",
+    level = paste0(as.character(`ILS`), " | ",
+                   as.character(`HP category`))) %>%
+    select(`metric group`, category, level, mean, sd, median, n),
+  tbl_ils_strongHP %>% mutate(category = "ILS x strong HP",
+    level = paste0(as.character(`ILS`), " | ",
+                   as.character(`HP group`))) %>%
+    select(`metric group`, category, level, mean, sd, median, n)
+)
+
+write.csv(rf_summary_all,
+          file.path(outdir, "rf_summary_table.csv"), row.names = FALSE)
+```
+
 

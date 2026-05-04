@@ -5,9 +5,8 @@ using DataFrames
 using Statistics
 using ArgParse
 
-include("visual_utilities.jl")
-
 using Plots
+using PrettyTables
 
 """
 Parse command line arguments
@@ -24,6 +23,9 @@ function parse_commandline()
         "--visualization_output_dir" 
             help = "Output directory for visualization files"
             default = "visualization_results/snaq" 
+        "--taxon_recovery_output"
+            help = "Output CSV for long-format taxon recovery summary"
+            default = "results/SNaQ_taxon_recovery.csv"
     end
     return parse_args(s)
 end
@@ -77,7 +79,8 @@ function process_csv_file(filepath::String)
         h_gt_1_count = 0
         
         for row in eachrow(df)
-            h0_support, h1_support, h_gt_1_support = classify_hypothesis(row.p_H0, row.p_H1)
+            h0_support, h1_support, h_gt_1_support =
+                classify_hypothesis(row.p_H0, row.p_H1)
             if h0_support
                 h0_count += 1
             elseif h1_support
@@ -104,16 +107,17 @@ function process_csv_file(filepath::String)
         find_true_net0 = sum(df.RF_net0_true .== 0.0)
         find_true_net0_noF = sum(df.RF_net0_true_noF .== 0.0)
         
-        # find_true_net1: count replicates where EITHER major or minor tree matched the true network
-        # Use logical OR to avoid double-counting replicates where both trees match
-        find_true_net1 = sum((df.RF_net1_1_true .== 0.0) .| (df.RF_net1_2_true .== 0.0))
-        find_true_net1_noF = sum((df.RF_net1_1_true_noF .== 0.0) .| (df.RF_net1_2_true_noF .== 0.0))
+        # find_true_net1: count reps where major OR minor tree matched
+        find_true_net1 = sum(
+            (df.RF_net1_1_true .== 0.0) .| (df.RF_net1_2_true .== 0.0))
+        find_true_net1_noF = sum(
+            (df.RF_net1_1_true_noF .== 0.0) .| (df.RF_net1_2_true_noF .== 0.0))
 
         # Check if net0's RF distance to alter1, alter2, alter3 together
-        # Only count rows where either RF_net1_1_true != 0 AND RF_net1_2_true != 0
-        # Skip rows where both RF_net1_1_true == 0 OR RF_net1_2_true == 0
-        valid_rows_net0 = df.RF_net1_1_true .!= 0.0  
-        valid_rows_net1 = (df.RF_net1_1_true .!= 0.0) .&& (df.RF_net1_2_true .!= 0.0)
+        # for alters: only count rows where the true tree was NOT recovered
+        valid_rows_net0 = df.RF_net1_1_true .!= 0.0
+        valid_rows_net1 = (df.RF_net1_1_true .!= 0.0) .&&
+            (df.RF_net1_2_true .!= 0.0)
         
         find_alter1_net0 = sum((df.RF_net0_alter1 .== 0.0) .& valid_rows_net0)
         find_alter2_net0 = sum((df.RF_net0_alter2 .== 0.0) .& valid_rows_net0)
@@ -121,14 +125,18 @@ function process_csv_file(filepath::String)
         find_alter_net0 = find_alter1_net0 + find_alter2_net0 + find_alter3_net0
 
         # check if net1's major hybrid's RF distance to alter1, alter2, alter3
-        find_alter1_net1_major = sum((df.RF_net1_1_alter1 .== 0.0) .& valid_rows_net1)
-        find_alter2_net1_major = sum((df.RF_net1_1_alter2 .== 0.0) .& valid_rows_net1)
-        find_alter3_net1_major = sum((df.RF_net1_1_alter3 .== 0.0) .& valid_rows_net1)
-        
-        # check if net1's minor hybrid's RF distance to alter1, alter2, alter3
-        find_alter1_net1_minor = sum((df.RF_net1_2_alter1 .== 0.0) .& valid_rows_net1)
-        find_alter2_net1_minor = sum((df.RF_net1_2_alter2 .== 0.0) .& valid_rows_net1)
-        find_alter3_net1_minor = sum((df.RF_net1_2_alter3 .== 0.0) .& valid_rows_net1)
+        find_alter1_net1_major = sum(
+            (df.RF_net1_1_alter1 .== 0.0) .& valid_rows_net1)
+        find_alter2_net1_major = sum(
+            (df.RF_net1_1_alter2 .== 0.0) .& valid_rows_net1)
+        find_alter3_net1_major = sum(
+            (df.RF_net1_1_alter3 .== 0.0) .& valid_rows_net1)
+        find_alter1_net1_minor = sum(
+            (df.RF_net1_2_alter1 .== 0.0) .& valid_rows_net1)
+        find_alter2_net1_minor = sum(
+            (df.RF_net1_2_alter2 .== 0.0) .& valid_rows_net1)
+        find_alter3_net1_minor = sum(
+            (df.RF_net1_2_alter3 .== 0.0) .& valid_rows_net1)
         
         # Return results as a named tuple
         return (
@@ -143,7 +151,7 @@ function process_csv_file(filepath::String)
             # whether net0 and net1 matched true network: 
             find_true_net0 = find_true_net0,
             find_true_net0_noF = find_true_net0_noF, 
-            find_true_net1 = find_true_net1, # include both major and minor tree 
+            find_true_net1 = find_true_net1,
             find_true_net1_noF = find_true_net1_noF,
             mean_p_H0 = mean_p_H0,
             mean_p_H1 = mean_p_H1,
@@ -167,13 +175,12 @@ end
 Filter SNaQ results where both RF_net1_1_true != 0.0 AND RF_net1_2_true != 0.0
 Extract minor gamma values and output to CSV with histogram visualization.
 """
-function filter_and_extract_minor_gamma(snaq_summary_dir::String, output_csv::String, output_plot::String)
+function filter_and_extract_minor_gamma(snaq_summary_dir::String,
+                                        output_csv::String, output_plot::String)
     """
-    Process all SNaQ summary files to extract rows where both RF_net1_1_true != 0.0 
-    and RF_net1_2_true != 0.0. Extract the minor gamma value (smaller of gamma_1, gamma_2).
-    
-    Output CSV columns: parameter_setting, repID, RF_net1_1_true, RF_net1_2_true, minor_gamma
-    Also generates a histogram of minor gamma values.
+    filter_and_extract_minor_gamma(snaq_summary_dir, output_csv, output_plot)
+    Extract rows where both RF_net1_1_true != 0.0 and RF_net1_2_true != 0.0,
+    then write minor gamma (min of gamma_1, gamma_2) and a histogram to disk.
     """
     
     if !isdir(snaq_summary_dir)
@@ -203,8 +210,8 @@ function filter_and_extract_minor_gamma(snaq_summary_dir::String, output_csv::St
             # Extract parameter setting from filename
             parameter_setting = extract_parameter_setting(csv_file)
             
-            # Filter rows where both RF_net1_1_true != 0.0 AND RF_net1_2_true != 0.0
-            filtered_rows = df[(df.RF_net1_1_true .!= 0.0) .& (df.RF_net1_2_true .!= 0.0), :]
+            filtered_rows = df[(df.RF_net1_1_true .!= 0.0) .&
+                (df.RF_net1_2_true .!= 0.0), :]
             
             # Process filtered rows
             for row in eachrow(filtered_rows)
@@ -223,7 +230,7 @@ function filter_and_extract_minor_gamma(snaq_summary_dir::String, output_csv::St
                 push!(all_minor_gammas, minor_gamma)
             end
             
-            println("Processed: $csv_file - Found $(nrow(filtered_rows)) matching replicates")
+            println("$csv_file: $(nrow(filtered_rows)) matching reps")
             
         catch e
             println("Error processing file $filepath: $e")
@@ -252,6 +259,105 @@ function filter_and_extract_minor_gamma(snaq_summary_dir::String, output_csv::St
     println("  Std Dev: $(std(all_minor_gammas))")
     
     return result_df
+end
+
+"""
+Explode a comma-separated role column into one row per taxon.
+Carries param_setting, repID, and true_tree_recovered.
+"""
+function explode_role_column(df::DataFrame, col::Symbol, role_label::String)
+    rows = NamedTuple[]
+    for row in eachrow(df)
+        for t in strip.(split(string(row[col]), ","))
+            isempty(t) && continue
+            push!(rows, (param_setting        = row.param_setting,
+                         repID               = row.repID,
+                         taxon               = t,
+                         role                = role_label,
+                         true_tree_recovered = row.true_tree_recovered))
+        end
+    end
+    return DataFrame(rows)
+end
+
+"""
+Long-format stratified taxon recovery summary from all CSV files in input_dir.
+Steps: read+tag → recovery flag → explode roles → group+summarize → print+save.
+"""
+function compute_taxon_recovery_summary(input_dir::String, output_file::String)
+    required_cols = [:repID, :hybrid_taxon, :major_donor, :minor_donor,
+                     :RF_net1_1_true, :RF_net1_2_true]
+
+    # STEP 1: Read and tag each CSV file; skip files missing required columns
+    csv_files = filter(f -> endswith(f, ".csv"), readdir(input_dir))
+    tagged_dfs = DataFrame[]
+    for f in csv_files
+        df = CSV.read(joinpath(input_dir, f), DataFrame)
+        missing_cols = [c for c in required_cols if !(c in propertynames(df))]
+        if !isempty(missing_cols)
+            @warn "Skipping $f — missing: $(join(string.(missing_cols), ", "))"
+            continue
+        end
+        df[!, :param_setting] = fill(replace(f, r"\.csv$" => ""), nrow(df))
+        push!(tagged_dfs, select(df, vcat(required_cols, [:param_setting])))
+    end
+    if isempty(tagged_dfs)
+        @warn "No usable files found for taxon recovery analysis — skipping."
+        return
+    end
+
+    # Stack all DataFrames; keep only shared columns
+    combined = vcat(tagged_dfs...; cols=:intersect)
+
+    # Filter out replicates where H1 never ran (both RF values are NaN);
+    # NaN == 0.0 is false in Julia, so keeping these would silently count
+    # missing replicates as "not recovered" rather than as missing data.
+    combined = filter(
+        row -> !isnan(row.RF_net1_1_true) || !isnan(row.RF_net1_2_true),
+        combined)
+
+    # Also drop rows where taxon columns were never filled ("NA" default)
+    combined = filter(row -> !(string(row.hybrid_taxon) == "NA" &&
+                               string(row.major_donor)  == "NA" &&
+                               string(row.minor_donor)  == "NA"), combined)
+
+    # STEP 2: Recovery flag — true if either RF orientation equals 0
+    # NaN RF values (only one tree displayed) are treated as not matching.
+    combined[!, :true_tree_recovered] =
+        (combined.RF_net1_1_true .== 0.0) .| (combined.RF_net1_2_true .== 0.0)
+
+    # STEP 3: Explode hybrid_taxon/major_donor/minor_donor (one row per taxon);
+    # explode_role_column already skips empty strings — "NA" entries are
+    # filtered above so they will not appear as a taxon name.
+    long_all = vcat(
+        explode_role_column(combined, :hybrid_taxon, "hybrid_taxon"),
+        explode_role_column(combined, :major_donor,  "major_donor"),
+        explode_role_column(combined, :minor_donor,  "minor_donor")
+    )
+    # Deduplicate: each (param_setting, repID, taxon, role) counted at most once
+    long_dedup = unique(long_all, [:param_setting, :repID, :taxon, :role])
+
+    # STEP 4: Stratified summary grouped by (param_setting, taxon, role)
+    summary = combine(
+        groupby(long_dedup, [:param_setting, :taxon, :role]),
+        :true_tree_recovered => sum             => :count_recovered,
+        :true_tree_recovered => (x -> sum(.!x)) => :count_not_recovered,
+        :true_tree_recovered => length          => :total
+    )
+    summary[!, :pct_correct] = map(
+        (r, t) -> t == 0 ? NaN : round(100.0 * r / t, digits=1),
+        summary.count_recovered, summary.total
+    )
+    sort!(summary, [:param_setting, order(:total, rev=true)])
+
+    # STEP 5: Print preview of first 20 rows and save full table to CSV
+    n_preview = min(20, nrow(summary))
+    println("\nTaxon recovery summary — first $n_preview rows:")
+    pretty_table(summary[1:n_preview, :];
+        header=names(summary), tf=tf_unicode_rounded)
+    mkpath(dirname(output_file) == "" ? "." : dirname(output_file))
+    CSV.write(output_file, summary)
+    println("Taxon recovery ($(nrow(summary)) rows) → $output_file")
 end
 
 function main()
@@ -354,32 +460,6 @@ function main()
 
     # Generate distribution plots
     mkpath(snaq_visualization_dir)
-    # plot_column_distributions(snaq_summary_dir, :gamma_1, :gamma_2, 
-    #                             snaq_visualization_dir, 
-    #                             "SNaQ_minor_gamma_distributions.png")
-    # plot_by_ratevar(snaq_summary_dir, :gamma_1, :gamma_2,
-    #                snaq_visualization_dir,
-    #                "SNaQ_minor_gamma_by_ratevar.png")
-    # plot_by_duploss_rate(snaq_summary_dir, :gamma_1, :gamma_2,
-    #                     snaq_visualization_dir,
-    #                     "SNaQ_minor_gamma_by_duploss_rate.png")
-
-    # plot_overlapping_categories(snaq_summary_dir, :gamma_1, :gamma_2,
-    #                            snaq_visualization_dir,
-    #                            "SNaQ_overlapping_ratevar.png",
-    #                            "ratevar")
-    # plot_overlapping_categories(snaq_summary_dir, :gamma_1, :gamma_2,
-    #                            snaq_visualization_dir,
-    #                            "SNaQ_overlapping_duploss.png",
-    #                            "duploss")
-    
-    # plot_ratevar_overlapping_by_duploss(snaq_summary_dir, :gamma_1, :gamma_2,
-    #                                    snaq_visualization_dir,
-    #                                    "SNaQ_ratevar_overlapping_by_duploss.png")
-
-    # plot_overlapping_ratevar_by_n_inds_sf(snaq_summary_dir, :gamma_1, :gamma_2, 
-    #                                         snaq_visualization_dir, 
-    #                                         "SNAQ_minorG_duploss_SF_ninds")
     
     # Generate 12-panel combined plot using R with facet_grid
     println("Generating combined 12-panel plot using R facet_grid...")
@@ -410,7 +490,7 @@ function main()
     
     # Filter for replicates with both net1 trees != 0 and extract minor gamma
     println("\n" * "="^80)
-    println("FILTERING FOR REPLICATES WITH BOTH RF_net1_1_true ≠ 0 AND RF_net1_2_true ≠ 0")
+    println("FILTERING: RF_net1_1_true ≠ 0 AND RF_net1_2_true ≠ 0")
     println("="^80)
     filtered_output_csv = joinpath(snaq_visualization_dir,
                                 "SNaQ_minor_gamma_filtered.csv")
@@ -424,10 +504,14 @@ function main()
                  plot_snaq_minor_gamma_by_tree_display('$snaq_summary_dir', 
                     '$snaq_visualization_dir', 
                     'SNaQ_minor_gamma_by_tree_display')"`)
-        println("SNaQ minor gamma by tree display visualization generated successfully")
+        println("SNaQ minor gamma by tree display visualization generated")
     catch e
         @warn "Could not generate SNaQ visualization: $e"
     end
+
+    # Taxon recovery summary — long-format table by (param_setting, taxon, role)
+    compute_taxon_recovery_summary(snaq_summary_dir,
+        args["taxon_recovery_output"])
     
 end
 

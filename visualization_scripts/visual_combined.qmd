@@ -12,24 +12,28 @@ library(tidyr)
 library(readr)
 library(ggplot2)
 library(stringr)
-setwd(dirname(rstudioapi::getActiveDocumentContext()$path)) 
-visualization_output <- "../visualization_results/combined" 
+library(cowplot)
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+visualization_output <- "../visualization_results/combined"
 snaq_input_dir <- "../snaq_summary"
 findgraph_input_dir <- "../findgraph_summary"
 source("../scripts/visual_utilities.R")
 
-# Load summary data frames for functions that take pre-loaded data
 parse_params <- function(df, param_col) {
   df %>% mutate(
-    dup_loss_rate = as.numeric(str_extract(.data[[param_col]], "(?<=DUP)[0-9]*\\.?[0-9]+(?:[eE][-+]?[0-9]+)?")),
-    RV    = factor(str_extract(.data[[param_col]], "(?<=RV)[A-Z]+"), levels = c("N", "G", "L")),
-    SF    = as.numeric(str_extract(.data[[param_col]], "(?<=SF)[0-9]*\\.?[0-9]+")),
+    dup_loss_rate = as.numeric(str_extract(
+      .data[[param_col]], "(?<=DUP)[0-9]*\\.?[0-9]+(?:[eE][-+]?[0-9]+)?")),
+    RV    = factor(str_extract(.data[[param_col]], "(?<=RV)[A-Z]+"),
+                   levels = c("N", "G", "L")),
+    SF    = as.numeric(str_extract(
+      .data[[param_col]], "(?<=SF)[0-9]*\\.?[0-9]+")),
     N_ind = as.integer(str_extract(.data[[param_col]], "(?<=N_ind)[0-9]+")),
     n_ind = N_ind
   )
 }
 
-snaq_df      <- read_csv("../results/SNaQ_summary.csv")      %>% parse_params("parameter_setting")
+snaq_df <- read_csv("../results/SNaQ_summary.csv") %>%
+  parse_params("parameter_setting")
 findgraph_df <- read_csv("../results/findgraph_summary.csv") %>%
   parse_params("paramname_root") %>%
   mutate(
@@ -39,53 +43,52 @@ findgraph_df <- read_csv("../results/findgraph_summary.csv") %>%
 ```
 
 # Combined Plot of minor Gamma SNaQ vs findgraph
-Minor gamma values aggregated across all parameter settings (n_inds, ILS, duplication/loss rates)
+Minor gamma values aggregated across all parameter settings (n_inds, ILS, rates)
 with substitution rate variation color coding (gene, lineage, none).
 
 ```{r combined_snaq_findgraph_minor_gamma, fig.width=14, fig.height=6}
-
-# Create combined 2-panel plot
-p_minor_gamma <- plot_combined_snaq_findgraph_aggregated(
-  snaq_input_dir = snaq_input_dir,
-  findgraph_input_dir = findgraph_input_dir,
-  output_dir = visualization_output,
-  output_filename = "combined_snaq_findgraph_aggregated",
-  max_y = 500
-)
-print(p_minor_gamma)
+# p_minor_gamma <- plot_combined_snaq_findgraph_aggregated(
+#   snaq_input_dir      = snaq_input_dir,
+#   findgraph_input_dir = findgraph_input_dir,
+#   output_dir          = visualization_output,
+#   output_filename     = "combined_snaq_findgraph_aggregated",
+#   max_y               = 500
+# )
+# print(p_minor_gamma)
 ```
 
-# Combined Plot of minor Gamma SNaQ vs findgraph for each parameter setting (n_inds, ILS, duplication/loss rates)
-Minor gamma values faceted by parameter settings (n_inds, ILS, duplication/loss rates)
+# Combined Plot of minor Gamma SNaQ vs findgraph for each parameter setting
+Minor gamma values faceted by parameter settings (n_inds, ILS, dup/loss rates)
 with substitution rate variation color coding (gene, lineage, none).
 
 ```{r combined_snaq_findgraph_minor_gamma_by_tree_display, fig.width=14, fig.height=18}
 source("../scripts/visual_utilities.R")
-# Create combined 2-panel plot by tree display visualization
 result <- plot_combined_snaq_findgraph_by_tree_display(
-  snaq_input_dir = snaq_input_dir,
+  snaq_input_dir      = snaq_input_dir,
   findgraph_input_dir = findgraph_input_dir,
-  output_dir = visualization_output,
-  output_filename = "combined_snaq_findgraph_by_tree_display",
-  max_y = 350,
-  max_y_by_ratevar = list(none = 250, gene = 350, lineage = 100)
+  output_dir          = visualization_output,
+  output_filename     = "combined_snaq_findgraph_by_tree_display",
+  max_y               = 350,
+  max_y_by_ratevar    = list(none = 250, 
+  gene = 350, 
+  lineage = 250)
 )
 print(result)
 ```
 
-
 # Combined H=1 True Graph Recovery: SNaQ vs findgraphs
 
 ```{r combined_h1_recovery, fig.width=16, fig.height=9}
-# SNaQ uses find_true_net1 (% replicates where H=1 finds true graph, across all graphs)
+# SNaQ: find_true_net1 = % reps where H=1 finds true graph (across all graphs)
 # findgraphs uses pct_true_tree_H1 (same metric)
 p_h1_recovery <- plot_combined_true_graph_recovery_H1_only(
-  snaq_df      = snaq_df,
-  findgraph_df = findgraph_df,
+  snaq_df          = snaq_df,
+  findgraph_df     = findgraph_df,
   h1_col_snaq      = "find_true_net1",
-  h1_col_findgraph = "pct_true_tree_H1", # among all trees recovered by findgraphs 
+  h1_col_findgraph = "pct_true_tree_H1",
   output_dir       = visualization_output,
-  output_filename  = "combined_snaq_findgraph_h1_alltrees_for_findgraphs_recovery",
+  output_filename  =
+    "combined_snaq_findgraph_h1_alltrees_for_findgraphs_recovery",
   y_range          = c(75, 105),
   plot_title       = "H=1 True Graph Recovery: SNaQ vs findgraphs"
 )
@@ -94,10 +97,10 @@ print(p_h1_recovery)
 
 ```{r combined_h1_best_graph_recovery, fig.width=16, fig.height=9}
 # Best-graph version: findgraphs uses count_H1_best_displays_true_tree
-source("../scripts/visual_utilities.R") 
+source("../scripts/visual_utilities.R")
 p_h1_best <- plot_combined_true_graph_recovery_H1_only(
-  snaq_df      = snaq_df,
-  findgraph_df = findgraph_df,
+  snaq_df          = snaq_df,
+  findgraph_df     = findgraph_df,
   h1_col_snaq      = "find_true_net1",
   h1_col_findgraph = "count_H1_best_displays_true_tree",
   output_dir       = visualization_output,
@@ -108,7 +111,8 @@ p_h1_best <- plot_combined_true_graph_recovery_H1_only(
 print(p_h1_best)
 ```
 
-# Combined Type I Error Rate (H≥1 Accepted): SNaQ vs findgraphs
+# Combined Type I Error Rate (H>=1 Accepted): SNaQ vs findgraphs
+
 ```{r combined_h0_acceptance, fig.width=16, fig.height=9}
 source("../scripts/visual_utilities.R")
 p_h0_combined <- plot_combined_hypothesis_acceptance_H0(
@@ -123,5 +127,315 @@ p_h0_combined <- plot_combined_hypothesis_acceptance_H0(
   plot_title            = NULL
 )
 print(p_h0_combined)
+```
+
+# Three-Panel Combined Figure (cowplot)
+
+Top-left: findgraphs WR 95th percentile jitter.  
+Top-right: H=1 best graph recovery (SNaQ vs findgraphs).  
+Bottom: Type I error rate (SNaQ vs findgraphs with WR thresholds).
+
+Requires p_wr_jitter, p_h1_best, p_h0_combined from the previous three chunks.
+
+```{r combined_three_panel_figure, fig.width=18, fig.height=16}
+source("../scripts/visual_utilities.R")
+
+# --- Figure 1: True-tree WR 95th-percentile jitter 
+# (findgraphs, facet label added) ---
+p_wr_jitter <- plot_WR_percentiles_jitter_combined(
+  input_dir  = findgraph_input_dir,
+  wr_column  = "true_tree_wr",
+  output_dir = visualization_output,
+  output_filename = "findgraph_true_tree_WR_95-percentiles_jitter_combined",
+  ymax = 9,
+  facet_label = "find_graphs"
+)
+
+# --- Shared legend: rate variation + ILS/n, 
+# each group in its own box ---
+p_for_shared_legend <- p_h0_combined +
+  guides(
+    color = guide_legend(
+      name         = "rate variation:",
+      override.aes = list(size = 8, stroke = 1.6),
+      nrow         = 3,
+      theme        = theme(
+        legend.background = element_rect(color = "black", 
+        linewidth = 1.2, fill = "white"),
+        legend.text       = element_text(size = 19, face = "bold"),
+        legend.title      = element_text(size = 19, face = "bold")
+      )
+    ),
+    shape = guide_legend(
+      name         = "ILS & individuals / taxon (n)",
+      override.aes = list(size  = 8, stroke = 1.6,
+                          fill  = c("grey55", "white", 
+                          "grey55", "white"),
+                          color = "black"),
+      nrow  = 2,
+      theme = theme(
+        legend.background = element_rect(color = "black", 
+                          linewidth = 1.2, fill = "white"),
+        legend.text       = element_text(size = 19, 
+                            face = "bold"),
+        legend.title      = element_text(size = 19, 
+                            face = "bold")
+      )
+    )
+  ) +
+  theme(
+    legend.position  = "bottom",
+    legend.box       = "horizontal",
+    legend.spacing.x = unit(1.5, "lines")
+  )
+combined_legend <- cowplot::get_legend(p_for_shared_legend)
+
+# =============================================================================
+# Uniform font sizes across all three panels
+#   axis.text = 20,  axis.title = 22,  strip.text = 21
+# =============================================================================
+
+COMMON_THEME <- theme(
+  axis.title.x     = element_blank(), # x-label shown only on Fig 3
+  axis.text.x      = element_text(size = 20, angle = 45, 
+                                  hjust = 1,
+                                  color = "black", face = "bold"),
+  axis.text.y      = element_text(size = 20, color = "black", 
+                                  face = "bold"),
+  strip.text       = element_text(size = 21, face = "bold"),
+  strip.background = element_rect(fill = "grey90"),
+  legend.position  = "none"
+)
+
+# --- Fig 1 (panel A) ---
+# WR threshold labels added inline; linetype legend suppressed
+last_x <- tail(levels(p_wr_jitter$data$dup_loss_rate_cat), 1)
+
+p1_noleg <- p_wr_jitter +
+  COMMON_THEME +
+  guides(linetype = "none") +
+  labs(x = NULL, y = "95th percentile of worst residuals", 
+        title = NULL) +
+  theme(
+    axis.title.y = element_text(size = 22, face = "bold", 
+    margin = margin(r = 10)),
+    plot.margin  = unit(c(0.5, 0.5, 0.2, 0.5), "lines")
+  )
+
+# --- Fig 2 (panel B) ---
+# y-axis on right; 2.5-line left margin creates:
+#   (a) a visible gap between panel A and panel B
+#   (b) space outside the panel for the B label
+p2_noleg <- p_h1_best +
+  COMMON_THEME +
+  scale_y_continuous(limits = c(60, 102), expand = c(0, 0)) +
+  labs(x = NULL, y = "prob. of displaying the true tree (%)", 
+          title = NULL) +
+  theme(
+    axis.title.y = element_text(size = 22, 
+              face = "bold", margin = margin(r = 10)),
+    plot.margin  = unit(c(0.5, 0.5, 0.2, 2.5), "lines")
+  )
+
+# --- Fig 3 (panel C) ---
+p3_noleg <- p_h0_combined +
+  theme(
+    legend.position = "none",
+    axis.title.x    = element_text(size = 22, 
+                      face = "bold", margin = margin(t = 10)),
+    axis.title.y    = element_text(size = 22, 
+                      face = "bold", margin = margin(r = 10)),
+    axis.text.x     = element_text(size = 20, angle = 45, hjust = 1,
+                                   color = "black", face = "bold"),
+    axis.text.y     = element_text(size = 20, 
+                                    color = "black", face = "bold"),
+    strip.text      = element_text(size = 21, face = "bold"),
+    plot.margin     = unit(c(0.2, 0.5, 0.5, 0.5), "lines")
+  )
+
+# --- Assemble ---
+# B label placed at label_x = 0.018: 
+# with 2.5-line left margin on p2,
+# that fraction falls inside the margin (left of the panel), 
+# outside the data area.
+top_row <- plot_grid(
+  p1_noleg, p2_noleg,
+  ncol           = 2,
+  rel_widths     = c(1.1, 2),
+  align          = "v",
+  axis           = "tb",
+  labels         = c("A", "B"),
+  label_x        = c(0.005, 0.003),
+  label_y        = 0.98,
+  label_size     = 26,
+  label_fontface = "bold"
+)
+
+main_grid <- plot_grid(
+  top_row, p3_noleg,
+  nrow           = 2,
+  labels         = c("", "C"),
+  label_x        = 0.005,
+  label_y        = 0.98,
+  label_size     = 26,
+  label_fontface = "bold"
+)
+
+# Full figure with shared legend at bottom
+final_figure <- plot_grid(
+  main_grid,
+  combined_legend,
+  nrow        = 2,
+  rel_heights = c(1, 0.12)
+)
+
+# Save
+dir.create(visualization_output, showWarnings = FALSE, recursive = TRUE)
+ggsave(
+  file.path(visualization_output, "combined_three_panel_figure.pdf"),
+  final_figure,
+  width = 14, height = 14, dpi = 300, units = "in",
+  device = cairo_pdf
+)
+print(final_figure)
+```
+
+# Three-Panel True Graph Recovery: findgraphs (best) / findgraphs (all) / SNaQ
+
+```{r combined_true_graph_recovery_three_panel, fig.width=14, fig.height=20}
+source("../scripts/visual_utilities.R")
+
+# --- Panel A: findgraphs best-scoring graph ---
+parts_A <- plot_true_graph_recovery_lines_aggregated(
+  findgraph_df,
+  h0_col     = "count_H0_best_is_true_tree",
+  h1_col     = "count_H1_best_displays_true_tree",
+  h1_noF_col = "count_H1_best_displays_true_tree_noF",
+  output_dir      = visualization_output,
+  output_filename = "findgraph_best_recovery_parts",
+  y_range         = c(70, 102),
+  return_parts    = TRUE
+)
+
+
+# --- Panel B: findgraphs all retained graphs ---
+parts_B <- plot_true_graph_recovery_lines_aggregated(
+  findgraph_df,
+  h0_col     = "pct_true_tree_H0",
+  h1_col     = "pct_true_tree_H1",
+  h1_noF_col = "pct_true_tree_H1_noF",
+  output_dir      = visualization_output,
+  output_filename = "findgraph_all_recovery_parts",
+  y_range         = c(90, 101),
+  return_parts    = TRUE
+)
+
+# --- Panel C: SNaQ ---
+parts_C <- plot_true_graph_recovery_lines_aggregated(
+  snaq_df,
+  output_dir      = visualization_output,
+  output_filename = "snaq_recovery_parts",
+  y_range         = c(65, 103),
+  return_parts    = TRUE
+)
+
+# --- Strip panels: no legend; A/B lose x-axis; all titles top-left ---
+PANEL_COMMON <- theme(
+  legend.position = "none",
+  plot.title      = element_text(hjust = 0, size = 19, face = "bold"),
+  axis.title.y    = element_text(size = 22, face = "bold",
+                                 margin = margin(r = 10)),
+  axis.text.x     = element_text(size = 18, angle = 20, hjust = 1,
+                                 color = "black", face = "bold"),
+  axis.text.y     = element_text(size = 22, color = "black", face = "bold"),
+  strip.text      = element_text(size = 22, face = "bold"),
+  plot.margin     = unit(c(0.4, 0.5, 0.2, 0.5), "lines")
+)
+
+pA <- parts_A$p_no_legend +
+  PANEL_COMMON +
+  labs(title = "find_graphs: among best-scoring graphs") +
+  theme(axis.title.x = element_blank())
+
+pB <- parts_B$p_no_legend +
+  PANEL_COMMON +
+  labs(title = "find_graphs: among all retained graphs") +
+  scale_y_continuous(limits = c(90, 101), expand = c(0, 0),
+                     breaks = scales::breaks_pretty()) +
+  theme(axis.title.x = element_blank())
+
+pC <- parts_C$p_no_legend +
+  PANEL_COMMON +
+  labs(title = "SNaQ") +
+  theme(
+    plot.margin  = unit(c(0.2, 0.5, 0.4, 0.5), "lines"),
+    axis.title.x = element_text(size = 22, face = "bold",
+                                 margin = margin(t = 10))
+  )
+
+# --- Shared legend: rate variation (color) + ILS/n (shape), bottom box ---
+legend_fill_override <- c("grey55", "white", "grey55", "white")
+
+shared_legend_src <- parts_C$base_plot +
+  theme(
+    legend.position    = "bottom",
+    legend.box         = "horizontal",
+    legend.spacing.x   = unit(1.5, "lines"),
+    legend.box.spacing = unit(0.0, "lines"),
+    legend.margin      = margin(10, 10, 10, 10),
+    legend.key.width   = unit(2.0, "cm"),
+    legend.background  = element_rect(color = "black",
+                                      linewidth = 1.2, fill = "white"),
+    legend.text        = element_text(size = 18, face = "bold"),
+    legend.title       = element_text(size = 18, face = "bold",
+                                      hjust = 0, margin = margin(b = 4)),
+    legend.title.position = "top"
+  ) +
+  guides(
+    color = guide_legend(
+      order        = 1,
+      override.aes = list(size = 6, stroke = 1.4),
+      ncol = 1
+    ),
+    shape = guide_legend(
+      order        = 2,
+      override.aes = list(
+        size   = 6,
+        stroke = 1.4,
+        fill   = legend_fill_override,
+        color  = "black"
+      ),
+      nrow = 2
+    )
+  )
+shared_legend <- cowplot::get_legend(shared_legend_src)
+
+# --- Assemble ---
+panels <- plot_grid(
+  pA, pB, pC,
+  ncol           = 1,
+  rel_heights    = c(1, 1, 1.15),
+  labels         = c("A", "B", "C"),
+  label_size     = 28,
+  label_fontface = "bold",
+  label_x        = 0.005,
+  label_y        = 0.995
+)
+
+final_recovery <- plot_grid(
+  panels,
+  shared_legend,
+  ncol        = 1,
+  rel_heights = c(1, 0.12)
+)
+
+dir.create(visualization_output, showWarnings = FALSE, recursive = TRUE)
+ggsave(
+  file.path(visualization_output,
+            "combined_true_graph_recovery_three_panel.pdf"),
+  final_recovery,
+  width = 12, height = 20, dpi = 300, units = "in"
+)
+print(final_recovery)
 ```
 

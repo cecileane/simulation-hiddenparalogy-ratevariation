@@ -1,0 +1,202 @@
+---
+title: "Baseline Tree Visualization"
+format: html
+execute:
+  warning: false
+  message: false
+---
+
+```{r setup}
+library(ape)
+library(phytools)
+library(ggplot2)
+library(tibble)
+library(dplyr)
+```
+
+## Trees
+
+Three representations of the same topology:
+
+- **Original**: uniform branch lengths (in thousands of years)
+- **Multiplied**: branch lengths scaled by lineage-specific rate multipliers
+- **Real labels**: same as multiplied but with taxon names
+
+```{r parse-trees}
+# Evaluate "length*multiplier" expressions in a Newick string
+eval_newick <- function(nwk) {
+  m    <- gregexpr("[0-9.eE+-]+\\*[0-9.eE+-]+", nwk, perl = TRUE)
+  hits <- regmatches(nwk, m)[[1]]
+  for (h in hits) {
+    parts <- strsplit(h, "\\*")[[1]]
+    val   <- as.numeric(parts[1]) * as.numeric(parts[2])
+    nwk   <- sub(h, format(val, scientific = FALSE, digits = 10), 
+            nwk, fixed = TRUE)
+  }
+  nwk
+}
+
+# Extract per-tip multipliers from entries like "A:3440*0.51"
+extract_tip_multipliers <- function(nwk) {
+  m    <- gregexpr("([A-Za-z0-9_]+):[0-9.eE+-]+\\*[0-9.eE+-]+", 
+              nwk, perl = TRUE)
+  hits <- regmatches(nwk, m)[[1]]
+  tibble(
+    abstract   = sub(":.*$", "", hits),
+    multiplier = as.numeric(sub("^.*\\*", "", hits))
+  )
+}
+
+nwk_orig <- "(A:3440,((((B:880,C:880):1710,(D:930,E:930):1660):170,F:2760):180,(G:500,H:500):2440):500);"
+
+nwk_mult_raw <- "(A:3440*0.5169864809498557,((((B:880*0.2153870155124918,C:880*0.18834479130316475):1710*0.4020718751928419,(D:930*1.2082967305424273,E:930*1.0232137924942215):1660*0.409265030942541):170*0.35253579234236804,F:2760*0.344215098863717):180*0.5023485661313807,(G:500*4.086688964324318,H:500*9.202700211638554):2440*0.9755544779699168):500*3.557239714945028);"
+
+tr_orig <- read.tree(text = nwk_orig)
+tr_mult <- read.tree(text = eval_newick(nwk_mult_raw))
+
+sub_per_cu <- 0.019526049565237014
+tr_sub <- tr_orig
+tr_sub$edge.length <- tr_mult$edge.length / 1000 * sub_per_cu
+```
+
+```{r multipliers}
+abstract_to_taxon <- c(
+  A = "Homo",
+  B = "Crocodylus",
+  C = "Alligator",
+  D = "Taeniopygia",
+  E = "Gallus",
+  F = "Chrysemys",
+  G = "Anolis",
+  H = "Pantherophis"
+)
+
+# Always stay in sync with nwk_mult_raw after edits
+tip_mult <- extract_tip_multipliers(nwk_mult_raw) %>%
+  mutate(label = abstract_to_taxon[abstract]) %>%
+  select(label, multiplier)
+
+tip_mult
+```
+
+## Plot — Original | Multiplied | Accumulated branch length
+
+```{r plot-sidebyside, fig.width=28, fig.height=9}
+# --- Pre-compute labels and accumulated depths ---
+orig_len       <- tr_orig$edge.length
+edge_mult_full <- tr_mult$edge.length / tr_orig$edge.length
+edge_mult      <- round(edge_mult_full, 2)   # round to 2 decimal 
+
+# Rebuild multiplied tree using the rounded multipliers
+tr_mult_r              <- tr_orig
+tr_mult_r$edge.length  <- orig_len * edge_mult
+
+lbl_orig  <- as.character(round(orig_len))
+lbl_mult  <- paste0("\u00d7 ", edge_mult, 
+      " (", round(tr_mult_r$edge.length / 1000, 2), ")")
+
+# Total root-to-tip distance using rounded multipliers
+depth_mult <- node.depth.edgelength(tr_mult_r)
+n_tips     <- length(tr_mult_r$tip.label)
+
+# Map abstract labels (A-H) → real taxon names
+abstract_to_real <- setNames(
+  c("Homo (human)",
+  "Crocodylus (crocodile)",
+  "Alligator (alligator)",
+  "Taeniopygia (zebra finch)",
+  "Gallus (chicken)",
+  "Chrysemys (turtle)",
+  "Anolis (lizard)",
+  "Pantherophis (snake)"),
+  c("A","B","C","D","E","F","G","H")
+)
+
+tip_accum <- tibble(
+  abstract = tr_mult_r$tip.label,
+  real     = abstract_to_real[tr_mult_r$tip.label],
+  accum    = depth_mult[seq_len(n_tips)]
+)
+
+# --- Drawing function (called for both PDF and inline) ---
+draw_all <- function() {
+  layout(matrix(1:3, 1, 3), widths = c(2.5, 2.5, 2.2))
+
+  # ── Panel 1: Original tree, very thick branches ──────────────────────────
+  par(mar = c(2, 1, 4, 2))
+  plot(tr_orig,
+       cex      = 1.6,
+       lwd      = 10,                      # ×10 thicker
+       main     = "baseline species tree",
+       cex.main = 1.8,
+       x.lim    = c(0, max(node.depth.edgelength(tr_orig)) * 1.3))
+  edgelabels(lbl_orig,
+             adj   = c(0.5, 1.5),
+             cex   = 1.2,
+             frame = "none",
+             col   = "black")
+
+  # ── Panel 2: Substitution rate tree (subs/site per branch) ─────────────
+  par(mar = c(5, 1, 4, 2))
+  plot(tr_sub,
+       use.edge.length = TRUE,
+       show.tip.label  = TRUE,
+       cex             = 1.6,
+       lwd             = 8,
+       main            = "Branch lengths in substitutions/site",
+       cex.main        = 1.8)
+  px      <- par("usr")   # c(x1, x2, y1, y2) in data coords
+  line_h  <- par("csi") * diff(px[3:4]) / par("pin")[2]  # 1 char in data coords
+  y_bar   <- px[3] - 2 * line_h   # 2 char-heights below the plot bottom
+  segments(px[1], y_bar, px[1] + 0.05, y_bar, lwd = 2, xpd = NA)
+  text(px[1] + 0.025, y_bar - 0.8 * line_h,
+       "0.05 subs/site", cex = 0.9, xpd = NA)
+
+  # ── Panel 3: Accumulated root-to-tip bar chart (aligned to tree tips) ────
+  # Grab y-coordinates of tips from the just-plotted tree
+  lp     <- get("last_plot.phylo", envir = .PlotPhyloEnv)
+  tip_y  <- lp$yy[seq_len(n_tips)]   # y position of each tip node
+  y_lim  <- lp$y.lim
+  x_max  <- max(tip_accum$accum)
+
+  par(mar = c(2, 0.5, 4, 8))
+  plot.new()
+  plot.window(xlim = c(0, x_max * 1.05), ylim = y_lim)
+  axis(1, cex.axis = 0.9)
+  mtext("Accumulated branch length", side = 1, line = 2.5, cex = 1.0)
+  mtext("root-to-tip branch length after lineage multiplication", 
+        side = 3, line = 0.8, cex = 1.3, font = 2)
+
+  # Single solid color for all bars
+  bar_h  <- 0.3
+  accums <- tip_accum$accum[match(tr_mult_r$tip.label, tip_accum$abstract)]
+  a_max  <- max(accums)
+
+  for (i in seq_len(n_tips)) {
+    y_center <- tip_y[i]
+    accum_i  <- accums[i]
+    real_i   <- tip_accum$real[
+      match(tr_mult_r$tip.label[i], tip_accum$abstract)]
+    rect(0, y_center - bar_h, accum_i, y_center + bar_h,
+         col = "#2166ac", border = "white")
+    # Value label inside bar
+    text(accum_i / 2, y_center, labels = round(accum_i),
+         cex = 0.85, col = "white", font = 2)
+    # Taxon name to the right
+    text(a_max * 1.02, y_center, labels = real_i,
+         adj = 0, cex = 1.1, xpd = TRUE)
+  }
+  abline(v = 0, col = "grey50")
+
+  layout(1)
+}
+
+# Save to PDF (adjust width/height here)
+out_pdf <- "baseline_tree_comparison.pdf"
+pdf(out_pdf, width = 20, height = 6)
+draw_all()
+invisible(dev.off())
+message("Saved: ", out_pdf)
+
+draw_all()
+```

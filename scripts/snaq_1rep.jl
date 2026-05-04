@@ -12,8 +12,7 @@ function parse_commandline()
     s = ArgParseSettings()
 
     @add_arg_table s begin
-        # Outfolder, raxmlfolder, astralfolder, sanqfolder are passed down from simulation.jl 
-        # to create meaingful filenames for snaq output 
+        # Folders passed down from simulation.jl for meaningful snaq filenames
 
         "--outfolder" 
         help = "root folder to be specified"
@@ -88,7 +87,7 @@ function parse_commandline()
         "--method"
         help = """Method to run sanq pipeline. Options are:
                 1. 'snaq_bootstrap' to run boostrapping of snaq
-                2. 'QuartetNetworkGoodnessFit' to compare the goodness of fit between nets"""
+                2. 'QuartetNetworkGoodnessFit' to compare goodness of fit"""
         arg_type = String
         required = true # default is set in snaq.jl 
 
@@ -126,7 +125,8 @@ seed_qgof1 = parsed_args["seed_qgof1"]
 method = parsed_args["method"] 
 # method = "QuartetNetworkGoodnessFit" # or "snaq_bootstrap"
 if !(method in ["snaq_bootstrap", "quartetnetworkgoodnessfit", "both"])
-    error("method should be either 'snaq_bootstrap' or 'quartetnetworkgoodnessfit' or both")
+    error("method must be 'snaq_bootstrap', 'quartetnetworkgoodnessfit'," *
+        " or 'both'")
 end
 
 # Specify folder path: 
@@ -142,8 +142,8 @@ mkpath(H1folder)
 
 # Load starting topology, gene trees, and CFs
 # species_tree = readMultiTopology(species_tree)[102] 
-# The above codes use older astral version (astral-5.7.8) where starting topology is the last (102th) tree
-# The below codes use newer (current) astral version where starting topology is thr first 
+# Older astral (5.7.8): starting topology is the last (102nd) tree
+# Newer astral: starting topology is the first tree
 # Read the astral tree file and clean NaN values before parsing
 species_tree_content = read(species_tree, String)
 species_tree_content = clean_newick_nan(species_tree_content)
@@ -154,7 +154,7 @@ species_tree = readnewick(species_tree_content)
 gene_trees = readmultinewick(gene_trees)
 taxonmap, mappingfile = map_accessions_to_species_dict(gene_trees, outdir) 
 # The above function retuns a Dict with species => individuals 
-# The csv is saved in outdir (snaqfolder) named "id_to_species.csv" - unique per replicate
+# id_to_species.csv saved in outdir (snaqfolder), unique per replicate
 
 #-------------------------------------#
 # Calculate concordance factors
@@ -164,7 +164,7 @@ if n_inds == 1 # Probably multiple gene copies per species
 
     # when n_inds == 1, we don't need to have taxonmap
     # but this is just for consistency and changing tipnames to A, B, C, etc 
-    # The below process see: # see https://juliaphylo.github.io/SNaQ.jl/dev/man/snaq_est/  
+    # see https://juliaphylo.github.io/SNaQ.jl/dev/man/snaq_est/
 
     q,t = countquartetsintrees(gene_trees, taxonmap) 
     nt = tablequartetCF(q,t) 
@@ -185,18 +185,18 @@ else # multiple individuals per species
                             columns=2:5)
     d_sp= readtableCF!(df_sp, mergerows=true) # DataCF object 
 
-    # This will take a long time so we can omit estimating the external branch lengths 
+    # Omit external branch length estimation (slow)
     # Check the documenation for this section: 
     # https://juliaphylo.github.io/SNaQ.jl/dev/man/multiplealleles/ 
     # -> calculated by averaging the CFs of quartets of individuals 
     df_sp_ave = DataFrame(tablequartetCF(d_sp)) 
     df_sp_reduced = filter(!hasrep, df_sp_ave)  
-    # The above removes rows with repeated taxa, so no estimation of terminal branch length  
-    CSV.write("$outdir/CF_results.csv", df_sp_reduced) # save the concordance factor of species quartets 
+    # Removes repeated-taxa rows; terminal branch lengths not estimated
+    CSV.write("$outdir/CF_results.csv", df_sp_reduced)
     iqtreeCF = readtableCF(df_sp_reduced) 
 
     num_cf = nrow(df_sp_reduced) 
-    # The above will be used in capushe model comparison as number of data points 
+    # num_cf used in capushe model comparison as number of data points
 end 
 
 #-------------------------------------#
@@ -222,17 +222,18 @@ Option 2: run snaq and then compare loglikelihoods
 # Here snaq for H = 0 does not need that many runs to find the optimal tree
 # because the starting tree is already a good estimate from astral
 # Using the default 10 runs is fine 
-println("Parameter setting for Snaq Hmax = 0:\n runs = 10, seed = $seed_net0. Running...")
+println("SNaQ Hmax=0: runs=10, seed=$seed_net0. Running...")
 net0out = joinpath(H0folder, "H0")
-# during testing, we typically use runs << 100. In this case, runs_net0 should be set to runs
-# when runs > 50, meaning that we are not trying to test, we can set runs_net0 = 10
+# Testing: runs_net0 = runs; production (runs > 50): runs_net0 = 10
 runs_net0 = runs > 50 ? 10 : runs
-net0 = snaq!(species_tree, iqtreeCF, hmax=0, filename=net0out, seed=seed_net0, runs=runs_net0) 
+net0 = snaq!(species_tree, iqtreeCF, hmax=0, filename=net0out,
+    seed=seed_net0, runs=runs_net0)
 
 # hmax = 1 --> The network with one hybrid edge 
-println("Parameter setting for Snaq Hmax = 1:\n runs = $runs, seed = $seed_net1. Running...")
+println("SNaQ Hmax=1: runs=$runs, seed=$seed_net1. Running...")
 net1out = joinpath(H1folder, "H1")
-net1 = snaq!(net0, iqtreeCF, hmax=1, filename=net1out, seed=seed_net1, runs=runs)
+net1 = snaq!(net0, iqtreeCF, hmax=1, filename=net1out,
+    seed=seed_net1, runs=runs)
 
 #-------------------------------------#
 # Post-SNaQ analyses 
@@ -257,7 +258,7 @@ if length(gammas) >= 2
         gamma_1, gamma_2 = gamma_2, gamma_1
     end
 else
-    error("Expected at least 2 hybrid edge with hmax=1, but found $(length(gammas))")
+    error("Expected ≥2 hybrid edges with hmax=1, found $(length(gammas))")
 end 
 
 # Run boostrapping only if specified 
@@ -266,11 +267,11 @@ if method == "snaq_bootstrap" || method == "both"
     # We will most likly not use this
 
     # Bootstrapping
-    println("bootsnaq Hmax = 0:\n runs = $runs, seed = $seed_net0_bs. Running...")
-    bslist = joinpath(iqtreefolder, "bslist.txt") 
-    gene_tree_list = [ [tree] for tree in gene_trees ] # Convert to Vector{Vector{HybridNetwork}}
+    println("bootsnaq Hmax=0: runs=$runs, seed=$seed_net0_bs. Running...")
+    bslist = joinpath(iqtreefolder, "bslist.txt")
+    gene_tree_list = [ [tree] for tree in gene_trees ]
 
-    for tree_wrapper in gene_tree_list # change all tips in gene_tree_list to species names 
+    for tree_wrapper in gene_tree_list # simplify tip labels to species names
         tree = tree_wrapper[1]
         simplified_tree = simplify_tip_labels(tree)
         tree_wrapper[1] = simplified_tree
@@ -291,7 +292,7 @@ if method == "snaq_bootstrap" || method == "both"
     CSV.write(bootnet0_output, BSe_tree0)
 
     # Boostrapping H = 1: 
-    println("bootsnaq Hmax = 0:\n runs = $runs, seed = $seed_net1_bs. Running...")
+    println("bootsnaq Hmax=1: runs=$runs, seed=$seed_net1_bs. Running...")
     bootnet1 = bootsnaq(
         net0,
         gene_tree_list,
@@ -312,7 +313,7 @@ if method == "quartetnetworkgoodnessfit" || method == "both"
 
     # Compare the goodness of fit between net0 and net1 
     # see tutorial: 
-    # https://juliaphylo.github.io/QuartetNetworkGoodnessFit.jl/stable/man/gof/#goodness_of_fit_1 
+    # see QuartetNetworkGoodnessFit.jl docs: /stable/man/gof/#goodness_of_fit_1
     
     # load CFs from the saved csv file 
     cffile = joinpath(outdir, "CF_results.csv") 
@@ -325,7 +326,7 @@ if method == "quartetnetworkgoodnessfit" || method == "both"
     if nrow(zero_gene_quartets) > 0
         # Skip goodness-of-fit test if there are missing quartets
         println("\n" * "="^70)
-        println("WARNING: Found $(nrow(zero_gene_quartets)) quartet(s) with ngenes = 0")
+        println("WARNING: $(nrow(zero_gene_quartets)) quartet(s) with ngenes=0")
         println("This occurs due to stochastic gene loss in the simulation.")
         println("Skipping quarnetGoFtest for this replicate.")
         println("Missing quartets:")
@@ -347,7 +348,8 @@ if method == "quartetnetworkgoodnessfit" || method == "both"
         CSV.write(gof0_path, df_0)
         
         df_1 = DataFrame(type = ["score", "gamma_1", "gamma_2", "status"], 
-                        value = [score_net1, gamma_1, gamma_2, "SKIPPED: missing quartets"])
+                        value = [score_net1, gamma_1, gamma_2,
+                            "SKIPPED: missing quartets"])
         CSV.write(gof1_path, df_1)
         
         println("Saved minimal results (without GoF test) to:")
@@ -359,8 +361,18 @@ if method == "quartetnetworkgoodnessfit" || method == "both"
         score_net0 = loglik(net0)
         score_net1 = loglik(net1)
 
+        # This pipeline is based on: 
+        # see QuartetNetworkGoodnessFit.jl docs: /stable/man/gof/
+        # Warm-up with few sims to find optimal branch lengths, then full run
+        res0 = quarnetGoFtest!(net0, qCF, true; seed=201, nsim=10); #warm-up 
+        res1 = quarnetGoFtest!(net1, qCF, true; seed=202, nsim=10); #warm-up 
+        net0 = res0[5] 
+        net1 = res1[5] 
         res0 = quarnetGoFtest!(net0, qCF, false; seed=seed_qgof0, nsim=1000);
         res1 = quarnetGoFtest!(net1, qCF, false; seed=seed_qgof1, nsim=1000);
+        # res0 = quarnetGoFtest!(net0, qCF, true; seed=seed_qgof0, nsim=1000);
+        # res1 = quarnetGoFtest!(net1, qCF, true; seed=seed_qgof1, nsim=1000);
+        # Branch length difference between true/false is small but noted
 
         # Save the results
         gof0_path = joinpath(H0folder, "snaq_gof_results_H0.csv")
@@ -368,7 +380,7 @@ if method == "quartetnetworkgoodnessfit" || method == "both"
 
         # save the results for H = 0 
         # Define meaningful names for each result element from quarnetGoFtest!
-        # Based on QuartetNetworkGoodnessFit.jl documentation and observed output
+        # Names based on QuartetNetworkGoodnessFit.jl docs and observed output
         result_names = ["p", "z_uncorrected", "sigma", "bootstrap_values", 
                         "network", "z_bootstrap"]
         

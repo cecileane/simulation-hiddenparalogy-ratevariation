@@ -49,29 +49,29 @@ def concatenate_nexus_to_fasta(nexus_dir, fasta_dir, rep_id):
     """
     # If a key doesn't exist, it initializes the key 
     concate_sequences = defaultdict(str) 
-    # Keep track of all taxa -> help with handle missing taxa in a gene tree file
+    # Keep track of all taxa to handle missing taxa in a gene tree file
     all_taxa = set() 
 
     # Get a set for all taxa 
     for file_name in sorted(os.listdir(nexus_dir)):
-        if file_name.endswith(".nex"):  # loop through .nex files in the directory 
+        if file_name.endswith(".nex"):  # loop through .nex files
             nexus_path = os.path.join(nexus_dir, file_name) # Input nexus files 
             with open(nexus_path, "r") as nexus_file: 
                 for seq_record in SeqIO.parse(nexus_file, "nexus"):
-                    all_taxa.add(seq_record.id) # record all taxa across all .nexus files 
+                    all_taxa.add(seq_record.id)  # record all taxa
 
     # Add seq from a particular nexus file into a dictionary.
     # Missing taxa in this .nexus will be processed with the "-"
     for file_name in sorted(os.listdir(nexus_dir)): 
         if file_name.endswith(".nex"):  
             nexus_path = os.path.join(nexus_dir, file_name) 
-            current_taxa = set() # set for the current taxa for a particular nexus file
+            current_taxa = set()  # taxa present in this nexus file
             seq_length = None 
             
             with open(nexus_path, "r") as nexus_file: 
                 for seq_record in SeqIO.parse(nexus_file, "nexus"):
                     seq_length = len(seq_record.seq)
-                    current_taxa.add(seq_record.id) # add current taxa into the set 
+                    current_taxa.add(seq_record.id)
                     # Concatenate all taxa present in the file: 
                     concate_sequences[seq_record.id] += str(seq_record.seq) 
                 
@@ -83,11 +83,12 @@ def concatenate_nexus_to_fasta(nexus_dir, fasta_dir, rep_id):
                     concate_sequences[taxon] += "-" * seq_length 
 
     # Reorder sequences alphabetically by letter first, then by number
-    reordered_sequences, reorder_message = reorder_sequences_alphabetically(concate_sequences)
+    reordered_sequences, reorder_message = \
+        reorder_sequences_alphabetically(concate_sequences)
     
     # Write the reordered dic to a fasta files: 
-    # Output are in the output folder named as concatenated_alignment_rep$id.fasta
-    fasta_path = os.path.join(fasta_dir, f"concate_alignment_rep{rep_id}.fasta") 
+    # Output: concatenated_alignment_rep$id.fasta in fasta_dir
+    fasta_path = os.path.join(fasta_dir, f"concate_alignment_rep{rep_id}.fasta")
     with open(fasta_path, "w") as fasta_file: 
         for taxon, sequence in reordered_sequences.items():
             fasta_file.write(f">{taxon}\n{sequence}\n")
@@ -97,12 +98,12 @@ def concatenate_nexus_to_fasta(nexus_dir, fasta_dir, rep_id):
 
 def reorder_sequences_alphabetically(sequences_dict):
     """
-    Reorder the sequences dictionary alphabetically by letter first, then by number.
+    Reorder the sequences dict alphabetically by letter, then by number.
     For example: A_0, A_1, B_0, B_1, B_2, C_0, etc.
     Args:
-        sequences_dict (dict): Dictionary with taxon names as keys and sequences as values
+        sequences_dict (dict): taxon names as keys, sequences as values
     Returns:
-        tuple: (reordered_dict, message) - Reordered dictionary and status message
+        tuple: (reordered_dict, message)
     """
     message = ""  # Initialize message string
     
@@ -130,7 +131,7 @@ def reorder_sequences_alphabetically(sequences_dict):
     
     # Create a message if there is no "A_" in the keys 
     if not any(taxon.startswith("A_") for taxon in sorted_taxa):
-        message = "No 'A_' taxon found. No outgroup for following-up analyses. " 
+        message = "No 'A_' taxon found. No outgroup for follow-up analyses."
     else: 
         pass # If trees are starting with "A_", no message is needed 
 

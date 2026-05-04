@@ -2,10 +2,12 @@
 # This script adds RF distances to admix=1 summary tables by comparing
 # inferred graphs with the true species tree
 
-using ArgParse 
+using ArgParse
 using PhyloNetworks
+using PhyloSummaries
 using RCall
-using DataFrames, CSV 
+using PhyloPlots
+using DataFrames, CSV
 using Printf
 using Statistics
 
@@ -13,20 +15,22 @@ using Statistics
 repID: replication ID
 best_k: K(H)=0, K(H)=1, K(H) > 1 models are accepted 
             based on WR = 3.0 threshold 
-best_k_new_WR_<threshold>: K(H)=0, K(H)=1, K(H) > 1 models are accepted 
-            based on new WR threshold if specified (column name includes the threshold value)
+best_k_new_WR_<threshold>: K(H)=0, K(H)=1, K(H) > 1 models are accepted
+            based on new WR threshold (column name includes the threshold value)
 H0_trees_found: How many trees found under H = 0 
 H1_graphs_found: How many graphs found under H = 1 
 true_tree_wr: Worst residual of the true tree 
 H0_best_tree_is_true_tree: For the best tree under H=0, is it the true tree?
-H0_best_tree_is_true_tree_noF: For the best tree under H=0, is it the true tree without F? 
+H0_best_tree_is_true_tree_noF: For the best tree under H=0,
+            is it the true tree without F?
 H0_best_tree_WR: WR of the best tree under H=0 
 H1_best_graph_displayed_true_tree: For the best graph under H=1, 
                                     is the displayed tree the true tree? 
-H1_best_graph_displayed_true_tree_noF: For the best graph under H=1, 
-                                    is the displayed tree the true tree without F?  
+H1_best_graph_displayed_true_tree_noF: For the best graph under H=1,
+            is the displayed tree the true tree without F?
 H1_best_graph_WR: WR of the best tree under H=1 
-true_tree_found_in_H0: For H=0, was the true tree found among all trees detected? 
+true_tree_found_in_H0: For H=0, was the true tree found
+            among all trees detected?
 true_tree_found_in_H0_noF: For H=0, was the true tree without F 
                             found among all trees detected? 
 num_blocks: Number of blocks used in analysis 
@@ -42,6 +46,14 @@ True_tree_noF_displayed_H1_major: Is the major displayed tree in the best H=1
                                 graph the true tree without F?
 True_tree_noF_displayed_H1_minor: Is the minor displayed tree in the best H=1 
                                 graph the true tree without F? 
+True_tree_noG_displayed_H1_major: Is the major displayed tree in the best H=1 
+                                graph the true tree without G?
+True_tree_noG_displayed_H1_minor: Is the minor displayed tree in the best H=1 
+                                graph the true tree without G?
+True_tree_noH_displayed_H1_major: Is the major displayed tree in the best H=1 
+                                graph the true tree without H?
+True_tree_noH_displayed_H1_minor: Is the minor displayed tree in the best H=1 
+                                graph the true tree without H?
 =# 
 
 include("utilities.jl")
@@ -86,19 +98,17 @@ function parse_commandline()
             arg_type = Int 
             default = 1000   
 
-        #= Worst residual threshold = 3 is predetermined by the R script which generates  
-        the findgraphs_summary_results.csv in the findgraph folder. 
-        However, based on the preliminary results, WR = 3 might not work well 
-        This script will set a new threshold if needed =#  
+        #= WR threshold = 3 is set by the R script that generates
+        findgraphs_summary_results.csv. WR = 3 may not work well;
+        this script can override it with a new threshold. =#
         "--new_WR_threshold"
-            help = "Worst residual threshold for accepting graphs (Default = 3.0)"
+            help = "Worst residual threshold for accepting graphs (Default=3.0)"
             arg_type = Float64
             default = 3.7 
 
-        #= There should be 784 residuals for any identified graph in this simulation setup 
-        If check_num_residuals is true, we will check if the number of residuals is 784
-        for rep001 (depending on the n_reps) and the first graph in admix0 and admix1 
-        This is served as a sanity check only =# 
+        #= Sanity check: any identified graph should have 784 residuals.
+        If check_num_residuals is true, we verify this for rep001 and
+        the first graph under admix0 and admix1. =#
         "--check_num_residuals"
             help = "Check number of residuals flag"
             arg_type = Bool
@@ -107,6 +117,8 @@ function parse_commandline()
             help = "Expected number of residuals (Default = 784)"
             arg_type = Int
             default = 784 
+            # There are 784 residuals but they are not unqiue 
+            # 406 of them are unique 
     end
     
     parsed_args = parse_args(s)
@@ -117,29 +129,22 @@ function parse_commandline()
     return parsed_args
 end
 
-#= Hardcoded true species tree for testing ß
-    We want to test if the estimated tree (or network) matches the true species tree 
-    1) Use true species tree with F --> This is the true species tree 
-    2) Use true species tree without F 
-        --> This is the true species tree without F, 
-        because we find that F is often messed up in the inferred graphs =# 
-
-true_species_tree = readnewick("(A,((((B,C),(D,E)),F),(G,H)));") 
+# True species tree and variants with F/G/H pruned
+true_species_tree = readnewick("(A,((((B,C),(D,E)),F),(G,H)));")
 species_tree_noF = readnewick("(A,((G,H),((B,C),(D,E))));")
+species_tree_noG = readnewick("(A,((((B,C),(D,E)),F),H));")
+species_tree_noH = readnewick("(A,((((B,C),(D,E)),F),G));")
 
 function process_single_replicate(rep_id::String,
                             findgraph_folder::String,
                             true_species_tree::HybridNetwork,
-                            true_species_tree_noF::HybridNetwork)
+                            true_species_tree_noF::HybridNetwork,
+                            true_species_tree_noG::HybridNetwork,
+                            true_species_tree_noH::HybridNetwork)
     """
-    Process a single replicate: load graphs, compute RF distances, update summary table
-    This function does the following things: 
-        1) Load the graphs from each replicate 
-        2) If H=2, find the displayed tree in each graph 
-        3) Calculate RF distance between the tree H = 0 or displayed tree H = 1 
-            to the true tree 
-        4) Calculate RF distance by removing F and to the true tree with out 
-            the troublesome F 
+    process_single_replicate(rep_id, findgraph_folder, ...)
+    Load graphs for one replicate, compute RF distances to the true tree
+    (full and with F/G/H pruned), and update the per-replicate summary tables.
     """
 
     h0_graphs_file = joinpath(findgraph_folder, 
@@ -168,16 +173,32 @@ function process_single_replicate(rep_id::String,
     if !("RF_net0_with_true_sptree_noF" in names(h0_df))
         h0_df[!, :RF_net0_with_true_sptree_noF] = fill("NA", nrow(h0_df))
     end
+    if !("RF_net0_with_true_sptree_noG" in names(h0_df))
+        h0_df[!, :RF_net0_with_true_sptree_noG] = fill("NA", nrow(h0_df))
+    end
+    if !("RF_net0_with_true_sptree_noH" in names(h0_df))
+        h0_df[!, :RF_net0_with_true_sptree_noH] = fill("NA", nrow(h0_df))
+    end
     if !("true_tree_noF_or_not" in names(h0_df))
         h0_df[!, :true_tree_noF_or_not] = fill(false, nrow(h0_df))
     end
     
     # Ensure RF columns are String type for re-runs
     if eltype(h0_df.RF_net0_with_true_sptree) != String
-        h0_df[!, :RF_net0_with_true_sptree] = string.(h0_df.RF_net0_with_true_sptree)
+        h0_df[!, :RF_net0_with_true_sptree] =
+            string.(h0_df.RF_net0_with_true_sptree)
     end
     if eltype(h0_df.RF_net0_with_true_sptree_noF) != String
-        h0_df[!, :RF_net0_with_true_sptree_noF] = string.(h0_df.RF_net0_with_true_sptree_noF)
+        h0_df[!, :RF_net0_with_true_sptree_noF] =
+            string.(h0_df.RF_net0_with_true_sptree_noF)
+    end
+    if eltype(h0_df.RF_net0_with_true_sptree_noG) != String
+        h0_df[!, :RF_net0_with_true_sptree_noG] =
+            string.(h0_df.RF_net0_with_true_sptree_noG)
+    end
+    if eltype(h0_df.RF_net0_with_true_sptree_noH) != String
+        h0_df[!, :RF_net0_with_true_sptree_noH] =
+            string.(h0_df.RF_net0_with_true_sptree_noH)
     end
 
     for i in 1:n_h0_graphs
@@ -200,24 +221,39 @@ function process_single_replicate(rep_id::String,
 
         hybrid_net0_noF = deepcopy(hybrid_net0) 
         deleteleaf!(hybrid_net0_noF, "F") 
-        RF_btw_net0_true_tree_noF = mudistance_semidirected(true_species_tree_noF, 
-                                                    hybrid_net0_noF, preorder=true)    
+        RF_btw_net0_true_tree_noF = mudistance_semidirected(
+            true_species_tree_noF, hybrid_net0_noF, preorder=true)
 
-        println("H0 Graph $i (hash:$graph_hash) RF dist to true species tree: " *
-                 "$RF_btw_net0_true_tree")
+        hybrid_net0_noG = deepcopy(hybrid_net0)
+        deleteleaf!(hybrid_net0_noG, "G")
+        RF_btw_net0_true_tree_noG = mudistance_semidirected(
+            true_species_tree_noG, hybrid_net0_noG, preorder=true)
 
-        println("H0 Graph $i (hash:$graph_hash) RF dist to true species tree (noF): " *
-                "$RF_btw_net0_true_tree_noF")
+        hybrid_net0_noH = deepcopy(hybrid_net0)
+        deleteleaf!(hybrid_net0_noH, "H")
+        RF_btw_net0_true_tree_noH = mudistance_semidirected(
+            true_species_tree_noH, hybrid_net0_noH, preorder=true)
+
+        println("H0 Graph $i ($graph_hash) RF=$RF_btw_net0_true_tree")
+        println("H0 Graph $i ($graph_hash) RF(noF)=$RF_btw_net0_true_tree_noF")
+        println("H0 Graph $i ($graph_hash) RF(noG)=$RF_btw_net0_true_tree_noG")
+        println("H0 Graph $i ($graph_hash) RF(noH)=$RF_btw_net0_true_tree_noH")
         
         # Update all rows in H0 summary table that match this hash
         matching_rows = findall(h0_df.hash .== graph_hash)
         for row_idx in matching_rows
 
-            h0_df[row_idx, :RF_net0_with_true_sptree] = string(RF_btw_net0_true_tree)
-            h0_df[row_idx, :RF_net0_with_true_sptree_noF] = string(RF_btw_net0_true_tree_noF)
-
-            # Note: true_tree_or_not is already set correctly by the R script based on hash
-            h0_df[row_idx, :true_tree_noF_or_not] = (RF_btw_net0_true_tree_noF == 0.0)
+            h0_df[row_idx, :RF_net0_with_true_sptree] =
+                string(RF_btw_net0_true_tree)
+            h0_df[row_idx, :RF_net0_with_true_sptree_noF] =
+                string(RF_btw_net0_true_tree_noF)
+            h0_df[row_idx, :RF_net0_with_true_sptree_noG] =
+                string(RF_btw_net0_true_tree_noG)
+            h0_df[row_idx, :RF_net0_with_true_sptree_noH] =
+                string(RF_btw_net0_true_tree_noH)
+            # true_tree_or_not is set by the R script; update noF version here
+            h0_df[row_idx, :true_tree_noF_or_not] =
+                (RF_btw_net0_true_tree_noF == 0.0)
 
         end
 
@@ -225,16 +261,18 @@ function process_single_replicate(rep_id::String,
     
     # Write updated H0 summary table
     CSV.write(h0_summary_file, h0_df; delim=' ', quotestrings=true)
-    println("Updated H0 summary table with RF distances and noF tree match information")
+    println("Updated H0 summary table with RF distances and noF match info")
 
     # Now process admix=1 results 
     # File paths
-    h1_graphs_file = joinpath(findgraph_folder, "rep$(rep_id)_admix1_unique_graphs.rds")
-    summary_file = joinpath(findgraph_folder, "rep$(rep_id)_admix1_summary_table.txt")
+    h1_graphs_file = joinpath(findgraph_folder,
+        "rep$(rep_id)_admix1_unique_graphs.rds")
+    summary_file = joinpath(findgraph_folder,
+        "rep$(rep_id)_admix1_summary_table.txt")
     
     # Check if files exist
     if !isfile(h1_graphs_file) || !isfile(summary_file)
-        println("Warning: H1 files for replicate $rep_id do not exist, skipping...")
+        println("Warning: H1 files for rep $rep_id not found, skipping...")
         return false
     end 
     
@@ -248,8 +286,12 @@ function process_single_replicate(rep_id::String,
         return true
     end
     
-    # Read existing summary table
-    df = CSV.read(summary_file, DataFrame; delim=' ', ignorerepeated=true, quotechar='"')
+    # validate=false: hybrid_taxon/major_donor/minor_donor may not exist yet
+    df = CSV.read(summary_file, DataFrame;
+        delim=' ', ignorerepeated=true, quotechar='"',
+        types=Dict(:hybrid_taxon => String,
+                   :major_donor => String, :minor_donor => String),
+        validate=false)
     
     # Add RF distance columns if they don't exist, ensure they are String type
     if !("RF_displayedtree1_with_true_sptree" in names(df))
@@ -263,6 +305,18 @@ function process_single_replicate(rep_id::String,
     end
     if !("RF_displayedtree2_with_true_sptree_noF" in names(df))
         df[!, :RF_displayedtree2_with_true_sptree_noF] = fill("NA", nrow(df)) 
+    end
+    if !("RF_displayedtree1_with_true_sptree_noG" in names(df))
+        df[!, :RF_displayedtree1_with_true_sptree_noG] = fill("NA", nrow(df))
+    end
+    if !("RF_displayedtree2_with_true_sptree_noG" in names(df))
+        df[!, :RF_displayedtree2_with_true_sptree_noG] = fill("NA", nrow(df))
+    end
+    if !("RF_displayedtree1_with_true_sptree_noH" in names(df))
+        df[!, :RF_displayedtree1_with_true_sptree_noH] = fill("NA", nrow(df))
+    end
+    if !("RF_displayedtree2_with_true_sptree_noH" in names(df))
+        df[!, :RF_displayedtree2_with_true_sptree_noH] = fill("NA", nrow(df))
     end
     
     # Ensure the RF columns are String type if they already exist
@@ -286,6 +340,40 @@ function process_single_replicate(rep_id::String,
         df[!, :RF_displayedtree2_with_true_sptree_noF] = 
             string.(df.RF_displayedtree2_with_true_sptree_noF)
     end
+    if "RF_displayedtree1_with_true_sptree_noG" in names(df) && 
+       eltype(df.RF_displayedtree1_with_true_sptree_noG) != String
+        df[!, :RF_displayedtree1_with_true_sptree_noG] = 
+            string.(df.RF_displayedtree1_with_true_sptree_noG)
+    end
+    if "RF_displayedtree2_with_true_sptree_noG" in names(df) && 
+       eltype(df.RF_displayedtree2_with_true_sptree_noG) != String
+        df[!, :RF_displayedtree2_with_true_sptree_noG] = 
+            string.(df.RF_displayedtree2_with_true_sptree_noG)
+    end
+    if "RF_displayedtree1_with_true_sptree_noH" in names(df) && 
+       eltype(df.RF_displayedtree1_with_true_sptree_noH) != String
+        df[!, :RF_displayedtree1_with_true_sptree_noH] = 
+            string.(df.RF_displayedtree1_with_true_sptree_noH)
+    end
+    if "RF_displayedtree2_with_true_sptree_noH" in names(df) && 
+       eltype(df.RF_displayedtree2_with_true_sptree_noH) != String
+        df[!, :RF_displayedtree2_with_true_sptree_noH] = 
+            string.(df.RF_displayedtree2_with_true_sptree_noH)
+    end
+    if !("hybrid_taxon" in names(df))
+        df[!, :hybrid_taxon] = Vector{String}(fill("NA", nrow(df)))
+    end
+    if !("major_donor" in names(df))
+        df[!, :major_donor] = Vector{String}(fill("NA", nrow(df)))
+    end
+    if !("minor_donor" in names(df))
+        df[!, :minor_donor] = Vector{String}(fill("NA", nrow(df)))
+    end
+    for col in [:hybrid_taxon, :major_donor, :minor_donor]
+        if eltype(df[!, col]) != String
+            df[!, col] = Vector{String}(string.(df[!, col]))
+        end
+    end
     
     # Process each graph
     for i in 1:n_h1_graphs
@@ -297,26 +385,35 @@ function process_single_replicate(rep_id::String,
         graph_rank = rcopy(Int, R"$graph_element$rank")
         graph_hash = rcopy(String, R"$graph_element$hash")
         
-        println("Processing graph $i (run: $graph_run, rank: $graph_rank, hash: $graph_hash)")
+        println("Processing graph $i (run=$graph_run, rank=$graph_rank," *
+            " hash=$graph_hash)")
         
         # Convert to HybridNetwork
         graph_df = rcopy(DataFrame, edges_tibble)
         rename!(graph_df, :from => :source, :to => :target)
         
-        hybrid_net = edgelist_to_net(graph_df.source, graph_df.target, 
-                                    graph_df.type, graph_df.weight)
+        hybrid_net = edgelist_to_net(graph_df.source, 
+                                    graph_df.target, 
+                                    graph_df.type, 
+                                    graph_df.weight)
+        
+        # Get hybrid taxon info (deepcopy so RF calculations see unmutated net)
+        hybrid_info = get_hybrid_info(deepcopy(hybrid_net), "A")
         
         # Compute RF distances
-        local RF_1, RF_2, RF_1_noF, RF_2_noF 
+        local RF_1, RF_2, RF_1_noF, RF_2_noF,
+              RF_1_noG, RF_2_noG, RF_1_noH, RF_2_noH
         displayed_trees = displayedtrees(hybrid_net, 0.0)
         
         # Check number of displayed trees
         num_displayed_trees = length(displayed_trees) 
         displayed_tree_1 = displayed_trees[1]
-        displayed_tree_2 = num_displayed_trees > 1 ? displayed_trees[2] : nothing
+        displayed_tree_2 = num_displayed_trees > 1 ?
+            displayed_trees[2] : nothing
 
-        # Find the RF distances btw true species tree and displayed trees 
-        RF_1 = mudistance_semidirected(true_species_tree, displayed_tree_1, preorder=true)
+        # RF distances between displayed trees and the true species tree
+        RF_1 = mudistance_semidirected(true_species_tree,
+            displayed_tree_1, preorder=true)
         RF_2 = (displayed_tree_2 !== nothing ? 
                         mudistance_semidirected(true_species_tree, 
                                                 displayed_tree_2, 
@@ -333,7 +430,7 @@ function process_single_replicate(rep_id::String,
             displayed_tree_2_noF = nothing
         end
         
-        # Find the RF distances btw true species tree without F and displayed trees: 
+        # RF distances with F pruned:
         RF_1_noF = mudistance_semidirected(true_species_tree_noF, 
                                             displayed_tree_1_noF, 
                                             preorder=true) 
@@ -343,21 +440,76 @@ function process_single_replicate(rep_id::String,
                                                 preorder=true) :
                                                 NaN)
 
+        # RF distances with G pruned:
+        displayed_tree_1_noG = deepcopy(displayed_tree_1)
+        deleteleaf!(displayed_tree_1_noG, "G")
+
+        if displayed_tree_2 !== nothing
+            displayed_tree_2_noG = deepcopy(displayed_tree_2)
+            deleteleaf!(displayed_tree_2_noG, "G")
+        else
+            displayed_tree_2_noG = nothing
+        end
+
+        RF_1_noG = mudistance_semidirected(true_species_tree_noG,
+                                            displayed_tree_1_noG,
+                                            preorder=true)
+        RF_2_noG = (displayed_tree_2_noG !== nothing ?
+                        mudistance_semidirected(true_species_tree_noG,
+                                                displayed_tree_2_noG,
+                                                preorder=true) :
+                                                NaN)
+
+        # RF distances with H pruned:
+        displayed_tree_1_noH = deepcopy(displayed_tree_1)
+        deleteleaf!(displayed_tree_1_noH, "H")
+
+        if displayed_tree_2 !== nothing
+            displayed_tree_2_noH = deepcopy(displayed_tree_2)
+            deleteleaf!(displayed_tree_2_noH, "H")
+        else
+            displayed_tree_2_noH = nothing
+        end
+
+        RF_1_noH = mudistance_semidirected(true_species_tree_noH,
+                                            displayed_tree_1_noH,
+                                            preorder=true)
+        RF_2_noH = (displayed_tree_2_noH !== nothing ?
+                        mudistance_semidirected(true_species_tree_noH,
+                                                displayed_tree_2_noH,
+                                                preorder=true) :
+                                                NaN)
+
         println("RF distances: Tree1 = $RF_1, Tree2 = $RF_2")
         println("RF distances (no F): Tree1 = $RF_1_noF, Tree2 = $RF_2_noF") 
+        println("RF distances (no G): Tree1 = $RF_1_noG, Tree2 = $RF_2_noG")
+        println("RF distances (no H): Tree1 = $RF_1_noH, Tree2 = $RF_2_noH")
         
         # Find matching row in summary table based on hash
         matching_rows = findall(df.hash .== graph_hash)
         
         if !isempty(matching_rows)
-            row_idx = matching_rows[1]  # Hash should be unique, so only one match expected
+            row_idx = matching_rows[1]  # hash is unique per graph
             df.RF_displayedtree1_with_true_sptree[row_idx] = string(RF_1)
             df.RF_displayedtree2_with_true_sptree[row_idx] = string(RF_2)
-            df.RF_displayedtree1_with_true_sptree_noF[row_idx] = string(RF_1_noF)
-            df.RF_displayedtree2_with_true_sptree_noF[row_idx] = string(RF_2_noF) 
+            df.RF_displayedtree1_with_true_sptree_noF[row_idx] =
+                string(RF_1_noF)
+            df.RF_displayedtree2_with_true_sptree_noF[row_idx] =
+                string(RF_2_noF)
+            df.RF_displayedtree1_with_true_sptree_noG[row_idx] =
+                string(RF_1_noG)
+            df.RF_displayedtree2_with_true_sptree_noG[row_idx] =
+                string(RF_2_noG)
+            df.RF_displayedtree1_with_true_sptree_noH[row_idx] =
+                string(RF_1_noH)
+            df.RF_displayedtree2_with_true_sptree_noH[row_idx] =
+                string(RF_2_noH)
+            df.hybrid_taxon[row_idx] = hybrid_info.hybrid_taxon
+            df.major_donor[row_idx]  = hybrid_info.major_donor
+            df.minor_donor[row_idx]  = hybrid_info.minor_donor
             println("Updated summary table for graph $i (matched by hash)")
         else
-            println("Warning: Could not find matching hash for graph $i ($graph_hash)")
+            println("Warning: no matching hash for graph $i ($graph_hash)")
         end
     end
     
@@ -378,7 +530,8 @@ function generate_summary_csv(outfolder::String, paramname_root::String,
     
     # Read findgraphs_summary_results.csv for repID and best_K information
     # This best_K is determined based on WR threshold = 3 
-    findgraphs_summary_file = joinpath(outfolder, "findgraphs_summary_results.csv")
+    findgraphs_summary_file = joinpath(outfolder,
+        "findgraphs_summary_results.csv")
     
     if !isfile(findgraphs_summary_file)
         println("Error: findgraphs_summary_results.csv not found")
@@ -391,16 +544,30 @@ function generate_summary_csv(outfolder::String, paramname_root::String,
     # Initialize additional columns
     base_df[!, :H0_trees_found] = fill(0, nrow(base_df))
     base_df[!, :H1_graphs_found] = fill(0, nrow(base_df))
-    base_df[!, :true_tree_wr] = Vector{Union{Missing, Float64}}(fill(missing, nrow(base_df)))
+    base_df[!, :true_tree_wr] =
+        Vector{Union{Missing, Float64}}(fill(missing, nrow(base_df)))
     base_df[!, :H0_best_tree_is_true_tree] = fill("False", nrow(base_df))
     base_df[!, :H0_best_tree_is_true_tree_noF] = fill("False", nrow(base_df)) 
-    base_df[!, :H0_best_tree_WR] = Vector{Union{Missing, Float64}}(fill(missing, nrow(base_df)))
-    base_df[!, :H1_best_graph_displayed_true_tree] = fill("False", nrow(base_df))
-    base_df[!, :H1_best_graph_displayed_true_tree_noF] = fill("False", nrow(base_df)) 
-    base_df[!, :H1_best_graph_WR] = Vector{Union{Missing, Float64}}(fill(missing, nrow(base_df)))
+    base_df[!, :H0_best_tree_is_true_tree_noG] = fill("False", nrow(base_df))
+    base_df[!, :H0_best_tree_is_true_tree_noH] = fill("False", nrow(base_df))
+    base_df[!, :H0_best_tree_WR] =
+        Vector{Union{Missing, Float64}}(fill(missing, nrow(base_df)))
+    base_df[!, :H1_best_graph_displayed_true_tree] =
+        fill("False", nrow(base_df))
+    base_df[!, :H1_best_graph_displayed_true_tree_noF] =
+        fill("False", nrow(base_df))
+    base_df[!, :H1_best_graph_displayed_true_tree_noG] =
+        fill("False", nrow(base_df))
+    base_df[!, :H1_best_graph_displayed_true_tree_noH] =
+        fill("False", nrow(base_df))
+    base_df[!, :H1_best_graph_WR] =
+        Vector{Union{Missing, Float64}}(fill(missing, nrow(base_df)))
     base_df[!, :true_tree_found_in_H0] = fill("False", nrow(base_df))
     base_df[!, :true_tree_found_in_H0_noF] = fill("False", nrow(base_df)) 
-    base_df[!, :num_blocks] = Vector{Union{Missing, Float64}}(fill(missing, nrow(base_df)))
+    base_df[!, :true_tree_found_in_H0_noG] = fill("False", nrow(base_df))
+    base_df[!, :true_tree_found_in_H0_noH] = fill("False", nrow(base_df))
+    base_df[!, :num_blocks] =
+        Vector{Union{Missing, Float64}}(fill(missing, nrow(base_df)))
     base_df[!, :avg_gamma1_H1] = fill(0.0, nrow(base_df))
     base_df[!, :avg_gamma2_H1] = fill(0.0, nrow(base_df))
     base_df[!, :best_graph_gamma1] = fill(0.0, nrow(base_df))
@@ -409,8 +576,18 @@ function generate_summary_csv(outfolder::String, paramname_root::String,
     base_df[!, :True_tree_displayed_H1_minor] = fill("False", nrow(base_df))
     base_df[!, :True_tree_noF_displayed_H1_major] = fill("False", nrow(base_df))
     base_df[!, :True_tree_noF_displayed_H1_minor] = fill("False", nrow(base_df))
+    base_df[!, :True_tree_noG_displayed_H1_major] = fill("False", nrow(base_df))
+    base_df[!, :True_tree_noG_displayed_H1_minor] = fill("False", nrow(base_df))
+    base_df[!, :True_tree_noH_displayed_H1_major] = fill("False", nrow(base_df))
+    base_df[!, :True_tree_noH_displayed_H1_minor] = fill("False", nrow(base_df))
     best_k_new_WR_col = Symbol("best_k_new_WR_$(new_WR_threshold)")
     base_df[!, best_k_new_WR_col] = fill(">1", nrow(base_df))
+    base_df[!, :best_graph_hybrid_taxon] =
+        Vector{String}(fill("NA", nrow(base_df)))
+    base_df[!, :best_graph_major_donor] =
+        Vector{String}(fill("NA", nrow(base_df)))
+    base_df[!, :best_graph_minor_donor] =
+        Vector{String}(fill("NA", nrow(base_df)))
     
     # Process each replicate to fill in the additional data
     for (idx, row) in enumerate(eachrow(base_df))
@@ -420,24 +597,27 @@ function generate_summary_csv(outfolder::String, paramname_root::String,
         rep_folder = joinpath(outfolder, "rep$rep_id")
         findgraph_folder = joinpath(rep_folder, "findgraph")
         
-        println("Processing rep $rep_id (from int $rep_id_int) - looking for directory: $findgraph_folder")
+        println("Processing rep $rep_id - dir: $findgraph_folder")
         
         if !isdir(findgraph_folder)
-            println("Warning: Directory $findgraph_folder does not exist, skipping rep $rep_id...")
+            println("Warning: $findgraph_folder not found, " *
+                "skipping rep $rep_id...")
             continue
         end
         
         # Process H0 (admix=0) results
-        h0_summary_file = joinpath(findgraph_folder, "rep$(rep_id)_admix0_summary_table.txt")
-        
+        h0_summary_file = joinpath(findgraph_folder,
+            "rep$(rep_id)_admix0_summary_table.txt")
+
         if isfile(h0_summary_file)
-            h0_df = CSV.read(h0_summary_file, DataFrame; delim=' ', ignorerepeated=true, quotechar='"')
+            h0_df = CSV.read(h0_summary_file, DataFrame;
+                delim=' ', ignorerepeated=true, quotechar='"')
             # Extract true tree worst_residual from the true_tree row
             true_tree_rows = filter(row -> row.run_id == "true_tree", h0_df)
             if nrow(true_tree_rows) > 0
                 base_df[idx, :true_tree_wr] = true_tree_rows[1, :worst_residual]
             end
-            # Skip first row if run_id == "true_tree", then check for TRUE in remaining rows
+            # exclude the reference true_tree row before checking results
             filtered_h0_df = filter(row -> row.run_id != "true_tree", h0_df)
             
             # Count number of trees found in H0 (excluding the "true_tree" row)
@@ -446,7 +626,7 @@ function generate_summary_csv(outfolder::String, paramname_root::String,
             # Find the best tree (lowest score) in H0
             if nrow(filtered_h0_df) > 0
                 
-                # The best tree = one with the lowest score among the non-true_tree rows 
+                # best tree = lowest score among non-true_tree rows
                 best_h0_idx = argmin(filtered_h0_df.score) 
                 best_h0_tree = filtered_h0_df[best_h0_idx, :]
                 # Check if best tree is the true tree
@@ -459,6 +639,20 @@ function generate_summary_csv(outfolder::String, paramname_root::String,
                         best_h0_tree.true_tree_noF_or_not == true 
                     base_df[idx, :H0_best_tree_is_true_tree_noF] = "True"
                 end 
+                # Check if best tree is the true tree without G
+                if "RF_net0_with_true_sptree_noG" in names(filtered_h0_df)
+                    rf_noG = best_h0_tree.RF_net0_with_true_sptree_noG
+                    if string(rf_noG) == "0" || rf_noG == 0
+                        base_df[idx, :H0_best_tree_is_true_tree_noG] = "True"
+                    end
+                end
+                # Check if best tree is the true tree without H
+                if "RF_net0_with_true_sptree_noH" in names(filtered_h0_df)
+                    rf_noH = best_h0_tree.RF_net0_with_true_sptree_noH
+                    if string(rf_noH) == "0" || rf_noH == 0
+                        base_df[idx, :H0_best_tree_is_true_tree_noH] = "True"
+                    end
+                end
 
                 # Get worst_residual for best tree
                 base_df[idx, :H0_best_tree_WR] = best_h0_tree.worst_residual
@@ -478,21 +672,38 @@ function generate_summary_csv(outfolder::String, paramname_root::String,
                     base_df[idx, :true_tree_found_in_H0_noF] = "True"
                 end
             end
+
+            # Check if true tree without G was found in H0
+            if "RF_net0_with_true_sptree_noG" in names(filtered_h0_df)
+                col_g = filtered_h0_df.RF_net0_with_true_sptree_noG
+                zero_g = (col_g .== "0") .| (col_g .== 0)
+                if any(zero_g)
+                    base_df[idx, :true_tree_found_in_H0_noG] = "True"
+                end
+            end
+
+            # Check if true tree without H was found in H0
+            if "RF_net0_with_true_sptree_noH" in names(filtered_h0_df)
+                col_h = filtered_h0_df.RF_net0_with_true_sptree_noH
+                zero_h = (col_h .== "0") .| (col_h .== 0)
+                if any(zero_h)
+                    base_df[idx, :true_tree_found_in_H0_noH] = "True"
+                end
+            end
             
-            # Check best_k_new_WR based on new_WR_threshold (H0 check)
-            # If any worst_residual (excluding true_tree row) is < new_WR_threshold,
-            # accept H0 (set best_k_new_WR = 0)
-            if nrow(filtered_h0_df) > 0 && any(filtered_h0_df.worst_residual .< new_WR_threshold)
+            # H0 check: any WR below threshold in non-true_tree rows → accept H0
+            if nrow(filtered_h0_df) > 0 &&
+                any(filtered_h0_df.worst_residual .< new_WR_threshold)
                 base_df[idx, best_k_new_WR_col] = "0"
             end
 
-            # Extract num_blocks from H0 summary (should be the same for all rows)
             if "num_blocks" in names(h0_df) && nrow(h0_df) > 0
-                # Get num_blocks from the first row (should be the same for all rows)
+                # num_blocks is the same for all rows; read from first row
                 num_blocks_value = h0_df[1, :num_blocks]
                 # Handle both numeric and string types
                 if !ismissing(num_blocks_value)
-                    parsed_num_blocks = tryparse(Float64, string(num_blocks_value))
+                    parsed_num_blocks =
+                        tryparse(Float64, string(num_blocks_value))
                     if !isnothing(parsed_num_blocks)
                         base_df[idx, :num_blocks] = parsed_num_blocks
                     end
@@ -503,11 +714,14 @@ function generate_summary_csv(outfolder::String, paramname_root::String,
         end
         
         # Process H1 (admix=1) results
-        h1_summary_file = joinpath(findgraph_folder, "rep$(rep_id)_admix1_summary_table.txt")
-        
+        h1_summary_file = joinpath(findgraph_folder,
+            "rep$(rep_id)_admix1_summary_table.txt")
+
         if isfile(h1_summary_file)
-            h1_df = CSV.read(h1_summary_file, DataFrame; delim=' ', 
-                            ignorerepeated=true, quotechar='"')
+            h1_df = CSV.read(h1_summary_file, DataFrame;
+                delim=' ', ignorerepeated=true, quotechar='"',
+                types=Dict(:hybrid_taxon => String,
+                           :major_donor => String, :minor_donor => String))
             
             # Count number of graphs found in H1 (all rows)
             base_df[idx, :H1_graphs_found] = nrow(h1_df)
@@ -517,29 +731,40 @@ function generate_summary_csv(outfolder::String, paramname_root::String,
                 best_h1_idx = argmin(h1_df.score) 
                 best_h1_graph = h1_df[best_h1_idx, :]
                 
-                # Check if best graph displayed the true tree (RF == 0)
-                rf1_is_zero = (
-                    string(best_h1_graph.RF_displayedtree1_with_true_sptree) == "0"
-                )
-                rf2_is_zero = (
-                    string(best_h1_graph.RF_displayedtree2_with_true_sptree) == "0"
-                )
+                # RF == 0 flags; always write True/False regardless of result
+                rf1_is_zero = string(
+                    best_h1_graph.RF_displayedtree1_with_true_sptree) == "0"
+                rf2_is_zero = string(
+                    best_h1_graph.RF_displayedtree2_with_true_sptree) == "0"
+                rf1_noF_is_zero = string(
+                    best_h1_graph.RF_displayedtree1_with_true_sptree_noF) == "0"
+                rf2_noF_is_zero = string(
+                    best_h1_graph.RF_displayedtree2_with_true_sptree_noF) == "0"
 
-                # Check if best graph displayed the true tree without F (RF == 0) 
-                rf1_noF_is_zero = (
-                    string(best_h1_graph.RF_displayedtree1_with_true_sptree_noF) == "0"
-                )
-                rf2_noF_is_zero = (
-                    string(best_h1_graph.RF_displayedtree2_with_true_sptree_noF) == "0"
-                )   
-                
-                if rf1_is_zero || rf2_is_zero
-                    base_df[idx, :H1_best_graph_displayed_true_tree] = "True"
-                end
+                # Always set the column regardless of the result
+                base_df[idx, :H1_best_graph_displayed_true_tree] =
+                    (rf1_is_zero || rf2_is_zero) ? "True" : "False"
 
-                if rf1_noF_is_zero || rf2_noF_is_zero
-                    base_df[idx, :H1_best_graph_displayed_true_tree_noF] = "True"
-                end
+                base_df[idx, :H1_best_graph_displayed_true_tree_noF] =
+                    (rf1_noF_is_zero || rf2_noF_is_zero) ? "True" : "False"
+
+                col_noG1 = "RF_displayedtree1_with_true_sptree_noG"
+                col_noG2 = "RF_displayedtree2_with_true_sptree_noG"
+                rf1_noG_is_zero = col_noG1 in names(best_h1_graph) &&
+                    string(best_h1_graph[col_noG1]) == "0"
+                rf2_noG_is_zero = col_noG2 in names(best_h1_graph) &&
+                    string(best_h1_graph[col_noG2]) == "0"
+                base_df[idx, :H1_best_graph_displayed_true_tree_noG] =
+                    (rf1_noG_is_zero || rf2_noG_is_zero) ? "True" : "False"
+
+                col_noH1 = "RF_displayedtree1_with_true_sptree_noH"
+                col_noH2 = "RF_displayedtree2_with_true_sptree_noH"
+                rf1_noH_is_zero = col_noH1 in names(best_h1_graph) &&
+                    string(best_h1_graph[col_noH1]) == "0"
+                rf2_noH_is_zero = col_noH2 in names(best_h1_graph) &&
+                    string(best_h1_graph[col_noH2]) == "0"
+                base_df[idx, :H1_best_graph_displayed_true_tree_noH] =
+                    (rf1_noH_is_zero || rf2_noH_is_zero) ? "True" : "False"
                 
                 # Get worst_residual for best graph
                 base_df[idx, :H1_best_graph_WR] = best_h1_graph.worst_residual
@@ -565,8 +790,10 @@ function generate_summary_csv(outfolder::String, paramname_root::String,
                 
                 # Extract gamma values from graph with lowest score
                 min_score_idx = argmin(h1_df.score)
-                best_gamma1 = tryparse(Float64, string(h1_df[min_score_idx, :gamma1]))
-                best_gamma2 = tryparse(Float64, string(h1_df[min_score_idx, :gamma2]))
+                best_gamma1 = tryparse(Float64,
+                    string(h1_df[min_score_idx, :gamma1]))
+                best_gamma2 = tryparse(Float64,
+                    string(h1_df[min_score_idx, :gamma2]))
                 
                 if !isnothing(best_gamma1)
                     base_df[idx, :best_graph_gamma1] = best_gamma1
@@ -574,51 +801,98 @@ function generate_summary_csv(outfolder::String, paramname_root::String,
                 if !isnothing(best_gamma2)
                     base_df[idx, :best_graph_gamma2] = best_gamma2
                 end
+                
+                # Extract hybrid topology from best graph
+                if "hybrid_taxon" in names(h1_df)
+                    base_df[idx, :best_graph_hybrid_taxon] =
+                        string(h1_df[min_score_idx, :hybrid_taxon])
+                end
+                if "major_donor" in names(h1_df)
+                    base_df[idx, :best_graph_major_donor] =
+                        string(h1_df[min_score_idx, :major_donor])
+                end
+                if "minor_donor" in names(h1_df)
+                    base_df[idx, :best_graph_minor_donor] =
+                        string(h1_df[min_score_idx, :minor_donor])
+                end
             end
 
-            # Check best_k_new_WR based on new_WR_threshold (H1 check)
-            # Only update if not already set to "0" by H0 check (once H0 accepts, H1 is not checked)
+            # H1 check: only if H0 didn't already accept
             if base_df[idx, best_k_new_WR_col] != "0"
-                if nrow(h1_df) > 0 && any(h1_df.worst_residual .< new_WR_threshold)
+                if nrow(h1_df) > 0 &&
+                    any(h1_df.worst_residual .< new_WR_threshold)
                     base_df[idx, best_k_new_WR_col] = "1"
                 end
             end
 
             # Check RF distances for displayed trees
             if "RF_displayedtree1_with_true_sptree" in names(h1_df)
-                # Check for both integer 0 and string "0"
-                zero_matches = (h1_df.RF_displayedtree1_with_true_sptree .== "0") .|| 
-                               (h1_df.RF_displayedtree1_with_true_sptree .== 0)
+                col1 = h1_df.RF_displayedtree1_with_true_sptree
+                zero_matches = (col1 .== "0") .| (col1 .== 0)
                 if any(zero_matches)
                     base_df[idx, :True_tree_displayed_H1_major] = "True"
                 end
             end
             
             if "RF_displayedtree2_with_true_sptree" in names(h1_df)
-                # Check for both integer 0 and string "0"
-                zero_matches = (h1_df.RF_displayedtree2_with_true_sptree .== "0") .|| 
-                               (h1_df.RF_displayedtree2_with_true_sptree .== 0)
+                col2 = h1_df.RF_displayedtree2_with_true_sptree
+                zero_matches = (col2 .== "0") .| (col2 .== 0)
                 if any(zero_matches)
                     base_df[idx, :True_tree_displayed_H1_minor] = "True"
                 end
             end
             
-            # Check RF distances for displayed trees against species_tree_noF
             if "RF_displayedtree1_with_true_sptree_noF" in names(h1_df)
-                # Check for both integer 0 and string "0"
-                zero_matches = (h1_df.RF_displayedtree1_with_true_sptree_noF .== "0") .|| 
-                               (h1_df.RF_displayedtree1_with_true_sptree_noF .== 0)
+                zero_matches =
+                    (h1_df.RF_displayedtree1_with_true_sptree_noF .== "0") .|
+                    (h1_df.RF_displayedtree1_with_true_sptree_noF .== 0)
                 if any(zero_matches)
                     base_df[idx, :True_tree_noF_displayed_H1_major] = "True"
                 end
             end
             
             if "RF_displayedtree2_with_true_sptree_noF" in names(h1_df)
-                # Check for both integer 0 and string "0"
-                zero_matches = (h1_df.RF_displayedtree2_with_true_sptree_noF .== "0") .|| 
-                               (h1_df.RF_displayedtree2_with_true_sptree_noF .== 0)
+                zero_matches =
+                    (h1_df.RF_displayedtree2_with_true_sptree_noF .== "0") .|
+                    (h1_df.RF_displayedtree2_with_true_sptree_noF .== 0)
                 if any(zero_matches)
                     base_df[idx, :True_tree_noF_displayed_H1_minor] = "True"
+                end
+            end
+
+            if "RF_displayedtree1_with_true_sptree_noG" in names(h1_df)
+                zero_matches =
+                    (h1_df.RF_displayedtree1_with_true_sptree_noG .== "0") .|
+                    (h1_df.RF_displayedtree1_with_true_sptree_noG .== 0)
+                if any(zero_matches)
+                    base_df[idx, :True_tree_noG_displayed_H1_major] = "True"
+                end
+            end
+
+            if "RF_displayedtree2_with_true_sptree_noG" in names(h1_df)
+                zero_matches =
+                    (h1_df.RF_displayedtree2_with_true_sptree_noG .== "0") .|
+                    (h1_df.RF_displayedtree2_with_true_sptree_noG .== 0)
+                if any(zero_matches)
+                    base_df[idx, :True_tree_noG_displayed_H1_minor] = "True"
+                end
+            end
+
+            if "RF_displayedtree1_with_true_sptree_noH" in names(h1_df)
+                zero_matches =
+                    (h1_df.RF_displayedtree1_with_true_sptree_noH .== "0") .|
+                    (h1_df.RF_displayedtree1_with_true_sptree_noH .== 0)
+                if any(zero_matches)
+                    base_df[idx, :True_tree_noH_displayed_H1_major] = "True"
+                end
+            end
+
+            if "RF_displayedtree2_with_true_sptree_noH" in names(h1_df)
+                zero_matches =
+                    (h1_df.RF_displayedtree2_with_true_sptree_noH .== "0") .|
+                    (h1_df.RF_displayedtree2_with_true_sptree_noH .== 0)
+                if any(zero_matches)
+                    base_df[idx, :True_tree_noH_displayed_H1_minor] = "True"
                 end
             end
 
@@ -630,8 +904,8 @@ function generate_summary_csv(outfolder::String, paramname_root::String,
         println("Processed summary for rep $rep_id")
     end
     
-    # Convert rep_id integers to zero-padded strings for consistency with directory names
-    base_df[!, :rep_id] = [pad_number(rep_id, n_reps) for rep_id in base_df.rep_id]
+    base_df[!, :rep_id] =
+        [pad_number(rep_id, n_reps) for rep_id in base_df.rep_id]
     
     # Rename rep_id to repID for consistency
     rename!(base_df, :rep_id => :repID)
@@ -645,18 +919,20 @@ function generate_summary_csv(outfolder::String, paramname_root::String,
 end
 
 #= Sanity check: mirrors get_wr_summary in wr_examing.qmd.
-   For the first rep (rep001, padded by n_reps) and the first graph under admix=0 and admix=1,
-   runs qpgraph with return_fstats=TRUE and verifies nrow(f4) == expected_count (784). =# 
+   Runs qpgraph(return_fstats=TRUE) on the first graph under admix=0 and admix=1
+   for rep001, and verifies nrow(f4) == expected_count (784). =#
 function check_residuals_count(rep_id::String, findgraph_folder::String,
                                expected_count::Int=784)
     println("\n=== Sanity check: number of residuals ===")
 
-    h0_graphs_file = joinpath(findgraph_folder, "rep$(rep_id)_admix0_unique_graphs.rds")
-    h1_graphs_file = joinpath(findgraph_folder, "rep$(rep_id)_admix1_unique_graphs.rds")
+    h0_graphs_file = joinpath(findgraph_folder,
+        "rep$(rep_id)_admix0_unique_graphs.rds")
+    h1_graphs_file = joinpath(findgraph_folder,
+        "rep$(rep_id)_admix1_unique_graphs.rds")
     f2_file        = joinpath(findgraph_folder, "rep$(rep_id)_f2.rds")
 
     if !isfile(h0_graphs_file) || !isfile(h1_graphs_file) || !isfile(f2_file)
-        println("Warning: One or more files for residual check not found, skipping check...")
+        println("Warning: files for residual check not found, skipping...")
         println("  h0: ", isfile(h0_graphs_file))
         println("  h1: ", isfile(h1_graphs_file))
         println("  f2: ", isfile(f2_file))
@@ -668,27 +944,235 @@ function check_residuals_count(rep_id::String, findgraph_folder::String,
     h1_graphs = R"readRDS($h1_graphs_file)"
     f2        = R"readRDS($f2_file)"
 
-    # admix=0 first graph  (mirrors qpgraph(f2, h0_graph$graph, return_fstats=TRUE))
     qp_h0 = R"qpgraph($f2, $h0_graphs[[1]]$graph, return_fstats=TRUE)"
     n_h0  = rcopy(Int, R"nrow($qp_h0$f4)")
-    println("Number of residuals (admix0, graph 1): $n_h0 (expected: $expected_count)")
+    println("Residuals (admix0, graph 1): $n_h0 (expected: $expected_count)")
     if n_h0 != expected_count
-        error(" WARNING: admix0 residual count ($n_h0) != expected ($expected_count)!")
+        error("admix0 residual count ($n_h0) != expected ($expected_count)!")
     else
         println(" Expected residual count verified! Nice job. ")
     end
 
-    # admix=1 first graph
     qp_h1 = R"qpgraph($f2, $h1_graphs[[1]]$graph, return_fstats=TRUE)"
     n_h1  = rcopy(Int, R"nrow($qp_h1$f4)")
-    println("Number of residuals (admix1, graph 1): $n_h1 (expected: $expected_count)")
+    println("Residuals (admix1, graph 1): $n_h1 (expected: $expected_count)")
     if n_h1 != expected_count
-        error(" WARNING: admix1 residual count ($n_h1) != expected ($expected_count)!")
+        error("admix1 residual count ($n_h1) != expected ($expected_count)!")
     else
         println(" Expected residual count verified! Nice job. ")
     end
 
     println("=== Residual check complete ===")
+end
+
+function generate_consensus_summary(outfolder::String, paramname_root::String,
+                                    rep_start::Int, rep_end::Int, n_reps::Int)
+    """
+    generate_consensus_summary(outfolder, paramname_root, ...)
+    Build consensus trees (H=0) and level-1 networks (H=1), treating each
+    replicate's best-scoring graph as one bootstrap sample.
+    """
+    println("\nBuilding findgraphs consensus trees/networks...")
+
+    h0_trees = HybridNetwork[]
+    h1_nets  = HybridNetwork[]
+
+    R"library(admixtools)"
+
+    for simulation_rep in rep_start:rep_end
+        rep_id = pad_number(simulation_rep, n_reps)
+        findgraph_folder = joinpath(outfolder, "rep$rep_id", "findgraph")
+
+        if !isdir(findgraph_folder)
+            continue
+        end
+
+        # H=0: lowest score among non-true_tree rows
+        h0_summary_file = joinpath(findgraph_folder,
+            "rep$(rep_id)_admix0_summary_table.txt")
+        h0_graphs_file  = joinpath(findgraph_folder,
+            "rep$(rep_id)_admix0_unique_graphs.rds")
+        if isfile(h0_summary_file) && isfile(h0_graphs_file)
+            try
+                h0_df = CSV.read(h0_summary_file, DataFrame;
+                                 delim=' ', ignorerepeated=true, quotechar='"')
+                filtered = filter(r -> string(r.run_id) != "true_tree", h0_df)
+                if nrow(filtered) > 0
+                    best_hash = filtered[argmin(filtered.score), :hash]
+                    h0_graphs = R"readRDS($h0_graphs_file)"
+                    n_h0 = rcopy(Int, R"length($h0_graphs)")
+                    found = false
+                    for i in 1:n_h0
+                        graph_element = R"$h0_graphs[[$i]]"
+                        ghash = rcopy(String, R"$graph_element$hash")
+                        if ghash == best_hash
+                            edges_tibble = R"$graph_element$edges"
+                            gdf = rcopy(DataFrame, edges_tibble)
+                            rename!(gdf, :from => :source, :to => :target)
+                            net = edgelist_to_net(gdf.source, gdf.target,
+                                                  gdf.type, gdf.weight)
+                            push!(h0_trees, net)
+                            found = true
+                            break
+                        end
+                    end
+                    if !found
+                        println("Warning: best H=0 hash $best_hash " *
+                            "not found in RDS for rep $rep_id")
+                    end
+                end
+            catch e
+                println("Warning: H=0 consensus failed for rep $rep_id: $e")
+            end
+        end
+
+        # H=1: lowest score
+        h1_summary_file = joinpath(findgraph_folder,
+            "rep$(rep_id)_admix1_summary_table.txt")
+        h1_graphs_file  = joinpath(findgraph_folder,
+            "rep$(rep_id)_admix1_unique_graphs.rds")
+        if isfile(h1_summary_file) && isfile(h1_graphs_file)
+            try
+                h1_df = CSV.read(h1_summary_file, DataFrame;
+                                 delim=' ', ignorerepeated=true, quotechar='"')
+                if nrow(h1_df) > 0
+                    best_hash = h1_df[argmin(h1_df.score), :hash]
+                    h1_graphs = R"readRDS($h1_graphs_file)"
+                    n_h1 = rcopy(Int, R"length($h1_graphs)")
+                    found = false
+                    for i in 1:n_h1
+                        graph_element = R"$h1_graphs[[$i]]"
+                        ghash = rcopy(String, R"$graph_element$hash")
+                        if ghash == best_hash
+                            edges_tibble = R"$graph_element$edges"
+                            gdf = rcopy(DataFrame, edges_tibble)
+                            rename!(gdf, :from => :source, :to => :target)
+                            net = edgelist_to_net(gdf.source, gdf.target,
+                                                  gdf.type, gdf.weight)
+                            push!(h1_nets, net)
+                            found = true
+                            break
+                        end
+                    end
+                    if !found
+                        println("Warning: best H=1 hash $best_hash " *
+                            "not found in RDS for rep $rep_id")
+                    end
+                end
+            catch e
+                println("Warning: H=1 consensus failed for rep $rep_id: $e")
+            end
+        end
+    end
+
+    println("Collected $(length(h0_trees)) H=0 trees and " *
+        "$(length(h1_nets)) H=1 networks for consensus")
+
+    consensus_dir = joinpath(outfolder,
+        "findgraphs-$(paramname_root)-consensus_nets")
+    mkpath(consensus_dir)
+    println("Consensus output directory: $consensus_dir")
+    con_h0_prefix = joinpath(consensus_dir,
+        "findgraph-$(paramname_root)-consensus_H0")
+    con_h0_nwk     = "$(con_h0_prefix).nwk"
+    con_h0_sup_csv = "$(con_h0_prefix)_edge_support.csv"
+    con_h1_prefix = joinpath(consensus_dir,
+        "findgraph-$(paramname_root)-consensus_H1")
+
+    # H=0: greedy consensus tree (unrooted, no outgroup)
+    if length(h0_trees) >= 2
+        println("Computing H=0 consensus tree from " *
+            "$(length(h0_trees)) trees...")
+        con_h0 = consensustree(h0_trees)
+        rootatnode!(con_h0, "A")
+        writenewick(con_h0, con_h0_nwk; support=true)
+        esup_h0 = DataFrame(
+            edge_number = [e.number for e in con_h0.edge
+                           if !isexternal(e)],
+            support = [round(e.y, digits=6) for e in con_h0.edge
+                       if !isexternal(e)]
+        )
+        CSV.write(con_h0_sup_csv, esup_h0)
+
+        # Plot H=0 consensus tree while con_h0 is live
+        # (e.y is not preserved on file round-trip)
+        con_h0_plot = "$(con_h0_prefix)_plot.pdf"
+        esup_h0_plot = DataFrame(
+            number  = [e.number for e in con_h0.edge if !isexternal(e)],
+            support = [round(100 * e.y, digits=1)
+                for e in con_h0.edge if !isexternal(e)]
+        )
+        try
+            R"pdf($con_h0_plot, width=8, height=6)"
+            R"par(mar=c(1,1,3,1))"
+            plot(con_h0;
+                 edgelabel     = esup_h0_plot,
+                 edgewidth     = 3,
+                 tipcex        = 1.5,
+                 edgecex       = 0.9,
+                 edgelabeladj  = [0.5, -0.3])
+            title_h0 = "H=0 consensus tree — findgraphs: $(paramname_root)"
+            R"title(main=$title_h0, cex.main=0.85)"
+            R"dev.off()"
+            println("H=0 plot saved: $con_h0_plot")
+        catch err
+            @warn "H=0 plot failed: $err"
+            try; R"dev.off()"; catch; end
+        end
+        println("H=0 consensus tree computed.")
+    else
+        println("Warning: Fewer than 2 H=0 trees – " *
+            "skipping H=0 consensus (found $(length(h0_trees))).")
+        con_h0_nwk = nothing
+        con_h0_sup_csv = nothing
+    end
+
+    # H=1: consensus level-1 network (unrooted, no outgroup)
+    if length(h1_nets) >= 2
+        println("Computing H=1 consensus level-1 network from " *
+            "$(length(h1_nets)) networks...")
+        res_h1 = consensus_level1network(h1_nets,
+            outgroup="A", suppressinfo=true)
+        consensus_level1network_save(res_h1, con_h1_prefix)
+
+        # Plot H=1 consensus network while res_h1 is live
+        # (blob/hybrid tables have :edge column)
+        con_h1_plot = "$(con_h1_prefix)_plot.pdf"
+        blb_df = DataFrame(res_h1[:blob_table],   copycols=false)
+        hyb_df = DataFrame(res_h1[:hybrid_table], copycols=false)
+        try
+            R"pdf($con_h1_plot, width=8, height=6)"
+            R"par(mar=c(1,1,3,1))"
+            plot(res_h1[:net];
+                 edgewidth      = 3,
+                 tipcex         = 1.5,
+                 nodelabeladj   = -0.1,
+                 edgelabeladj   = [0.5, -0.3],
+                 nodelabelcolor = "orangered",
+                 edgelabelcolor = "deepskyblue",
+                 nodelabel = select(blb_df, [:node, :support_partition]),
+                 edgelabel = select(hyb_df, [:edge, :support_hybrid]))
+            title_h1 = "H=1 consensus network — findgraphs: $(paramname_root)"
+            R"title(main=$title_h1, cex.main=0.85)"
+            R"dev.off()"
+            println("H=1 plot saved: $con_h1_plot")
+        catch err
+            @warn "H=1 plot failed: $err"
+            try; R"dev.off()"; catch; end
+        end
+        println("H=1 consensus network computed.")
+    else
+        println("Warning: Fewer than 2 H=1 networks – " *
+            "skipping H=1 consensus (found $(length(h1_nets))).")
+    end
+
+    con_h0_plot = length(h0_trees) >= 2 ? "$(con_h0_prefix)_plot.pdf" : nothing
+    con_h1_plot = length(h1_nets)  >= 2 ? "$(con_h1_prefix)_plot.pdf" : nothing
+    return (consensus_dir=consensus_dir, con_h0_nwk=con_h0_nwk,
+            con_h0_sup_csv=con_h0_sup_csv, con_h1_prefix=con_h1_prefix,
+            con_h0_plot=con_h0_plot, con_h1_plot=con_h1_plot,
+            n_h0_collected=length(h0_trees),
+            n_h1_collected=length(h1_nets))
 end
 
 function main()
@@ -716,12 +1200,12 @@ function main()
     println("Starting post-processing for parameter set: $paramname_root")
     println("Processing replicates $rep_start to $rep_end")
 
-    # Sanity check: verify residual count for the first rep before processing all reps
-    # expected_residual_counts default = 784 
     if check_num_residuals
-        first_rep_id  = pad_number(1, n_reps)
-        first_findgraph_folder = joinpath(outfolder, "rep$first_rep_id", "findgraph")
-        check_residuals_count(first_rep_id, first_findgraph_folder, expected_residual_counts)
+        first_rep_id = pad_number(1, n_reps)
+        first_findgraph_folder = joinpath(outfolder,
+            "rep$first_rep_id", "findgraph")
+        check_residuals_count(first_rep_id,
+            first_findgraph_folder, expected_residual_counts)
     end
     
     # Process each replicate
@@ -740,7 +1224,8 @@ function main()
         end
         
         if process_single_replicate(rep_id, findgraph_folder, 
-                                    true_species_tree, species_tree_noF)
+                                    true_species_tree, species_tree_noF,
+                                    species_tree_noG, species_tree_noH)
             successful_reps += 1
         else
             failed_reps += 1
@@ -752,19 +1237,31 @@ function main()
                                             rep_start, rep_end, n_reps,
                                             new_WR_threshold)
     
+    # Build consensus trees / networks across replicates
+    consensus_files = generate_consensus_summary(outfolder, paramname_root,
+                                                  rep_start, rep_end, n_reps)
+
     # Summary
     println("POST-PROCESSING COMPLETE")
     println("Parameter set: $paramname_root")
     println("Total replicates processed: $(successful_reps + failed_reps)")
     println("Successful: $successful_reps")
     println("Failed: $failed_reps")
-    println("Summary CSV generated: $summary_csv_file")
-    
     if failed_reps > 0
         println("Warning: $failed_reps replicates failed processing")
     else
         println("All replicates processed successfully!")
     end
+
+    println()
+    println("========================================")
+    println("findgraphs Postprocessing: Output Files Summary")
+    println("========================================")
+    println("  findgraph summary CSV : $summary_csv_file")
+    if consensus_files.con_h0_nwk !== nothing
+        println("  consensus directory   : $(consensus_files.consensus_dir)")
+    end
+    println("========================================")
 end
 
 # Run the script

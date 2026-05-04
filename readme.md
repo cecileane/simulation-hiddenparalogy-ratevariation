@@ -1,197 +1,263 @@
-# goal
+# Simulation for hidden paralogy and rate variation 
 
-Evaluate if some model violations, or lack of information in gene trees
-may result of overestimation of reticulation by network reconstruction methods.
+We simulate phylogenomic datasets to test whether model violations — gene duplication/loss (hidden paralogy) and substitution rate variation — can cause network inference methods (find_graphs, SNaQ) to detect spurious hybridization when the true history is a tree. Parameters are calibrated from real reptile UCE data ([Crawford et al. 2012](https://academic.oup.com/sysbio/article/61/5/717/1735316)).
 
-Start with a simulation without any model violation: under a tree
-estimated from the real data, and parameters estimated from real data.
-See if the network methods display the behavior as in the real data
-(with 1 reticulation inferred with hybridization proportions close to .5/.5)
+Ready to dive deep? Let's go! 
 
-parameters from real data: very low information content within a single gene,
-that is, very low rate of evolution.
+## Pipeline
 
-Later, if we have time, add a violation of assumptions
-(hidden paralogy: gene duplications & losses? long branch attraction?)
+| Step | Script | What it does |
+|---|---|---|
+| 1. Simulation | `simulation.jl` | SimPhy → filter paralogs → Seq-Gen → IQ-TREE → ASTRAL-IV |
+| 2. SNaQ | `snaq.jl` | Network inference at h=0 and h=1 |
+| 3. find\_graphs | `findgraphs.jl` | Admixture graph inference via f-statistics |
+| 4. Post-processing | `run_postprocessing.jl` | Aggregate results across all parameter sets |
+| 5. Summary | `summary_*.jl` | Compute statistics and generate plots |
+| 6. Visualization | `visualization_scripts/` | Quarto notebooks for paper figures |
 
-# How to run this simulation
+Details on each script - Check this out [scripts/readme.md](scripts/readme.md).
 
-### Installing software
+## Reproducing the Analysis
 
-- Create a new directory where you want to run the simulation,
-  then run git clone with this repo
+All commands run from the **repo root**. Steps 2–3 are independent and can run in parallel after Step 1.
 
-- This simulation needs four executable programs to run:
-  [SimPhy](https://github.com/adamallo/SimPhy),
-  [Seq-Gen](https://github.com/rambaut/Seq-Gen),
-  [RAxML](https://github.com/stamatak/standard-RAxML) and
-  [ASTRAL](https://github.com/smirarab/ASTRAL).  
-  Download these 4 executable programs and move their respective executable file to a folder `executables` to be created within `simulation-reptiles`,
-  with the following titles:
+**0. Install dependencies**
 
-            * SimPhy
-            * seq-gen
-            * raxmlHPC-PTHREADS
-            * astral.5.7.8.jar
+Binary and R executables go in `executables/`. See [software_installation.sh](executables/software_installation.sh). Julia packages are listed in `Project.toml` and `Manifest.toml`. 
 
-- Now the simulation is ready to be run. Navigate to the
-  `simulation-reptiles/scripts` directory.
-  There are two julia scripts for this simulation.
-  The first is `julia clean.jl`: this will remove all old output files and leave the simulation ready to be ran.
-  The second is `julia simulation.jl`: this will run the simulation based
-  on the parameters passed to the simphy configuration file in the
-  `simulation-reptiles/simphy-configs` folder.
-
-### Installing executables
-
-for SimPhy, on `franklin00` server:
-
-```shell
-cd ~/private/apps # or other private folder for private installs
-wget https://github.com/adamallo/SimPhy/releases/download/v1.0.2/SimPhy_1.0.2.tar.gz
-tar -xvf SimPhy_1.0.2.tar.gz
-cp SimPhy_1.0.2/bin/simphy_lnx64 ~/bin
-chmod ug+x ~/bin/simphy_lnx64
-cd - # go back to simulation-reptiles folder
-ln -s ~/bin/simphy_lnx64 executables/SimPhy
-executables/SimPhy -h # just checking
+```bash
+bash executables/software_installation.sh   # external binaries
+julia -e 'using Pkg; Pkg.instantiate()'     # Julia packages
 ```
 
-for RAxML, still on `franklin00`:
+**1. Run simulation** (one parameter set, 100 replicates, multiple processors)
 
-```shell
-git clone https://github.com/stamatak/standard-RAxML.git ~/private/apps/standard-RAxML
-cd ~/private/apps/standard-RAxML # or other private folder for private installs
-make -f Makefile.PTHREADS.gcc; rm *.o
-mv raxmlHPC-PTHREADS ~/bin/
-cd - # go back to simulation-reptiles folder
-ln -s ~/bin/raxmlHPC-PTHREADS executables/raxmlHPC-PTHREADS
-executables/raxmlHPC-PTHREADS -h # just checking
+The species tree branch lengths and substitution rates were derived from empirical reptile data in [scripts/speciestree.jl](scripts/speciestree.jl).
+
+```bash
+julia -p 100 scripts/simulation.jl \
+    --dup_rate 0.0003 --loss_rate 0.0003 \
+    --ratevar G --n_reps 100 --n_inds 1 --SF 1.0
 ```
 
-for ASTRAL:
+`simulation.jl` runs four steps per replicate: (1) simulate gene trees, (2) simulate sequences, (3) estimate gene trees, (4) estimate the species tree. The workflow is shown below.
 
-```shell
-cd ~/private/apps
-wget https://github.com/smirarab/ASTRAL/raw/master/Astral.5.7.8.zip
-unzip Astral.5.7.8.zip
-cd - # go back to simulation-reptiles folder
-ln -s ~/private/apps/Astral/astral.5.7.8.jar executables/astral.5.7.8.jar
+![Simulation workflow](plots/simulation_workflow.png)
+
+## Key parameters used in our simulation
+
+Variable parameters:
+
+| Parameter | Values | Notes |
+|---|---|---|
+| `--ratevar` | `N`, `G`, `L` | None, gene-specific, lineage-specific |
+| `--dup_rate` / `--loss_rate` | `0.0`, `0.0003`, `0.0004` | Per-gene-per-generation; `0.0` disables duplication/loss |
+| `--SF` | `0.5`, `1.0` | Ne scaling factor; higher = higher ILS |
+| `--n_inds` | `1`, `2` | Individuals sampled per species |
+
+Other parameters:
+
+| Parameter | Values | Notes |
+|---|---|---|
+| `--n_reps` | any int | number of replicates; we used 100 |
+| `--n_genes` | any int | number of genes; we used 1000 |
+| `--gene_len` | any int | bp length per gene; we used 1000 |
+
+*Note*
+1. Legacy functions/arguments exist in `simulation.jl`, `snaq.jl`, and `findgraphs.jl`; the parameters above define our 36 main simulation settings.
+2. `--n_reps`, `--n_genes`, and `--gene_len` are consistent across all settings.
+3. Output folders are named `DUP<d>-LOS<l>-RV<r>-N_ind<n>-SF<s>-genelen<g>`.
+4. Using `-p N` where N matches the number of replicates gives the best efficiency.
+
+**2. Network inference**
+
+```bash
+# SNaQ
+julia -p 100 scripts/snaq.jl \
+    --dup_rate 0.0003 --loss_rate 0.0003 --ratevar G --n_reps 100 --n_inds 1 --runs 100
+
+# find_graphs
+julia -p 100 scripts/findgraphs.jl \
+    --dup_rate 0.0003 --loss_rate 0.0003 --ratevar G --n_reps 100 --n_inds 1 --runs 100 --block 1000
 ```
 
-# Simulation plan
+`--runs` controls optimization runs per model: at `--runs 100`, SNaQ uses 10 runs under H=0 (hard-coded) and 100 under H=1; find_graphs uses 100 for both. `--block` (find_graphs only) sets the number of SNP blocks; we used 1000.
 
-### get a species tree from real data
+**3. Post-process all parameter sets at once**
 
-species tree topology, with branch lengths in coalescent units,
-and also in substitution (substitution/unit of time) units.
-for this we need to process the gene trees estimated from the real data.
-
-use the tree from the **crawford** data (10 taxa) obtained with ASTRAL + IQTree
-[here](https://github.com/cecileane/reptiles/blob/main/estimatednets_collapsed.csv#L44)
-because it has the most accepted topology, and
-shorter internal edge lengths (than the chiari tree)
-for more incomplete lineage sorting. But:
-subsample taxa to match the taxon sampling from shaffer data (8 taxa),
-to get faster analysis time.
-**Remove**:
-- sphenodon
-- one turtle (Pelomedusa) if need be
-This was done in file `scripts/speciestree.jl`. The final tree is
-copy-pasted below as a string, with code to read it in julia.
-Taxon names could be simplified for the simulation!
-
-```julia
-using PhyloNetworks
-using PhyloPlots
-treestring = "(Homo:3.44,((((Crocodylus:0.88,alligator_mississippiensis:0.88)100.0:1.71,(Taeniopygia:0.93,Gallus:0.93)93.2:1.66)0.0:0.17,Chrysemys:2.76)0.0:0.18,(Anolis:0.5,Pantherophis:0.5):2.44)0.0:0.5);"
-tree = readnewick(treestring)
-plot(tree, :R, showEdgeLength=true, useEdgeLength=true);
+```bash
+julia -p 10 scripts/run_postprocessing.jl --mode simulation
+julia -p 10 scripts/run_postprocessing.jl --mode snaq
+julia -p 10 scripts/run_postprocessing.jl --mode findgraphs
 ```
 
-### simulate gene trees along this species tree
+Or you can postprocess the results from simulation, snaq and find_graphs individually. 
+For example: 
 
-1000 gene trees in each data set to match the size of our real data
-(chiari: 248 genes, other data: between 1113 and 1955 genes).
-using the coalescent, using
-[SimPhy](https://github.com/adamallo/SimPhy) and
-[paper](https://dx.doi.org/10.1093%2Fsysbio%2Fsyv082)
-
-To do this, we need the rate of evolution of each gene tree:
-average rate, also variation of rates across genes.
-We should get this from the real data.
-
-Parameters to get gene tree branch lengths in substitutions per site:
-1. an overall genome-wide substitution rate: in substitutions/site per coalescent unit
-2. a species-specific rate to model rate variation between species:
-   for example if birds evolve faster, or if turtles evolve slower,
-   or if some ancestral lineage evolved faster or slower
-3. a distribution of rate variation across genes: if some genes evolve faster or slower than others
-4. a distribution of gene x lineage rate variation:
-   if lineages evolve at different rates in genes trees,
-   in a way that's independent across genes and lineages.
-
-For #1 and #2: use the notation from the newick format used by [SimPhy](https://github.com/adamallo/SimPhy/wiki/Manual#521-input-files-newick-tree-format):
-`: branchlength_num_generations * substitution_rate_multiplier ~ generation_time_multiplier # Ne`
-although the spaces are just for readability --there shouldn't be any spaces.
-We get this (same as at the end of `scripts/speciestree.jl`):
-
-    (Homo:3.44*0.0100947,((((Crocodylus:0.88*0.0042057,Alligator:0.88*0.0036776):1.71*0.0078509,(Taeniopygia:0.93*0.0235933,Gallus:0.93*0.0199793):1.66*0.0079913):0.17*0.0068836,Chrysemys:2.76*0.0067212):0.18*0.0098089,(Anolis:0.5*0.0797969,Pantherophis:0.5*0.1796924):2.44*0.0190487):0.5*0.0694588);
-
-For #3: the best fit the to crawford's genes rate was lognormal, so use
-the `HL` option for a log-normal distribution of gene-family-specific rates
-(h for heterogeneity, l for locus): `-hl l:-0.19,0.6164414002968976`
-(or `ln`?) which has mean 1 because `0.6164414002968976 = sqrt(2*0.19)`.
-
-For #4: look at gene trees some more (to do).
-For now, use a Gamma distribution with mean 1 and shape 10
-(SimPhy option `-hg f:10`), for little variation.
-
-Parameters for rate variation across sites:
-we looked at log files from IQTree (to estimate gene trees),
-to get the substitution parameters in real gene trees:
-see [choice-seqgen-parameters.md](choice-seqgen-parameters.md).
-
-Conclusions:
-- to simulate all genes with the same substitution model, use:
-  * HKY (-m option) with transition/transversion ratio kappa = 4.143 (option -t)
-  * base frequencies 0.316,0.182,0.183,0.319 (-f option)
-  * shape alpha = 0.356 (-a option) for the Gamma distribution of rates across sites
-
-- to simulate each gene with its own substitution model, use HKY with:
-  * kappa from LogNormal(μ=1.4215, σ=0.2798)
-  * frequencies from Dirichlet(66.59, 38.41, 38.61, 67.12)
-  * alpha from Gamma(α=3.267, θ=0.109).
+```bash
+julia -p 100 scripts/snaq_postprocess.jl --dup_rate 0 --loss_rate 0 --ratevar N --n_inds 2 --SF 1 --n_reps 100
+```
 
 
-### simulate an alignment along each gene tree
+**4. Summarize and visualize**
 
-using [seq-gen](http://tree.bio.ed.ac.uk/software/seqgen/)
-we'll need to size of each gene: in # of base pairs
+```bash
+julia scripts/summary_simulation.jl
+julia scripts/summary_snaq.jl
+julia scripts/summary_findgraph.jl
+quarto render visualization_scripts/visual_combined.qmd  # and any other visualization file
+```
 
-### analyze the simulated sets of alignments
+Visualization scripts were saved in [visualization_scripts](visualization_scripts/) and check that readme for specific details[visualization_scripts/readme.md](visualization_scripts/readme.md). 
 
-using the same methods we used for real data (or a subset?)
-* to estimate gene trees: IQ-Tree, RAxML, FastTree, MrBayes
-  - focus on RAxML only
-* to estimate a species tree from a set of gene trees:
-  ASTRAL, and network methods under the constraint of h=0 hybrid nodes
-* to estimate a network from a set of gene trees: SNaQ and Phylonet_MPL,
-  under the constraint h≤1.
+## Major Results
 
-### summarize
+![Combined results figure](plots/combined_three_panel_figure.png)
 
-- results of ASTRAL: how often is the true species tree recovered?
-- results of network methods (e.g. SNaQ) with h=0: idem.
-- results of network methods with h=1:
-  what is the support for a reticulation? gammas?
+**(A)** Under constant or gene-specific rate variation, the 95th percentile of the worst residuals (WR) from fitting the true species tree exceeded the standard threshold of 3.0, so we also evaluated a more permissive WR ≤ 3.7 threshold. Under lineage-specific rates, WR reached 6–8, making model selection unreliable at any common threshold. **(B)** Both find\_graphs and SNaQ recovered the true species tree topology in ~87% of replicates under h=1. **(C)** Hidden paralogy had little effect on type I error for either method, but lineage-specific rate variation drove false reticulation detection to near 100% in find\_graphs even under WR ≤ 3.7, while SNaQ remained conservative throughout.
+
+In short: lineage-specific rate variation, not hidden paralogy, is the main driver of spurious reticulation signal. The standard WR threshold in find\_graphs is too strict under the realistic conditions we examined here, and even the permissive threshold breaks down under lineage-specific rates.
+
+## Dependencies
+
+Check [Executables README](executables/readme.md) for details! 
+
+**Julia** (see `Project.toml`): `PhyloNetworks`, `QuartetNetworkGoodnessFit`, `PhyloPlots`, `RCall`, `CSV`, `DataFrames`, `ArgParse`, `Distributed`.
+
+**External binaries** (symlinked in `executables/`): SimPhy, Seq-Gen, IQ-TREE 2, astral, snp-sites.
+
+**R**: `admixtools`, `optparse`, `dplyr`, `igraph` — required for find_graphs and visualization.
+
+## Repository Layout
+
+After running all simulation, the folder structure should be similar to this: 
+
+```
+simulation-reptiles/
+├── scripts/                        Pipeline scripts (see scripts/readme.md)
+│   ├── utilities.jl                Shared Julia helpers across all stages
+│   ├── simulation.jl               Entry point: SimPhy + seq-gen + IQ-TREE
+│   ├── simulation_postprocess.jl   Aggregate per-replicate simulation stats
+│   ├── snaq.jl                     Entry point: SNaQ runs (parallel)
+│   ├── snaq_1rep.jl                Per-replicate SNaQ worker
+│   ├── snaq_postprocess.jl         Aggregate per-replicate SNaQ results
+│   ├── findgraphs.jl               Entry point: find_graphs runs (parallel)
+│   ├── findgraphs_1rep.R           Per-replicate find_graphs worker (R)
+│   ├── findgraphs_postprocess.jl   Aggregate per-replicate find_graphs results
+│   ├── summary_simulation.jl       Cross-setting simulation summary CSV
+│   ├── summary_snaq.jl             Cross-setting SNaQ summary CSV
+│   ├── summary_findgraph.jl        Cross-setting find_graphs summary CSV
+│   ├── visual_utilities.R          Shared R plotting helpers
+│   ├── speciestree.jl              One-time: true species tree construction
+│   ├── clean.jl                    Remove intermediate output files
+│   └── readme.md                   Script-level documentation
+│
+├── visualization_scripts/          Quarto visualization notebooks
+│   ├── visualization_simulation.qmd
+│   ├── visualization_snaq.qmd
+│   ├── visualization_finsgraphs.qmd
+│   ├── visualize_baselinetree.qmd
+│   └── visual_combined.qmd
+│
+├── executables/                    Symlinks to required binaries
+│   ├── simphy -> ...
+│   ├── iqtree2 -> ...
+│   ├── seq-gen -> ...
+│   ├── astral -> ...
+│   └── snp-sites -> ...
+│
+├── simphy-configs/                 SimPhy configuration templates
+│   ├── Example.conf
+│   ├── simphysim-conf
+│   └── simphysim-conf-master
+│
+├── output/               Per-replicate outputs (not tracked by Git)
+│   │
+|   |   # 36 parameter settings in total 
+│   │   # 12 DUP/LOSS=0.0 settings 
+│   ├── DUP0.0-LOS0.0-RVN-N_ind1-SF0.5-genelen1000/
+│   ├── ... 
+│   ├── DUP0.0-LOS0.0-RVL-N_ind1-SF0.5-genelen1000/
+│   │
+│   │   # 12 DUP/LOSS=0.0003 settings 
+│   ├── DUP0.0003-LOS0.0003-RVN-N_ind1-SF0.5-genelen1000/
+│   ├── ...
+│   ├── DUP0.0003-LOS0.0003-RVL-N_ind2-SF1.0-genelen1000/
+│   │
+│   │   # 12 DUP/LOSS=0.0004 settings 
+│   ├── DUP0.0004-LOS0.0004-RVN-N_ind1-SF0.5-genelen1000/
+│   ├── ...
+│   └── DUP0.0004-LOS0.0004-RVG-N_ind2-SF1.0-genelen1000/
+│
+│       # Each parameter folder shares this structure:
+|       # A brief overview of the output folder, but it contains more intermediate files 
+│       ├── arguments-<paramname>.log       command-line arguments used
+│       ├── simulation_<paramname>.csv      aggregated simulation results
+│       ├── random_seed_[software].txt   per-software seeds
+│       ├── screen_<paramname>.log          main worker log
+│       ├── screen_<paramname>_worker*.log  per-worker logs
+│       ├── rep001/
+│       │   ├── genetrees_simphy/           raw SimPhy gene trees
+│       │   ├── genetrees_singlecopy/       filtered single-copy gene trees
+│       │   │   ├── besttrees.tre
+│       │   │   ├── gene.treefile
+│       │   │   └── mapping.csv
+│       │   ├── seqgenfolder/               Seq-Gen sequence output
+│       │   ├── iqtreefolder/               IQ-TREE output
+│       │   ├── astralfolder/               ASTRAL species tree
+│       │   │   ├── astral.tre
+│       │   │   └── astral_mapping.txt
+│       │   ├── snaqfolder/
+│       │   │   ├── CF_results.csv
+│       │   │   ├── id_to_species.csv
+│       │   │   ├── snaq_gof_results_H0.csv
+│       │   │   ├── H0_output/              SNaQ H=0 run outputs
+│       │   │   └── H1_output/              SNaQ H=1 run outputs
+│       │   └── findgraph/
+│       │       ├── rep01.vcf
+│       │       ├── eigenstrat_rep01.geno
+│       │       ├── eigenstrat_rep01.ind
+│       │       ├── eigenstrat_rep01.snp
+│       │       ├── rep01_admix0_summary_table.txt
+│       │       ├── rep01_admix0_unique_graphs.rds
+│       │       ├── rep01_admix1_summary_table.txt
+│       │       ├── rep01_admix1_unique_graphs.rds
+│       │       └── rep01_f2.rds
+│       ├── rep002/
+|       ├── ... 
+|       ├── # Feel free to add more replicates but in our simulation we used 100 
+│       └── rep100/ 
+│
+├── simulation_summary/             Per-setting simulation summary CSVs
+│   └── summary_<paramname>.csv
+│
+├── snaq_summary/                   Per-setting SNaQ summary CSVs
+│   └── SNaQ-<paramname>-summary.csv
+│
+├── findgraph_summary/              Per-setting find_graphs summary CSVs
+│   └── findgraph-<paramname>.csv
+│
+├── results/                        Cross-setting aggregated summary CSVs
+│   ├── SNaQ_summary.csv
+│   ├── findgraph_summary.csv
+│   ├── summary_concatenated.csv
+│   └── combined_*.csv
+│
+├── visualization_results/          Generated figures (not tracked by Git)
+│   ├── simulation/
+│   ├── snaq/
+│   └── findgraph/
+│
+├── plots/                          Figures and workflow diagrams
+├── notebook/                       Analysis notebooks and documentation
+├── executables/                    Executables saved here 
+├── example/                        Exploratory analyses and debugging
+├── third_party_scripts/            External scripts (Apache 2.0)
+├── Project.toml                    Julia package environment
+├── Manifest.toml
+└── readme.md
+```
 
 ## License
 
-This repository is primarily licensed under the MIT License (see `LICENSE`).
-
-**Third-Party Code:**  
-The script `third_party/vcf2eigenstrat.py` is derived from a project by Iain Mathieson and is licensed under the Apache License 2.0.  
-See `third_party/LICENSE-APACHE-2.0.txt` for details.
-
-
+MIT License. `third_party_scripts/vcf2eigenstrat.py` is Apache 2.0 (see `third_party_scripts/LICENSE-APACHE-2.0.txt`).

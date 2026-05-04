@@ -5,7 +5,7 @@ using DataFrames
 using Statistics
 using ArgParse
 
-include("visual_utilities.jl")
+using PrettyTables
 
 """
 Parse command line arguments
@@ -22,13 +22,17 @@ function parse_commandline()
         "--visualization_output_dir"
             help = "Output directory for visualization files"
             default = "visualization_results/findgraph" 
+        "--taxon_recovery_output"
+            help = "Output CSV for long-format taxon recovery summary"
+            default = "results/findgraph_taxon_recovery.csv"
     end
     return parse_args(s)
 end
 
 """
 Extract parameter name root from filename
-Example: "findgraph-DUP0.0004-LOS0.0004-RVN-N_ind1-SF0.5.csv" -> "DUP0.0004-LOS0.0004-RVN-N_ind1-SF0.5"
+Example: "findgraph-DUP0.0004-LOS0.0004-RVN-N_ind1-SF0.5.csv"
+→ "DUP0.0004-LOS0.0004-RVN-N_ind1-SF0.5"
 """
 function extract_paramname(filename::String)
     # Remove "findgraph-" prefix and ".csv" suffix
@@ -116,10 +120,10 @@ function process_file(filepath::String, paramname::String)
                                (df.True_tree_displayed_H1_minor .== true))
     pct_true_tree_h1 = true_tree_h1_count / total_reps * 100
 
-    # If we remove F from the tree, 
-    # what is the percentage of replicate find the true tree in H1 (either major or minor) 
-    true_tree_h1_count_noF = count((df.True_tree_noF_displayed_H1_major .== true) .| 
-                               (df.True_tree_noF_displayed_H1_minor .== true)) 
+    # Same but without F: pct reps finding true tree in H1
+    true_tree_h1_count_noF = count(
+        (df.True_tree_noF_displayed_H1_major .== true) .|
+        (df.True_tree_noF_displayed_H1_minor .== true))
     pct_true_tree_h1_noF = true_tree_h1_count_noF / total_reps * 100 
     
     # Summary statistics for H0_trees_found
@@ -136,11 +140,13 @@ function process_file(filepath::String, paramname::String)
     min_H1_graphs = minimum(df.H1_graphs_found)
     max_H1_graphs = maximum(df.H1_graphs_found)
     
-    # Count replicates with true tree found (handle both string "True" and boolean true)
-    count_H0_best_is_true = count(x -> x == "True" || x == true, df.H0_best_tree_is_true_tree)
-    count_H0_best_is_true_noF = count(x -> x == "True" || x == true, df.H0_best_tree_is_true_tree_noF)
-    count_H1_best_displays_true = count(x -> x == "True" || x == true, df.H1_best_graph_displayed_true_tree)
-    count_H1_best_displays_true_noF = count(x -> x == "True" || x == true, df.H1_best_graph_displayed_true_tree_noF)
+    istrue(x) = x == "True" || x == true
+    count_H0_best_is_true = count(istrue, df.H0_best_tree_is_true_tree)
+    count_H0_best_is_true_noF = count(istrue, df.H0_best_tree_is_true_tree_noF)
+    count_H1_best_displays_true = count(
+        istrue, df.H1_best_graph_displayed_true_tree)
+    count_H1_best_displays_true_noF = count(
+        istrue, df.H1_best_graph_displayed_true_tree_noF)
     
     return merge((
         paramname_root = paramname,
@@ -182,7 +188,8 @@ Validate that all files have consistent WR thresholds
 function validate_wr_thresholds(input_dir::String)
     # Find all files starting with "findgraph"
     all_files = readdir(input_dir)
-    findgraph_files = filter(f -> startswith(f, "findgraph") && endswith(f, ".csv"), all_files)
+    findgraph_files = filter(
+        f -> startswith(f, "findgraph") && endswith(f, ".csv"), all_files)
     
     all_thresholds = Set()
     
@@ -200,7 +207,9 @@ function validate_wr_thresholds(input_dir::String)
     
     # Check consistency
     if length(all_thresholds) > 1
-        error("Inconsistent WR thresholds found in input directory $input_dir. Found thresholds: $(sort(collect(all_thresholds))). All files must have the same threshold.")
+        error("Inconsistent WR thresholds in $input_dir: " *
+            "$(sort(collect(all_thresholds))). " *
+            "All files must have the same threshold.")
     elseif length(all_thresholds) == 1
         threshold = collect(all_thresholds)[1]
         println("Using WR threshold: $threshold")
@@ -209,6 +218,100 @@ function validate_wr_thresholds(input_dir::String)
     end
     
     return all_thresholds
+end
+
+"""
+Explode a comma-separated role column into one row per taxon.
+Carries param_setting, repID, and true_tree_recovered.
+"""
+function explode_role_column(df::DataFrame, col::Symbol, role_label::String)
+    rows = NamedTuple[]
+    for row in eachrow(df)
+        for t in strip.(split(string(row[col]), ","))
+            isempty(t) && continue
+            push!(rows, (param_setting        = row.param_setting,
+                         repID               = row.repID,
+                         taxon               = t,
+                         role                = role_label,
+                         true_tree_recovered = row.true_tree_recovered))
+        end
+    end
+    return DataFrame(rows)
+end
+
+"""
+Long-format stratified taxon recovery summary from all CSV files in input_dir.
+Steps: read+tag → recovery flag → explode roles → group+summarize → print+save.
+"""
+function compute_taxon_recovery_summary(input_dir::String, output_file::String)
+    required_cols = [:repID, :best_graph_hybrid_taxon,
+        :best_graph_major_donor, :H1_best_graph_displayed_true_tree]
+
+    # STEP 1: Read and tag each CSV file; skip files missing required columns
+    csv_files = filter(f -> endswith(f, ".csv"), readdir(input_dir))
+    tagged_dfs = DataFrame[]
+    for f in csv_files
+        df = CSV.read(joinpath(input_dir, f), DataFrame)
+        missing_cols = [c for c in required_cols if !(c in propertynames(df))]
+        if !isempty(missing_cols)
+            @warn "Skipping $f — missing: $(join(string.(missing_cols), ", "))"
+            continue
+        end
+        df[!, :param_setting] = fill(replace(f, r"\.csv$" => ""), nrow(df))
+        push!(tagged_dfs, select(df, vcat(required_cols, [:param_setting])))
+    end
+    if isempty(tagged_dfs)
+        @warn "No usable files found for taxon recovery analysis — skipping."
+        return
+    end
+
+    # Stack all DataFrames; keep only shared columns
+    combined = vcat(tagged_dfs...; cols=:intersect)
+
+    # Drop rows where no H1 graph was found ("NA" in all taxon columns).
+    # Keeping these would conflate "not computed" with "computed False".
+    combined = filter(row ->
+        !(string(row.best_graph_hybrid_taxon) == "NA" &&
+          string(row.best_graph_major_donor)  == "NA" &&
+          string(row.best_graph_minor_donor)  == "NA"), combined)
+
+    # STEP 2: Recovery flag from H1_best_graph_displayed_true_tree
+    # (always set unconditionally in findgraphs_postprocess.jl)
+    combined[!, :true_tree_recovered] = map(
+        x -> x == true || x == "True",
+        combined.H1_best_graph_displayed_true_tree)
+
+    # STEP 3: Explode taxon role columns (one row per taxon);
+    # "NA" rows are filtered above so they will not appear as a taxon name.
+    long_all = vcat(
+        explode_role_column(combined, :best_graph_hybrid_taxon, "hybrid_taxon"),
+        explode_role_column(combined, :best_graph_major_donor,  "major_donor"),
+        explode_role_column(combined, :best_graph_minor_donor,  "minor_donor")
+    )
+    # Deduplicate: each (param_setting, repID, taxon, role) counted at most once
+    long_dedup = unique(long_all, [:param_setting, :repID, :taxon, :role])
+
+    # STEP 4: Stratified summary grouped by (param_setting, taxon, role)
+    summary = combine(
+        groupby(long_dedup, [:param_setting, :taxon, :role]),
+        :true_tree_recovered => sum             => :count_recovered,
+        :true_tree_recovered => (x -> sum(.!x)) => :count_not_recovered,
+        :true_tree_recovered => length          => :total
+    )
+    summary[!, :pct_correct] = map(
+        (r, t) -> t == 0 ? NaN : round(100.0 * r / t, digits=1),
+        summary.count_recovered, summary.total
+    )
+    sort!(summary, [:param_setting, order(:total, rev=true)])
+
+    # STEP 5: Print preview of first 20 rows and save full table to CSV
+    n_preview = min(20, nrow(summary))
+    println("\nTaxon recovery summary — first $n_preview rows:")
+    pretty_table(summary[1:n_preview, :];
+        header=names(summary), tf=tf_unicode_rounded)
+    mkpath(dirname(output_file) == "" ? "." : dirname(output_file))
+    CSV.write(output_file, summary)
+    println("Taxon recovery ($(nrow(summary)) rows) → $output_file")
 end
 
 """
@@ -234,7 +337,8 @@ function main()
     
     # Find all files starting with "findgraph"
     all_files = readdir(input_dir)
-    findgraph_files = filter(f -> startswith(f, "findgraph") && endswith(f, ".csv"), all_files)
+    findgraph_files = filter(
+        f -> startswith(f, "findgraph") && endswith(f, ".csv"), all_files)
     
     if isempty(findgraph_files)
         error("No findgraph files found in $input_dir")
@@ -269,39 +373,6 @@ function main()
     #--------- Generate distribution plots ---------# 
     # Plot gamma distribution 
     mkpath(visualization_output_dir)
-
-    # Legacy functions in Julia to sanity check the data and results: 
-    # plot_column_distributions(input_dir, :best_graph_gamma1, 
-    #                             :best_graph_gamma2, 
-    #                             visualization_output_dir, 
-    #                             "findgraphs_minor_gamma_distributions.png")
-    # plot_by_ratevar(input_dir, :best_graph_gamma1, 
-    #                 :best_graph_gamma2,
-    #                visualization_output_dir,
-    #                "findgraphs_minor_gamma_by_ratevar.png")
-
-    # plot_by_duploss_rate(input_dir, :best_graph_gamma1, 
-    #                     :best_graph_gamma2,
-    #                     visualization_output_dir,
-    #                     "findgraph_minor_gamma_by_duploss_rate.png")
-
-    # plot_overlapping_categories(input_dir, :best_graph_gamma1, 
-    #                        :best_graph_gamma2,
-    #                        visualization_output_dir,
-    #                        "findgraph_overlapping_ratevar.png",
-    #                        "ratevar")
-
-    # plot_overlapping_categories(input_dir, :best_graph_gamma1, 
-    #                         :best_graph_gamma2,
-    #                         visualization_output_dir,
-    #                         "findgraph_overlapping_duploss.png",
-    #                         "duploss") 
-
-    # plot_overlapping_ratevar_by_n_inds_sf(input_dir, 
-    #                                     :best_graph_gamma1, 
-    #                                     :best_graph_gamma2,
-    #                                     visualization_output_dir, 
-    #                                     "findgraph_minorG_duploss_SF_ninds")
     
     # Generate 12-panel combined plot using R with facet_grid
     println("Generating combined 12-panel plot using R facet_grid...")
@@ -319,33 +390,6 @@ function main()
         @warn "Could not generate R plot: $e"
     end
     
-    # Generate WR distribution plots
-    # println("Generating H0 best tree WR distribution plot...")
-    # try
-    #     run(`Rscript -e "source('scripts/visual_utilities.R'); 
-    #             plot_WR_distributions('$input_dir', 
-    #                         'H0_best_tree_WR', 
-    #                         '$visualization_output_dir', 
-    #                         'findgraph_H0_best_tree_WR_distributions', 
-    #                         25)"`)
-    #     println("H0 WR distribution plot generated successfully")
-    # catch e
-    #     @warn "Could not generate H0 WR plot: $e"
-    # end
-    
-    # println("Generating H1 best graph WR distribution plot...")
-    # try
-    #     run(`Rscript -e "source('scripts/visual_utilities.R'); 
-    #             plot_WR_distributions('$input_dir', 
-    #                                 'H1_best_graph_WR', 
-    #                                 '$visualization_output_dir', 
-    #                                 'findgraph_H1_best_graph_WR_distributions',
-    #                                 25)"`)
-    #     println("H1 WR distribution plot generated successfully")
-    # catch e
-    #     @warn "Could not generate H1 WR plot: $e"
-    # end
-    
     println("Generating the true graph WR distribution plot...")
     try
         run(`Rscript -e "source('scripts/visual_utilities.R'); 
@@ -359,73 +403,6 @@ function main()
     catch e
         @warn "Could not generate true tree WR plot: $e"
     end
-
-    # Generate WR distribution plots by rate variation
-    # println("Generating H0 best tree WR distribution by rate variation...")
-    # try
-    #     run(`Rscript -e "source('scripts/visual_utilities.R'); 
-    #             plot_WR_by_rate_variation('$input_dir', 
-    #                         'H0_best_tree_WR', 
-    #                         '$visualization_output_dir', 
-    #                         'findgraph_H0_WR_by_ratevar',
-    #                         250)"`)
-    #     println("H0 WR by rate variation plot generated successfully")
-    # catch e
-    #     @warn "Could not generate H0 WR by rate variation plot: $e"
-    # end
-    
-    # println("Generating H1 best graph WR distribution by rate variation...")
-    # try
-    #     run(`Rscript -e "source('scripts/visual_utilities.R'); 
-    #             plot_WR_by_rate_variation('$input_dir', 
-    #                                 'H1_best_graph_WR', 
-    #                                 '$visualization_output_dir', 
-    #                                 'findgraph_H1_WR_by_ratevar',
-    #                                 250)"`)
-    #     println("H1 WR by rate variation plot generated successfully")
-    # catch e
-    #     @warn "Could not generate H1 WR by rate variation plot: $e"
-    # end
-    
-    # println("Generating true tree WR distribution by rate variation...")
-    # try
-    #     run(`Rscript -e "source('scripts/visual_utilities.R'); 
-    #             plot_WR_by_rate_variation('$input_dir', 
-    #                                 'true_tree_wr', 
-    #                                 '$visualization_output_dir', 
-    #                                 'findgraph_true_tree_WR_by_ratevar',
-    #                                 250)"`)
-    #     println("True tree WR by rate variation plot generated successfully")
-    # catch e
-    #     @warn "Could not generate true tree WR by rate variation plot: $e"
-    # end
-
-    # Generate WR percentile plots by rate variation
-    # println("Generating H0 best tree WR percentiles by rate variation...")
-    # try
-    #     run(`Rscript -e "source('scripts/visual_utilities.R'); 
-    #             plot_WR_percentiles_by_rate_variation('$input_dir', 
-    #                         'H0_best_tree_WR', 
-    #                         '$visualization_output_dir', 
-    #                         'findgraph_H0_WR_percentiles_by_ratevar',
-    #                         rv_colors = rv_colors)"`)  
-    #     println("H0 WR percentiles plot generated successfully")
-    # catch e
-    #     @warn "Could not generate H0 WR percentiles plot: $e"
-    # end
-    
-    # println("Generating H1 best graph WR percentiles by rate variation...")
-    # try
-    #     run(`Rscript -e "source('scripts/visual_utilities.R'); 
-    #             plot_WR_percentiles_by_rate_variation('$input_dir', 
-    #                         'H1_best_graph_WR', 
-    #                         '$visualization_output_dir', 
-    #                         'findgraph_H1_WR_percentiles_by_ratevar',
-    #                         rv_colors = rv_colors)"`) 
-    #     println("H1 WR percentiles plot generated successfully")
-    # catch e
-    #     @warn "Could not generate H1 WR percentiles plot: $e"
-    # end
     
     println("Generating true tree WR percentiles by rate variation...")
     try
@@ -440,47 +417,16 @@ function main()
         @warn "Could not generate true tree WR percentiles plot: $e"
     end
 
-    # Generate WR percentile jitter-combined plots (n_inds = 1 and 2 in one panel)
-    # Shape = ILS level (circle = high SF=1.0, triangle = low SF=0.5)
-    # Fill  = n_inds   (filled = n_inds=1, hollow = n_inds=2)
-    # Color = rate variation (none / gene / lineage)
-    # println("Generating H0 best tree WR percentiles jitter-combined plot...")
-    # try
-    #     run(`Rscript -e "source('scripts/visual_utilities.R'); 
-    #             plot_WR_percentiles_jitter_combined('$input_dir', 
-    #                         'H0_best_tree_WR', 
-    #                         '$visualization_output_dir', 
-    #                         'findgraph_H0_WR_percentiles_jitter_combined',
-    #                         rv_colors = rv_colors)"`)
-    #     println("H0 WR percentiles jitter-combined plot generated successfully")
-    # catch e
-    #     @warn "Could not generate H0 WR percentiles jitter-combined plot: $e"
-    # end
-
-    # println("Generating H1 best graph WR percentiles jitter-combined plot...")
-    # try
-    #     run(`Rscript -e "source('scripts/visual_utilities.R'); 
-    #             plot_WR_percentiles_jitter_combined('$input_dir', 
-    #                         'H1_best_graph_WR', 
-    #                         '$visualization_output_dir', 
-    #                         'findgraph_H1_WR_percentiles_jitter_combined',
-    #                         rv_colors = rv_colors)"`)
-    #     println("H1 WR percentiles jitter-combined plot generated successfully")
-    # catch e
-    #     @warn "Could not generate H1 WR percentiles jitter-combined plot: $e"
-    # end
-
     println("Generating true tree WR percentiles jitter-combined plot...")
     try
-        run(`Rscript -e "source('scripts/visual_utilities.R'); 
-                plot_WR_percentiles_jitter_combined('$input_dir', 
-                            'true_tree_wr', 
-                            '$visualization_output_dir', 
-                            'findgraph_true_tree_WR_95-percentiles_jitter_combined',
-                            rv_colors = rv_colors)"`)
-        println("True tree WR percentiles jitter-combined plot generated successfully")
+        run(`Rscript -e "source('scripts/visual_utilities.R');
+                plot_WR_percentiles_jitter_combined('$input_dir',
+                    'true_tree_wr', '$visualization_output_dir',
+                    'findgraph_true_tree_WR_95-percentiles_jitter_combined',
+                    ymax = 9, rv_colors = rv_colors)"`)
+        println("True tree WR percentiles jitter-combined plot generated")
     catch e
-        @warn "Could not generate true tree WR percentiles jitter-combined plot: $e"
+        @warn "Could not generate true tree WR jitter-combined plot: $e"
     end
 
     # Generate gamma threshold summary
@@ -509,7 +455,7 @@ function main()
                              [0.95, 0.99])
 
     # Generate findgraph statistics by tree display visualization using R
-    println("\nGenerating findgraph minor gamma (gamma2) by tree display visualization...")
+    println("\nGenerating findgraph minor gamma (gamma2) by tree display...")
     try
         run(`Rscript -e "source('scripts/visual_utilities.R'); 
                  plot_statistics_by_tree_display('$input_dir', 
@@ -517,14 +463,14 @@ function main()
                     'H1_best_graph_displayed_true_tree',
                     '$visualization_output_dir', 
                     'findgraph_gamma2_by_tree_display',
-                    'Findgraph H1 Best Graph Minor Gamma (gamma2) Distribution by True Tree Display',
+                    'Findgraph H1 Minor Gamma (gamma2) by True Tree Display',
                     'Minor Gamma (gamma2)')"`)
-        println("Findgraph gamma2 by tree display visualization generated successfully")
+        println("Findgraph gamma2 by tree display visualization generated")
     catch e
         @warn "Could not generate findgraph gamma2 visualization: $e"
     end
     
-    println("Generating findgraph H1 best graph WR by tree display visualization...")
+    println("Generating findgraph H1 best graph WR by tree display...")
     try
         run(`Rscript -e "source('scripts/visual_utilities.R'); 
                  plot_statistics_by_tree_display('$input_dir', 
@@ -532,9 +478,9 @@ function main()
                     'H1_best_graph_displayed_true_tree',
                     '$visualization_output_dir', 
                     'findgraph_H1_WR_by_tree_display',
-                    'Findgraph H1 Best Graph WR Distribution by True Tree Display',
+                    'Findgraph H1 Best Graph WR by True Tree Display',
                     'Worst Residual (WR)')"`)
-        println("Findgraph H1 WR by tree display visualization generated successfully")
+        println("Findgraph H1 WR by tree display visualization generated")
     catch e
         @warn "Could not generate findgraph H1 WR visualization: $e"
     end
@@ -544,6 +490,9 @@ function main()
 
     println("\nSummary written to: $output_file")
     println("Processed $(nrow(results_df)) files successfully")
+
+    # Taxon recovery summary — long-format table by (param_setting, taxon, role)
+    compute_taxon_recovery_summary(input_dir, args["taxon_recovery_output"])
 
 end
 

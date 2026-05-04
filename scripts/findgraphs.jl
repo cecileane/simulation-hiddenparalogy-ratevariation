@@ -16,7 +16,7 @@ using RCall
             r_home = strip(read(`R RHOME`, String))
             ENV["R_HOME"] = r_home
         catch
-            @warn "Could not automatically detect R_HOME. Please set it manually."
+            @warn "Could not detect R_HOME. Please set it manually."
         end
     end
 end
@@ -90,21 +90,22 @@ function parse_commandline()
         arg_type = Int 
         default = 100
       "--outgroup"
-        help = "Outgroup population name used in findgraphs, default is homo sapiens"
+        help = "Outgroup population name used in findgraphs (default: A)"
         arg_type = String
         default = "A" # Homo, see speciestree.jl 
       "--block"
         help = "Number of blocks (approximate) used in find_graphs" 
         arg_type = Int
-        required = true
+        default = 1000 # we typically simulate genes with 1000 bp 
       "--selection_method"
         help = "Method to select graphs"
         arg_type = String
-        default = "select_threshold_within_ll"  
+        default = "select_threshold_within_ll" # always use this 
+        # the other option is a legacy option 
       "--threshold"
         help = "Threshold for graph selection, default: NULL"
         arg_type = Int
-        default = 2
+        default = 2 # corresponds to 4 AIC
 
       # Other arguments: 
       "--log"
@@ -112,10 +113,10 @@ function parse_commandline()
         default = true
         arg_type = Bool
       "--vcf_transfer_scripts" 
-        help = "Two scripts for transfering vcf to eigentrat files \n
-                1. Biallelic option: Standard option which don't treat missing alleles\n
-                2. Multiallelic option: Legacy option which treat missing alleles\n
-                Options: 1. Biallelic; 2. Multiallelic"
+        # Multiallelic is a legacy option. 
+        help = "Script to transfer vcf to eigenstrat.\n
+                Biallelic: standard, no missing alleles.\n
+                Multiallelic: legacy, treats missing alleles."
         arg_type = String 
         default = "biallelic"
       "--gene_len" 
@@ -197,7 +198,7 @@ params_dict_for_seed_setting = get_dict_for_seed_setting(paramname_root)
 master_seed = generate_master_seed(params_dict_for_seed_setting) 
 
 software_names = ["findgraphs", "qpgraph"] 
-seed_dic = generate_software_seeds(master_seed, software_names) # see utility.jl 
+seed_dic = generate_software_seeds(master_seed, software_names)
 # This seed used to generate m (n_reps) x 2 seed array: 
 seed_findgraphs = seed_dic["findgraphs"] 
 # This generates seeds for qpgraph: 
@@ -324,7 +325,7 @@ check_existing_dir(findgraph_folderlist) # see utilies.jl.
     # estimate the blgsize based on alignment length 
     # blgsize should be the size of each individual gene locus 
     # block is the number of blocks (approximate) used in find_graphs 
-    # Thus, blgsize = alignment_length / block which calculated the average size of each block 
+    # blgsize = alignment_length / block = average block size
     blgsize = Int(floor(alignment_length / block)) 
 
     if debug_mode 
@@ -332,7 +333,7 @@ check_existing_dir(findgraph_folderlist) # see utilies.jl.
       println("DEBUG INFO for Rep$rep_id:")
       println("Alignment length: $alignment_length bp")
       println("Block parameter: $block") 
-      println("Calculation: $alignment_length / $block = $(alignment_length / block)")
+      println("$alignment_length / $block = $(alignment_length / block)")
       println("Calculated blgsize: $blgsize")
       println("="^60)
     end
@@ -340,7 +341,7 @@ check_existing_dir(findgraph_folderlist) # see utilies.jl.
     # run snp-sites: 
     run(`./executables/snp-sites $fasta_file -v -o $vcf_file`)
     
-    # Goal 2:  Convert VCF to eigenstrat using codes from https://github.com/mathii/gdc  
+    # Convert VCF to eigenstrat (github.com/mathii/gdc)
     eigenstrat_file = joinpath(findgraph_folder, "eigenstrat_rep$(rep_id)") 
 
     if vcf_transfer_scripts == "biallelic"
@@ -349,26 +350,26 @@ check_existing_dir(findgraph_folderlist) # see utilies.jl.
         -v $(vcf_file) \
         -o $(eigenstrat_file)`) 
     elseif vcf_transfer_scripts == "multiallelic" 
-      #= Use the multiallelic version which treat missing alleles 
-      Legacy option: We don't use this option by default because we stop allowing 
-      missing data during our simulation pipeline =# 
+      #= multiallelic: legacy, treats missing alleles (unused by default) =#
       run(`python third_party_scripts/vcf2eigenstrat_multiallelic.py \
         -v $(vcf_file) \
         -o $(eigenstrat_file)`)
     else
-      error("Invalid vcf_transfer_scripts option. Must be 'biallelic' or 'multiallelic'.") 
+      error("Invalid vcf_transfer_scripts: " *
+          "must be 'biallelic' or 'multiallelic'.")
     end
 
     # Goals 3: output .ind files is re-assigned a unique pop to each taxon
     eigenstrat_ind_file = "$(eigenstrat_file).ind"
     modified_ind_file = "$(eigenstrat_file)_modified.ind"
     replace_pop_inInd_file(eigenstrat_ind_file, modified_ind_file) 
-    # rm and rename modified_ind_file, because f2_from_geno can only recognize one prefix 
+    # f2_from_geno requires a single prefix; rename in place
     # The below process is not done in a function to avoid over-writing 
     # Choose not to use indAsPop from vcf2eigenstrat_modified_py3.py, 
     # since we might have multiple individual from one pop (eg. A_0, A_1) 
-    run(`sh -c "rm $eigenstrat_ind_file && mv $modified_ind_file $eigenstrat_ind_file"`)
-    worker_println("Rep$rep_id: Finished converting .vcf to eigenstrat and adding pop names")
+    run(`sh -c "rm $eigenstrat_ind_file && \
+        mv $modified_ind_file $eigenstrat_ind_file"`)
+    worker_println("Rep$rep_id: vcf → eigenstrat conversion done")
 
     return blgsize # return the estimated blgsize 
 end 
@@ -568,7 +569,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
   #=====================================================#
   ---Arguments used for simulating this output dataset---
   master seed = $master_seed, unique master_seed for this parameter setting 
-  Seed for findgraph= $seed_findgraphs to create seed array (replicate x 2) for findgraphs
+  Seed for findgraph= $seed_findgraphs (rep x 2 seed array)
   This experiment runs from rep$rep_start to rep$rep_end
   ---'findgraphs' specific patameters---
   Number of runs to run findgraphs = $runs;

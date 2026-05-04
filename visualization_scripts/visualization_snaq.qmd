@@ -22,7 +22,8 @@ source("../scripts/visual_utilities.R")
 ```{r load-parse}
 df <- read_csv("../results/SNaQ_summary.csv") %>%
   mutate(
-    dup_loss_rate = as.numeric(str_extract(parameter_setting, "(?<=DUP)[0-9.]+")),
+    dup_loss_rate = as.numeric(
+      str_extract(parameter_setting, "(?<=DUP)[0-9.]+")),
     RV = factor(str_extract(parameter_setting, "(?<=RV)[A-Z]+"),
                 levels = c("N", "G", "L", "GL")),
     SF = as.numeric(str_extract(parameter_setting, "(?<=SF)[0-9.]+")),
@@ -46,7 +47,7 @@ p <- plot_hypothesis_acceptance_grid(df,
   h_greater_col = "pct_H_greater",
   output_dir = "../visualization_results/snaq",
   output_filename = "SNaQ_model_choice.png",
-  plot_title = "SNaQ model choice")
+  plot_title = "") # no title 
 # Display the plot
 print(p)
 ```
@@ -58,41 +59,41 @@ print(p)
 #| fig-height: 6
 
 # Plot H=0 (tree) acceptance percentage by rate variation
-p_h0 <- plot_hypothesis_acceptance_H0_by_rate_variation(
-  df,
-  h0_col = "pct_H0",
-  output_dir = "../visualization_results/snaq",
-  output_filename = "SNaQ_hypothesis_typeIerror_H0.pdf",
-  y_range = c(-1, 6),
-  plot_title = "SNaQ type-I error rate by duplication/loss rate")
+# p_h0 <- plot_hypothesis_acceptance_H0_by_rate_variation(
+#   df,
+#   h0_col = "pct_H0",
+#   output_dir = "../visualization_results/snaq",
+#   output_filename = "SNaQ_hypothesis_typeIerror_H0.pdf",
+#   y_range = c(-1, 6),
+#   plot_title = "SNaQ type-I error rate by duplication/loss rate")
 
-# Display the plot
-print(p_h0)
+# # Display the plot
+# print(p_h0)
 ```
 
 
 ## True Graph Recovery by Duplication/Loss Rate
 ```{r}
-source("../scripts/visual_utilities.R") 
-p_recovery_aggregated <- plot_true_graph_recovery_lines_aggregated(df, 
-  output_dir = "../visualization_results/snaq",
-  y_range = c(60, 102),
-  output_filename = "SNaQ_true_graph_recovery_lines_aggregated.png",
-  plot_title = NULL)
-print(p_recovery_aggregated)
+# source("../scripts/visual_utilities.R") 
+# p_recovery_aggregated <- plot_true_graph_recovery_lines_aggregated(df, 
+#   output_dir = "../visualization_results/snaq",
+#   y_range = c(60, 102),
+#   output_filename = "SNaQ_true_graph_recovery_lines_aggregated.png",
+#   plot_title = NULL)
+# print(p_recovery_aggregated)
 ```
 
 ```{r}
 #| fig-width: 12
 #| fig-height: 6
 # Plot H=1 only recovery rates
-p_h1_only <- plot_true_graph_recovery_H1_only(df,
-  output_dir = "../visualization_results/snaq",
-  output_filename = "SNaQ_true_graph_recovery_H1_only.pdf",
-  plot_title = "SNaQ true graph recovery under H=1")
+# p_h1_only <- plot_true_graph_recovery_H1_only(df,
+#   output_dir = "../visualization_results/snaq",
+#   output_filename = "SNaQ_true_graph_recovery_H1_only.pdf",
+#   plot_title = "SNaQ true graph recovery under H=1")
 
-# Display the plot
-print(p_h1_only)
+# # Display the plot
+# print(p_h1_only)
 ```
 
 
@@ -106,4 +107,19 @@ print(p_h1_only)
 #   output_filename = "SNaQ_true_graph_recovery_lines.pdf")
 # # Display the plot
 # print(p2)
+```
+
+## Taxon Recovery Heatmaps
+
+```{r plot-taxon-recovery-heatmaps}
+#| fig-width: 15
+#| fig-height: 12
+
+# Plot taxon recovery rates by role and parameter setting
+# plot_taxon_recovery_heatmaps(
+#   input_long = "../results/SNaQ_taxon_recovery.csv",
+#   input_dir = "../results",
+#   output_dir = "../visualization_results/snaq",
+#   colormap = "Blues"
+# )
 ``` 

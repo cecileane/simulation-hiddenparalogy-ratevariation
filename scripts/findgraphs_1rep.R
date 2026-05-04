@@ -6,6 +6,10 @@ library(dplyr)
 library(tidyverse)
 library(Rcpp)
 library(igraph)
+# NOTE: requires igraph 1.x (tested with 1.6.0). igraph 2.x broke the API for
+# get.edge.ids() no longer accepts igraph.vs objects. admixtools:::graph_to_pwts
+# passes igraph.vs to get.edge.ids(), so igraph >= 2.0 causes a runtime error.
+# Install with: remotes::install_version('igraph', version='1.6.0')
 
 #===============================================================================
 # phylogenetic graph inference and true tree recovery
@@ -18,7 +22,7 @@ library(igraph)
 # -----------
 # 1. compute f2 statistics from input data
 # 2. run multiple find_graphs() searches across replicates
-# 3. select graphs either by top-n ranking or likelihood threshold (first filter per run)
+# 3. select graphs by top-n ranking or ll threshold (first filter per run)
 # 4. deduplicate topologies via hashing (remove duplicates across all runs)
 # 5. apply second filter using selection method on unique graphs
 # 6. evaluate graphs with qpgraph (likelihood, residuals)
@@ -66,7 +70,7 @@ option_list <- list(
   make_option(c("-b", "--blgsize"), type = "integer", default = 1000,
               help = "Block sizes used in find_graphs"),
   make_option("--maxmiss", type = "numeric", default = 1.0,
-              help = "Maximum fraction of missing data per SNP (default: 1.0, no filtering)"),
+              help = "Max fraction of missing data per SNP (default: 1.0)"),
   make_option(c("-r", "--rep_id"), type = "character",
               help = "Replication ID for printing and result saving"),
   make_option(c("-s", "--seed_file_path"), type = "character",
@@ -132,25 +136,28 @@ if (is.null(num_admix) || is.na(num_admix)) {
 #      -> select graphs within a threshold of the lowest ll score from each run 
 # keep_five_lowest_ll_graphs:
 #      -> keep the five lowest ll graphs from each run 
-if (selection_method == "select_threshold_within_ll" && (is.null(threshold) || threshold <= 0)) {
+if (selection_method == "select_threshold_within_ll" &&
+    (is.null(threshold) || threshold <= 0)) {
   stop("Please provide a valid positive threshold value for graph selection.")
-} else if (selection_method == "select_threshold_within_ll" && !is.null(threshold)) { 
+} else if (selection_method == "select_threshold_within_ll" &&
+    !is.null(threshold)) {
   message(paste0("Select graphs within ", threshold,
   " of the best graph with lowest ll score."))
 } else if (selection_method == "keep_five_lowest_ll_graphs") {
   message("Keep the five lowest ll graphs from each run.") 
 } else if (selection_method == "both") {
   message(paste0("Select graphs within ", threshold,
-  " of the best graph with lowest ll score and keep the five lowest ll graphs from each run."))
+    " of best graph and keep five lowest ll graphs per run."))
 } else {
-  stop("Invalid selection method. Please choose either 'select_threshold_within_ll', 'keep_five_lowest_ll_graphs', or 'both'.")
-} 
+  stop(paste0("Invalid selection method. Choose ",
+    "'select_threshold_within_ll', 'keep_five_lowest_ll_graphs', or 'both'."))
+}
 
 # Debug mode message
 if (debug_mode) {
-  message("DEBUG MODE ENABLED: Individual run results will be saved to separate .rds files")
+  message("DEBUG MODE: Individual run results will be saved to .rds files")
 } else if (selection_method == "both") {
-  message("Individual run results will be saved to separate .rds files for each selection method")
+  message("Individual run results saved to .rds files per selection method")
 }
 
 rootfolder <- opt$rootfolder # set up rootfolder 
@@ -171,8 +178,9 @@ output_graph_f2 <- file.path(output_dir,
   paste0("rep", rep_id, output_f2_suffix))  # nolint
 
 # output_summary_table: the output file for summary table 
-output_summary_table <- file.path(output_dir, 
-  paste0("rep", rep_id, "_admix", num_admix, output_summary_table_suffix)) # nolint
+output_summary_table <- file.path(output_dir,
+  paste0("rep", rep_id, "_admix", num_admix, # nolint
+         output_summary_table_suffix))
 
 #------------ set up seeds --------------#
 # Read the seed array - it should be m x n matrix where:
@@ -216,13 +224,13 @@ cat("===========================\n\n")
 # rep with num_admix = 0 
 if (num_admix == 0) {
   # Only compute f2 when num_admix or k == 0 
-  # maxmiss: maximum fraction of missing data per SNP (default 1.0 = no filtering)
+  # maxmiss: max fraction of missing data per SNP (1.0 = no filtering)
   # adjust_pseudohaploid: TRUE for haploid/phylogenetic VCF with missing data
   # blgsize: block size for jackknife (use command-line parameter value)
   f2 <- f2_from_geno(pref = input_prefix,
                     adjust_pseudohaploid = TRUE,
                     blgsize = blgsize,
-                    remove_na = FALSE # no missing data so this is a safty check 
+                    remove_na = FALSE # safety check: no missing data
                     )
                     
   # check the dimension of f2 --> number of blocks left after filtering: 
@@ -231,7 +239,7 @@ if (num_admix == 0) {
   saveRDS(f2, file = output_graph_f2)
 } else {
   # For num_admix > 0, 
-  # load pre-computed f2 statistics from the corresponding rep with num_admix = 0
+  # load pre-computed f2 from the corresponding rep with num_admix = 0
   f2_file_for_admix <- file.path(output_dir, 
     paste0("rep", rep_id, output_f2_suffix))  # nolint
   if (!file.exists(f2_file_for_admix)) {
@@ -252,7 +260,8 @@ if (num_admix == 0) {
 cat("Tree topology:", true_tree_newick, "\n")
 
 # Check if the string is valid before proceeding
-if (is.null(true_tree_newick) || length(true_tree_newick) == 0 || true_tree_newick == "" || nchar(true_tree_newick) == 0) {
+if (is.null(true_tree_newick) || length(true_tree_newick) == 0 ||
+    true_tree_newick == "" || nchar(true_tree_newick) == 0) {
   stop("true_tree_newick is null, empty, or invalid")
 }
 
@@ -293,8 +302,8 @@ cat("True species tree hash:", true_tree_hash, "\n")
 #' result[["run1"]][[1]]$score  # Get its score
 
 # Helper function to generate method-specific summary table filename
-get_summary_table_filename <- function(output_dir, rep_id, num_admix, 
-                                      method_name, output_summary_table_suffix) {
+get_summary_table_filename <- function(output_dir, rep_id, num_admix,
+    method_name, output_summary_table_suffix) {
   # Parse the suffix to insert method name before file extension
   if (grepl("\\.", output_summary_table_suffix)) {
     # Split at the last dot to separate name and extension
@@ -327,7 +336,8 @@ run_find_graphs_replicate <- function(f2,
   select_top5_graphs <- function(opt_results, run_id) {
     Top5_graphs_per_run <- opt_results %>% 
                   dplyr::slice_min(score, n = 5, with_ties = TRUE) 
-    top5_graphs_list_per_run <- lapply(1:nrow(Top5_graphs_per_run), function(j) {
+    top5_graphs_list_per_run <- lapply(
+        1:nrow(Top5_graphs_per_run), function(j) {
           list(graph = Top5_graphs_per_run$graph[[j]], 
               edges = Top5_graphs_per_run$edges[[j]],
               score = Top5_graphs_per_run$score[j],
@@ -363,7 +373,7 @@ run_find_graphs_replicate <- function(f2,
         paste0("rep", rep_id, "_admix", num_admix, "_", 
                     method_name, "_run", run_id, ".rds"))
       saveRDS(graph_list, file = debug_filename)
-      cat("DEBUG: Saved run", run_id, method_name, "results to:", debug_filename, "\n")
+      cat("DEBUG: Saved run", run_id, method_name, "to:", debug_filename, "\n")
     }
   }
 
@@ -390,8 +400,8 @@ run_find_graphs_replicate <- function(f2,
       
       # Debug mode: Save individual run results
       if (debug_mode) {
-        save_debug_results(top5_graphs_list_per_run, "keep_five_lowest_ll_graphs", 
-                          i, rep_id, num_admix, output_dir)
+        save_debug_results(top5_graphs_list_per_run,
+          "keep_five_lowest_ll_graphs", i, rep_id, num_admix, output_dir)
       }
 
     } else if (selection_method == "select_threshold_within_ll") {
@@ -422,14 +432,16 @@ run_find_graphs_replicate <- function(f2,
       # For backward compatibility, use top5 as the main list for graph_lst
       graph_lst[[paste0("run", i)]] <- top5_graphs_list_per_run
       
-      # Debug mode: Save individual run results for both methods (always enabled for "both")
-      save_debug_results(top5_graphs_list_per_run, "keep_five_lowest_ll_graphs", 
-                        i, rep_id, num_admix, output_dir)
+      # Always save per-run results for both methods
+      save_debug_results(top5_graphs_list_per_run,
+        "keep_five_lowest_ll_graphs", i, rep_id, num_admix, output_dir)
       save_debug_results(selected_graphs_list, "select_threshold_within_ll", 
                         i, rep_id, num_admix, output_dir)
 
     } else { # This is checked before but just in case 
-      stop("Invalid selection method. Please choose 'select_threshold_within_ll', 'keep_five_lowest_ll_graphs', or 'both'.")
+      stop(paste0("Invalid selection method. Choose ",
+        "'select_threshold_within_ll',",
+        " 'keep_five_lowest_ll_graphs', or 'both'."))
     }
   }
   
@@ -488,21 +500,24 @@ add_hashes_to_graph_lst <- function(graph_lst) {
 
 #' Apply second filter after removing duplicates
 #'
-#' After removing duplicate graphs, apply the selection method (threshold or top-5)
-#' to further filter the unique graphs based on their scores.
+#' After deduplication, apply selection method (threshold or top-5) to
+#' further filter unique graphs based on scores.
 #'
 #' @param unique_graphs A list of unique graphs after deduplication
-#' @param selection_method Character. Method to select graphs ("select_threshold_within_ll", "keep_five_lowest_ll_graphs", or "both")
-#' @param threshold Numeric. Threshold for graph selection (used with "select_threshold_within_ll")
+#' @param selection_method Character. "select_threshold_within_ll",
+#'   "keep_five_lowest_ll_graphs", or "both"
+#' @param threshold Numeric. Used with "select_threshold_within_ll"
 #'
 #' @return Filtered list of graphs based on the selection method
-apply_second_filter <- function(unique_graphs, selection_method, threshold = NULL) {
+apply_second_filter <- function(unique_graphs, selection_method,
+    threshold = NULL) {
   if (length(unique_graphs) == 0) {
     cat("No graphs to filter - returning empty list\n")
     return(unique_graphs)
   }
   
-  cat("Applying second filter:", selection_method, "to", length(unique_graphs), "unique graphs\n")
+  cat("Applying second filter:", selection_method,
+      "to", length(unique_graphs), "unique graphs\n")
   
   # Extract scores and sort graphs by score
   scores <- sapply(unique_graphs, function(g) g$score)
@@ -523,13 +538,15 @@ apply_second_filter <- function(unique_graphs, selection_method, threshold = NUL
     min_score <- min(scores)
     threshold_score <- min_score + threshold
     selected_indices <- which(scores <= threshold_score)
-    cat("Keeping", length(selected_indices), "graphs within threshold", threshold, 
-        "of best score", min_score, "(threshold score:", threshold_score, ")\n")
+    cat("Keeping", length(selected_indices), "graphs within threshold",
+        threshold, "of best score", min_score,
+        "(threshold score:", threshold_score, ")\n")
     return(unique_graphs[selected_indices])
     
   } else {
     # For "both" or other methods, return all unique graphs
-    cat("No additional filtering applied - keeping all", length(unique_graphs), "graphs\n")
+    cat("No additional filtering - keeping all",
+        length(unique_graphs), "graphs\n")
     return(unique_graphs)
   }
 }
@@ -617,7 +634,8 @@ run_qpgraph <- function(unique_graphs,
   true_tree_result <- NULL
   if (!is.null(true_tree_graph)) {
     cat("Processing true species tree...\n")
-    true_tree_qpgraph_result <- qpgraph(f2, true_tree_graph, return_fstats = TRUE)
+    true_tree_qpgraph_result <- qpgraph(f2, true_tree_graph,
+      return_fstats = TRUE)
     true_tree_wr <- true_tree_qpgraph_result$worst_residual
     true_tree_WR_smaller_than_3 <- true_tree_wr <= 3
     score <- true_tree_qpgraph_result$score
@@ -629,11 +647,14 @@ run_qpgraph <- function(unique_graphs,
     cat("True tree qpgraph result structure:\n")
     str(true_tree_qpgraph_result)
     if (!is.null(true_tree_qpgraph_result$f2)) {
-      cat("True tree F2 fitted range:", range(true_tree_qpgraph_result$f2$fit, na.rm = TRUE), "\n")
+      f2fit <- range(true_tree_qpgraph_result$f2$fit, na.rm = TRUE)
+      cat("True tree F2 fitted range:", f2fit, "\n")
     }
     if (!is.null(true_tree_qpgraph_result$f4)) {
-      cat("True tree F4 fitted range:", range(true_tree_qpgraph_result$f4$fit, na.rm = TRUE), "\n")
-      cat("True tree F4 diff range:", range(true_tree_qpgraph_result$f4$diff, na.rm = TRUE), "\n")
+      f4fit <- range(true_tree_qpgraph_result$f4$fit, na.rm = TRUE)
+      f4diff <- range(true_tree_qpgraph_result$f4$diff, na.rm = TRUE)
+      cat("True tree F4 fitted range:", f4fit, "\n")
+      cat("True tree F4 diff range:", f4diff, "\n")
     }
     cat("=====================================\n")
 
@@ -643,7 +664,8 @@ run_qpgraph <- function(unique_graphs,
       score = score,  # Changed from ll_score to score
       worst_residual = true_tree_wr,
       WR_smaller_than_3 = true_tree_WR_smaller_than_3,
-      hash = if (!is.null(true_tree_hash)) true_tree_hash else graph_hash(true_tree_graph),
+      hash = if (!is.null(true_tree_hash)) true_tree_hash
+             else graph_hash(true_tree_graph),
       true_tree_or_not = TRUE,  # The true tree matches itself
       gamma1 = NA,  # True tree doesn't have admixture, so gamma values are NA
       gamma2 = NA,
@@ -680,7 +702,8 @@ run_qpgraph <- function(unique_graphs,
       score <- graph_info$score
       rank <- graph_info$rank
       run_id <- graph_info$run_id
-      hash_val <- if ("hash" %in% names(graph_info)) graph_info$hash else graph_hash(graph)
+      hash_val <- if ("hash" %in% names(graph_info)) graph_info$hash
+                 else graph_hash(graph)
 
       result <- qpgraph(f2, graph, return_fstats = TRUE)
       wr <- result$worst_residual # returns abs(wr)
@@ -688,7 +711,7 @@ run_qpgraph <- function(unique_graphs,
       unique_graphs[[i]] <- graph_info # update unique graphs
 
       # Debug: Print detailed information for each graph
-      cat("Graph", i, "- Worst residual:", wr, "- Score:", score, "- Hash:", hash_val, "\n")
+      cat("Graph", i, "- WR:", wr, "- Score:", score, "- Hash:", hash_val, "\n")
       
       # Additional debug info for first few graphs
       if (i <= 3) {
@@ -706,7 +729,7 @@ run_qpgraph <- function(unique_graphs,
 
       WR_smaller_than_3 <- wr <= 3
 
-      # Check if this graph matches the true tree hash (only relevant when true_tree_hash is provided)
+      # Check if this graph matches true tree hash
       is_true_tree <- if (!is.null(true_tree_hash)) {
         hash_val == true_tree_hash
       } else {
@@ -724,7 +747,8 @@ run_qpgraph <- function(unique_graphs,
           admix_edges <- edges_df[edges_df$type == "admix", ]
           if (nrow(admix_edges) >= 1) {
             # Get gamma values from high and low columns, excluding NA values
-            if ("high" %in% names(admix_edges) && "low" %in% names(admix_edges)) {
+            if ("high" %in% names(admix_edges) &&
+                "low" %in% names(admix_edges)) {
               # Extract all non-NA values from high and low columns
               high_values <- admix_edges$high[!is.na(admix_edges$high)]
               low_values <- admix_edges$low[!is.na(admix_edges$low)]
@@ -842,21 +866,25 @@ run_qpgraph_for_graphs <- function(unique_graphs, method_suffix = "") {
 
 #-------------- Two-stage graph filtering --------------#
 # Stage 1: Remove duplicate graphs based on hash
-# Stage 2: Apply selection method (threshold or top-5) to remaining unique graphs
+# Stage 2: Apply selection method to remaining unique graphs
 
 # Handle different return types based on selection method
 if (selection_method == "both") {
-  # For "both" method, use the combined graph list and apply both filters after deduplication
+  # For "both": use combined graph list, apply both filters after dedup
   combined_graph_lst <- graph_lst$main
   unique_graphs_all <- remove_duplicate_graphs(combined_graph_lst, rootfolder)
   
   # Apply second filter with each method
-  unique_graphs_method1 <- apply_second_filter(unique_graphs_all, "keep_five_lowest_ll_graphs")
-  unique_graphs_method2 <- apply_second_filter(unique_graphs_all, "select_threshold_within_ll", threshold)
-  
+  unique_graphs_method1 <- apply_second_filter(
+    unique_graphs_all, "keep_five_lowest_ll_graphs")
+  unique_graphs_method2 <- apply_second_filter(
+    unique_graphs_all, "select_threshold_within_ll", threshold)
+
   # Generate summary tables for both methods
-  unique_graph_with_residual_method1 <- run_qpgraph_for_graphs(unique_graphs_method1, "keep_five_lowest_ll_graphs")
-  unique_graph_with_residual_method2 <- run_qpgraph_for_graphs(unique_graphs_method2, "select_threshold_within_ll")
+  unique_graph_with_residual_method1 <- run_qpgraph_for_graphs(
+    unique_graphs_method1, "keep_five_lowest_ll_graphs")
+  unique_graph_with_residual_method2 <- run_qpgraph_for_graphs(
+    unique_graphs_method2, "select_threshold_within_ll")
   
   # Use method1 results for the rest of the analysis (backward compatibility)
   unique_graphs <- unique_graphs_method1
@@ -865,7 +893,8 @@ if (selection_method == "both") {
 } else {
   # Handle single method case: remove duplicates first, then apply second filter
   unique_graphs_all <- remove_duplicate_graphs(graph_lst, rootfolder)
-  unique_graphs <- apply_second_filter(unique_graphs_all, selection_method, threshold)
+  unique_graphs <- apply_second_filter(unique_graphs_all,
+    selection_method, threshold)
   
   # Run qpgraph analysis
   unique_graph_with_residual <- run_qpgraph_for_graphs(unique_graphs)
@@ -898,7 +927,8 @@ if (num_admix == 0) {
   if (true_tree_found) {
     matching_indices <- which(discovered_hashes == true_tree_hash)
     cat("\n*** Oh yay! True species tree was found! ***\n")
-    cat("True tree hash", true_tree_hash, "matches graph(s):", paste(matching_indices, collapse = ", "), "\n")
+    cat("True tree hash", true_tree_hash, "matches graph(s):",
+        paste(matching_indices, collapse = ", "), "\n")
     
     # Print details of matching graphs
     for (idx in matching_indices) {
@@ -913,7 +943,8 @@ if (num_admix == 0) {
     }
   } else {
     cat("\n*** Oh no! True species tree was NOT found ***\n")
-    cat("True tree hash", true_tree_hash, "does not match any discovered graphs\n")
+    cat("True tree hash", true_tree_hash,
+        "does not match any discovered graphs\n")
   }
 }
 

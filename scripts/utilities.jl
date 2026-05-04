@@ -1,91 +1,47 @@
-#= Script to store utility functions 
-The below script has four parts 
+#= Utility functions shared across all pipeline scripts.
 
-Part 0 --> Logging helper functions for distributed computation
-    F1: "worker_println" 
-        -> Print to stdout and log file if logging is enabled
-    F2: "open_worker_log" 
-        -> Open worker-specific log file
-    F3: "close_worker_log" 
-        -> Close worker-specific log file
+Part 0 -- Logging helpers for distributed workers
+    worker_println  -> println that also writes to worker log file
+    open_worker_log -> open per-worker log at start of parallel job
+    close_worker_log -> close per-worker log at end of parallel job
 
-Part 1 --> A group of functions to modify gene tree output from SimPhy
-    F1: "replace_taxa_name" 
-        -> Count and modify one tree tip given Char and newick 
-    F2: "count_missing" 
-        -> Count # missing taxa in the given newick and modify 
-        all tree tips (conditions seen below)
-    F3: "modify_newicks" 
-        -> write modified newicks (condtions seen below)
-    F4: "modify_newick_for_n_genes" 
-        -> run "modify_newicks" for n times and output the files with given prefix 
+Part 1 -- Gene tree cleanup after SimPhy
+    replace_taxa_name      -> rename one tip given species char + newick
+    count_missing          -> count missing/duplicate taxa in a newick
+    modify_newicks         -> filter and simplify a gene tree file
+    modify_newick_for_n_genes -> run modify_newicks across n gene files
 
-Part 2 --> A group of helper functions to re-run simphy simulation and modify newicks
- PS:       seen details in scripts/speciestree_iqtree.jl 
-    F1: “seed_generator” 
-        -> generate N x M arrays with random seeds given a master seed 
-    F2: "calculate_batch" 
-        -> Estimate batch size for simulating gene trees in the next iterations 
+Part 2 -- Simulation control helpers
+    seed_generator   -> build N x M seed arrays from a master seed
+    calculate_batch  -> estimate how many SimPhy iters remain
 
-Part 3 --> Other utilities functions 
-    F1: "pad_number" 
-        -> convert a given Int to a string to meet the output from Simphy
-    F2: "check_existing_dir" 
-        -> check if a path exists and then decide to remove the path or not
-    F3: "replace_tips_with_letters" 
-        -> Replace text tips with letters to both strings and Network/tree 
-        seen scripts/speciestree.jl 
-    F4: "replace_pop_inInd_files" 
-        -> Replace "POP" from the output ind file to make each sample is 
-        mapped to a unique population ID
-    F5: "generate_software_seeds" 
-        -> Generate a dictionary of stable random seeds for each software 
-        name using a given master seed.
-    F6: "generate_master_seed" 
-        -> Generate a master seed based on given parameter values.
-    F7: "get_dict_for_seed_setting" 
-        -> Get a dictionary for setting up the master seed based on the 
-        string "paramname_root"
-    F8: "median_branch_length" 
-        -> Compute the median branch length of a phylogenetic tree or network.
-    F9: "transform_newick_no_lineage_tree" 
-        -> Transform a Newick tree string by scaling branch lengths based on 
-        a given pattern and effective population size (Ne). 
-    F10: "transform_newick_with_lineage_tree" 
-        -> Transform a Newick tree string by scaling branch lengths based on 
-        lineage tree data.
-    F11: "add_outgroup_to_newick" 
-        -> Add an outgroup branch to a Newick tree string. 
-    F12: "prune_tip_from_newick" 
-        -> Remove a specific tip from a Newick tree string. 
-    F13: "totallength" 
-        -> Calculate the total branch length of a phylogenetic tree or network.  
-    F14: "hasrep" 
-        -> Check if a Newick string has repeated taxa. 
-        This helper function is retrieved from SNaQ.jl documentation 
-            https://juliaphylo.github.io/SNaQ.jl/dev/man/multiplealleles/ 
-    F15: "set_up_paramname_root"
-        -> Set up the string "paramname_root" based on given parameter values.
-        # Super important for almost all scripts in this project 
-    F16: "scale_branch_lengths"
-        -> Scale the branch lengths of a Newick tree string by a given factor.
-        # Used in scripts/simulation.jl
-=# 
-using PhyloNetworks # Used in "replace_tips_with_letters" to get trees and networks 
-using StatsBase # Use the countmap function to find duplicated items
-using StableRNGs # Used to generate stanble random seeds that won't change between julia versions
-using Primes # use "nextprimes()" function to get the next prime bigger than a number 
+Part 3 -- General utilities
+    pad_number             -> zero-padded string matching SimPhy output
+    check_existing_dir     -> interactive prompt to clear output dirs
+    replace_tips_with_letters -> convert species names to letters
+    replace_pop_inInd_file -> assign unique pop IDs in .ind files
+    generate_software_seeds -> per-software seeds from master seed
+    generate_master_seed   -> deterministic seed from param dict
+    get_dict_for_seed_setting -> extract seed params from name string
+    totallength            -> sum all branch lengths in a tree/network
+    hasrep                 -> detect repeated taxa in a newick string
+    set_up_paramname_root  -> build the canonical param name string
 
-using PhyloNetworks 
-using StatsBase 
-using StableRNGs 
-using Primes 
+Part 4 -- Summary statistics
+    parse_parameter_setting      -> parse param name string to dict
+    summarize_gamma_by_threshold -> gamma stats grouped by parameter
+    summarize_WR_by_threshold    -> WR stats grouped by parameter
+=#
+using PhyloNetworks
+using StatsBase
+using StableRNGs
+using Primes
 using Statistics
-using Printf 
-using InlineStrings # use String3 
-using IterTools # produce cartesian product of multiple vectors 
-using Glob 
-using Distributions 
+using Printf
+using InlineStrings
+using IterTools
+using Glob
+using Distributions
 
 #-----------------------------------------------#       
 #               Part 0  
@@ -94,30 +50,17 @@ using Distributions
 """
     worker_println(args...)
 
-Print to stdout and flush immediately. If logging is enabled (via global 
-`log_output` flag and `worker_logfile`), also write to the worker-specific 
-log file.
+Print to stdout and flush. If logging is enabled, also write to the
+worker-specific log file.
 
-This function is designed for use in distributed worker processes to ensure
-output is visible and logged.
-
-# Arguments
-- `args...`: Arguments to pass to println
-
-# Notes
-- Requires global variables: `log_output` (Bool) and `worker_logfile` (IOStream or nothing)
-- Silently fails if log write fails to prevent interrupting the main computation
-
-# Examples
-```julia
-worker_println("Rep1 Iter5: Processing...")
-worker_println("Status: ", 10, " trees generated")
-```
+Globals needed: `log_output` (Bool), `worker_logfile` (IOStream or nothing).
 """
 function worker_println(args...)
     println(args...)
     flush(stdout)
-    if @isdefined(log_output) && log_output && @isdefined(worker_logfile) && worker_logfile !== nothing
+    log_active = @isdefined(log_output) && log_output
+    file_open  = @isdefined(worker_logfile) && worker_logfile !== nothing
+    if log_active && file_open
         try
             println(worker_logfile, args...)
             flush(worker_logfile)
@@ -130,26 +73,16 @@ end
 """
     open_worker_log()
 
-Open a worker-specific log file for the current worker process.
-Creates a log file named `screen_<paramname>_worker<id>.log` in the output folder.
+Open `screen_<paramname>_worker<id>.log` in `outfolder`.
+Call at the start of each distributed worker.
 
-This function should be called at the start of distributed computation when 
-logging is enabled.
-
-# Notes
-- Requires global variables: `log_output`, `outfolder`, `paramname_root`
-- Uses `myid()` to create unique log files per worker
-- Warns but does not fail if log file cannot be opened
-
-# Examples
-```julia
-@everywhere open_worker_log()
-```
+Globals needed: `log_output`, `outfolder`, `paramname_root`.
 """
 function open_worker_log()
     if @isdefined(log_output) && log_output
         try
-            log_filename = joinpath(outfolder, "screen_$(paramname_root)_worker$(myid()).log")
+            log_filename = joinpath(outfolder,
+                "screen_$(paramname_root)_worker$(myid()).log")
             global worker_logfile = open(log_filename, "w")
             println(worker_logfile, "=== Worker $(myid()) Log Started ===")
             flush(worker_logfile)
@@ -162,19 +95,8 @@ end
 """
     close_worker_log()
 
-Close the worker-specific log file for the current worker process.
-
-This function should be called at the end of distributed computation when 
-logging is enabled.
-
-# Notes
-- Requires global variable: `worker_logfile`
-- Silently fails if close operation fails
-
-# Examples
-```julia
-@everywhere close_worker_log()
-```
+Close the worker log file opened by `open_worker_log()`.
+Call at the end of each distributed worker. Silent on failure.
 """
 function close_worker_log()
     if @isdefined(worker_logfile) && worker_logfile !== nothing
@@ -196,43 +118,13 @@ end
 """
     replace_taxa_name(taxon::Char, newick::String)
 
-Input:
-- `char`: target character to search for in tip labels.
-- `tree_str`: newick tree string containing tip labels in the format `char_x_y`.
+Count and optionally rename tips for one species in a SimPhy newick.
+Tips are labelled `char_locusID_accessionID`; this strips the locusID.
 
-Output: Tuple (count, modified_tree):
-- `count`: number of occurrences of `char` in the tree.
-- `modified_tree`: the newick string, modified if applicable.
-   * If tip appears in the string only once, then the tree is modified.
-   * If tip appears in the string 0 or more than once, then tree is not modified.
-
-Examples: 
-
-Case 1: the character appears in the string for only once
-```julia
-julia> replace_taxa_name('A', "(A_0_1:0.01,(((B_0_1:0.004,C_1_1:0.003):0.007,(D_1_0:0.02,E_0_1:0.02):0.01)));")
-(1, "(A_1:0.01,(((B_0_1:0.004,C_1_1:0.003):0.007,(D_1_0:0.02,E_0_1:0.02):0.01)));")
-```
-
-Case 2: the character appears in the string for 0 time
-```julia
-julia> replace_taxa_name('F', "(A_0_1:0.01,(((B_0_1:0.004,C_1_1:0.003):0.007,(D_1_0:0.02,E_0_1:0.02):0.01)));")
-(0, "(A_0_1:0.01,(((B_0_1:0.004,C_1_1:0.003):0.007,(D_1_0:0.02,E_0_1:0.02):0.01)));")
-```
-
-Case 3: the character appears in the string >= 2 times:
-```julia
-julia> replace_taxa_name('A', "(A_0_1:0.01,(((B_0_1:0.004,C_1_1:0.003):0.007,(A_1_0:0.02,A_2_1:0.02):0.01)));")
-(2, "(A_0_1:0.01,(((B_0_1:0.004,C_1_1:0.003):0.007,(A_1_0:0.02,A_2_1:0.02):0.01)));")
-```
-
-Case 4: Similar to above, the character appears in the string >= 2 times,
-but the there are different individuals from the same species:
-```julia
-julia> replace_taxa_name('A', "(A_0_1:0.01,(((B_0_1:0.004,C_1_1:0.003):0.007,(A_0_0:0.02,A_0_2:0.02):0.01)));")
-(1, "(A_1:0.01,(((B_0_1:0.004,C_1_1:0.003):0.007,(A_0:0.02,A_2:0.02):0.01)));")
-```
-becase all three As are the same gene copies from different accessions. 
+Returns `(count, modified_newick)`:
+- count == 0: species absent, newick unchanged.
+- count == 1: one unique copy, locus ID stripped.
+- count >= 2: duplicated gene copy, newick unchanged.
 """
 function replace_taxa_name(taxon::Char, newick::String)
     tre = readnewick(newick)
@@ -251,12 +143,9 @@ function replace_taxa_name(taxon::Char, newick::String)
     tip_list = [replace(tip, regex => s"\1_\2") for tip in matching_tips]
     counts = values(countmap(tip_list)) 
     num = isempty(counts) ? 0 : maximum(counts) 
-    # The above code makes sure that it only takes the maximum. 
-    # Thus, if one individual has more than one copies, 
-    # the tree will be discarded later. If the char is not in the string, num = 0 
-   
-
-    if num == 0 || num >= 2 # If # of taxons >= 2 and == 0, no change to the tips: 
+    # max copies of this taxon across accessions;
+    # 0 = absent, >=2 = duplicated gene (non-hidden paralogy)
+    if num == 0 || num >= 2
         return (num, newick)
     else # If # of taxons == 1, remove locus ID from the tip 
         modified_newick = replace(newick, regex => s"\1_\2") 
@@ -267,30 +156,10 @@ end
 """
     count_missing(newick::String)
 
-Check a Newick tree string for missing or duplicate taxa.
-
-Each taxon label must follow the format `char_x_y`, where `char` is a species code 
-from "A" to "H".  
-The function identifies missing species and simplifies taxon labels to `char_index`.
-
-Returns a tuple `(missing_count, modified_tree)` if all gene copies are unique.  
-Returns `nothing` if any gene copy is duplicated.
-
-# Arguments
-- `newick::String`: A Newick-formatted tree with taxa in the format `char_x_y`.
-
-# Returns
-- `Tuple{Int, String}`: Num of missing taxa and the simplified Newick, if valid.
-- `nothing`: If any taxon appears more than once with the same gene copy.
-
-# Examples
-```julia-repl
-julia> count_missing("(A_0_1:0.01,(((B_0_1:0.004,C_1_1:0.003):0.007,(D_1_0:0.02,E_0_1:0.02):0.01)));")
-(3, "(A_1:0.01,(((B_1:0.004,C_1:0.003):0.007,(D_0:0.02,E_1:0.02):0.01)));")
-
-julia> count_missing("(F_0_1:0.8,(A_0_1:0.01,((A_1_1:0.004,C_1_1:0.003):0.007,(D_1_0:0.02,E_0_1:0.02):0.01)));")
-nothing
-```
+Check a SimPhy newick (taxa A–H, format `char_x_y`) for missing or
+duplicate gene copies. Returns `(n_missing, simplified_newick)` if all
+copies are unique, or `nothing` if any taxon is duplicated (paralogy not
+hidden).
 """
 function count_missing(newick::String)
     taxa = "ABCDEFGH"  # Species tree only have those taxa (8 species)
@@ -305,41 +174,18 @@ function count_missing(newick::String)
             num_missing += 1
         end
     end
-    return (num_missing, nwk) # Return (number of missing, modified newick string) 
+    return (num_missing, nwk)
 end
 
 """
     modify_newicks(input::String, output::String) -> Tuple{Int, Int}
 
-Process a file of Newick trees to exclude trees with repeated taxa or excessive missing taxa,
-and write the simplified valid trees to an output file.
+Filter and simplify gene trees from a SimPhy output file.
+Trees with duplicated gene copies or more than `max_taxa_missing`
+absent taxa are dropped. Valid trees have tip labels simplified
+from `A_locusID_accessionID` to `A_accessionID`.
 
-Each tree is checked for two conditions:
-- If it contains repeated gene copies (i.e. paralogy is not hidden), it is excluded.
-- If more than four of the eight expected taxa (A–H) are missing, it is excluded.
-
-Trees that pass both checks are modified by simplifying tip labels from the format
-`A_locusID_accessionID` to `A_accessionID`, and are written to the output file.
-
-# Arguments
-- `input::String`: Path to the input file containing Newick trees (one per line).
-- `output::String`: Path to the output file for valid and simplified Newick trees.
-
-# Returns
-- `Tuple{Int, Int}`: Number of excluded trees due to:
-    1. Repeated taxa (non-hidden paralogy),
-    2. Too many missing taxa.
-
-# Notes
-- If no hidden paralogy is simulated (`dup_rate = 0`, `loss_rate = 0`),
-  no trees are excluded for duplicates.
-- Valid trees will always be simplified even when no trees are excluded.
-
-# Examples
-```julia-repl
-julia> modify_newicks("simphy_output.txt", "cleaned_output.txt")
-(5, 12)  # 5 trees excluded due to repeated taxa, 12 due to too many missing
-```
+Returns `(n_repeated, n_missing)` — counts of excluded trees.
 """
 function modify_newicks(input::String, output::String, 
                         intermediate_file_mapsl::String, 
@@ -352,10 +198,8 @@ function modify_newicks(input::String, output::String,
         return (0, 0)
     end
     
-    # Read the entire file content atomically before any processing
-    # This prevents file system race conditions on network file systems (like AFS)
-    # where file operations can have delays between open/read/close
-    # Note: SimPhy gene tree files contain a single Newick string per file
+    # Read atomically to avoid AFS race conditions where open/read/close
+    # can interleave with concurrent writes. Each SimPhy file = one newick.
     nwk = try
         # Read entire file, remove whitespace, convert to String
         content = read(input, String)
@@ -378,77 +222,43 @@ function modify_newicks(input::String, output::String,
     temp = try
         count_missing(nwk)
     catch e
-        @error "Failed to process tree in $input" exception=(e, catch_backtrace())
+        @error "Failed to process tree in $input" exception=(e,
+            catch_backtrace())
         return (0, 0)
     end
-    
+
+    # helper to remove a file if it exists, with a warning on failure
+    function try_rm(path)
+        isempty(path) && return
+        try
+            isfile(path) && rm(path; force=true)
+        catch e
+            @warn "Failed to remove $path" exception=(e, catch_backtrace())
+        end
+    end
+
     if isnothing(temp)
         # Tree has repeated taxa - invalid
         println("The input $input has repeated taxa")
 
-        # Remove intermediate mapping files if the tree is invalid 
-        # Note: These files may not exist depending on dup_rate/loss_rate settings
         if !debug_mode
-            try
-                if !isempty(intermediate_file_mapsl) && isfile(intermediate_file_mapsl)
-                    rm(intermediate_file_mapsl; force=true)
-                end
-            catch e
-                @warn "Failed to remove $intermediate_file_mapsl" exception=(e, catch_backtrace())
-            end
-
-            try
-                if !isempty(intermediate_file_maplg) && isfile(intermediate_file_maplg)
-                    rm(intermediate_file_maplg; force=true)
-                end
-            catch e
-                @warn "Failed to remove $intermediate_file_maplg" exception=(e, catch_backtrace())
-            end
-
-            # Remove the tree file if it is invalid
-            try
-                if !isempty(input) && isfile(input)
-                    rm(input; force=true)
-                end
-            catch e
-                @warn "Failed to remove $input" exception=(e, catch_backtrace())
-            end 
+            try_rm(intermediate_file_mapsl)
+            try_rm(intermediate_file_maplg)
+            try_rm(input)
         else
             println("  DEBUG: Keeping intermediate files and tree for analysis")
         end
 
         tree_repeated_taxa = 1
-        
-    elseif temp[1] > max_taxa_missing 
-        # Tree has too many missing taxa - invalid
-        println("""The input $input has too many taxa missing (temp[1]=$(temp[1]), max_taxa_missing=$max_taxa_missing)""")
 
-        # Remove intermediate mapping files if the tree is invalid
+    elseif temp[1] > max_taxa_missing
+        println("The input $input has too many taxa missing " *
+            "(missing=$(temp[1]), max=$max_taxa_missing)")
+
         if !debug_mode
-            try
-                if !isempty(intermediate_file_mapsl) && isfile(intermediate_file_mapsl)
-                    rm(intermediate_file_mapsl; force=true)
-                end
-            catch e
-                @warn "Failed to remove $intermediate_file_mapsl" exception=(e, catch_backtrace())
-            end
-            
-            try
-                if !isempty(intermediate_file_maplg) && isfile(intermediate_file_maplg)
-                    rm(intermediate_file_maplg; force=true)
-                end
-            catch e
-                @warn "Failed to remove $intermediate_file_maplg" exception=(e, catch_backtrace())
-            end
-            
-            # Remove the tree file if it is invalid
-            try
-                if !isempty(input) && isfile(input)
-                    rm(input; force=true)
-                end
-            catch e
-                @warn "Failed to remove $input" exception=(e, catch_backtrace())
-            end
+            try_rm(intermediate_file_mapsl)
+            try_rm(intermediate_file_maplg)
+            try_rm(input)
         else
             println("  DEBUG: Keeping intermediate files and tree for analysis")
             println("  DEBUG: Tree content: $nwk")
@@ -465,7 +275,7 @@ function modify_newicks(input::String, output::String,
                 write(io, modified_tree * "\n")
             end
         catch e
-            @warn "Failed to write output $output" exception=(e, catch_backtrace())
+            @warn "Failed to write $output" exception=(e, catch_backtrace())
         end
     end
     
@@ -475,37 +285,13 @@ end
 
 
 """
-    modify_newick_for_n_genes(input::String, output::String, n::Int, iteration::Int) 
-        -> Tuple{Int, Int}
+    modify_newick_for_n_genes(input, output, n, iteration) -> Tuple{Int, Int}
 
-Run `modify_newicks` across multiple gene tree files for a given replicate and iteration.
+Run `modify_newicks` across `n` gene tree files from one SimPhy replicate.
+Input files: `g_trees{GENEID}.trees` (zero-padded IDs).
+Output files: `g_trees_noLocusID_Gene{GENEID}_Int{iteration}.trees`.
 
-This function processes `n` gene tree files, renaming valid trees and writing them 
-to the specified output directory. It filters out trees with:
-- repeated taxa (non-hidden paralogy),
-- fewer than 4 remaining taxa (i.e., more than 4 missing from the set A–H).
-
-# Arguments
-- `input::String`: Input directory containing original Newick gene tree files.
-- `output::String`: Output directory where modified trees will be written.
-- `n::Int`: Number of gene tree files to process.
-- `iteration::Int`: Replicate or iteration index (used in output file naming).
-
-# Returns
-- `Tuple{Int, Int}`: Total number of excluded trees due to:
-    1. Repeated taxa (non-hidden paralogy),
-    2. Too many missing taxa.
-
-# Notes
-Each gene tree file is expected to be named `g_trees{GENEID}.trees`, where 
-`GENEID` is zero-padded to match the total number `n`. Output files are named 
-using the pattern:
-    `g_trees_noLocusID_Gene{GENEID}_Int{iteration}.trees`.
-
-# Examples
-```julia-repl
-julia> modify_newick_for_n_genes("input_dir", "output_dir", 100, 1)
-(8, 21)  # 8 trees removed for repeated taxa, 21 for missing taxa
+Returns `(n_repeated, n_missing)` totalled across all genes.
 ```
 """
 function modify_newick_for_n_genes(input::String, 
@@ -518,22 +304,18 @@ function modify_newick_for_n_genes(input::String,
                                 debug_mode::Bool=false
                                 )
     
-    # report the number of trees with repeated taxa and insufficient taxa 
-    # Those trees are removed from the dataset 
-    tree_repeated_taxa_tot = 0 
-    tree_insufficient_taxa_tot = 0 
+    # counts of filtered trees (removed from dataset)
+    tree_repeated_taxa_tot = 0
+    tree_insufficient_taxa_tot = 0
 
-    # Below are statistics that are trees kept for downstream analysis 
-    # Report the number of trees experiencing gene loss and gene duplication
+    # counts of kept trees by event type
     num_trees_experiencing_gene_duplication_and_loss = 0
-    # num of trees only experiencing gene loss but no gene duplication
     num_trees_experiencing_gene_loss_only = 0
-    # num of trees experiencing nothing (i.e. no gene loss and no gene duplication)
+    # trees with no duplication and no loss
     num_trees_experiencing_nothing = 0
 
-    # count how many leaf left in trees 
-    # Later, will be used to calculate the average number of taxa in the final dataset 
-    num_leaf_left_in_trees = Int[] 
+    # leaf counts across kept trees (for average reporting)
+    num_leaf_left_in_trees = Int[]
     
     # Save a list of gene trees name for each category 
     gene_trees_gene_duplication_and_loss = String[]
@@ -542,62 +324,30 @@ function modify_newick_for_n_genes(input::String,
     # because the rest are gene trees experiencing nothing
 
     for gene_tree in 1:n
-        genenum_string = pad_number(gene_tree, n) # see Part 3 "pad_number" below
-        output_tree_name = "g_trees_noLocusID_Gene$(genenum_string)_Int$(iteration).trees"
+        genenum_string = pad_number(gene_tree, n)
+        output_tree_name = "g_trees_noLocusID_Gene$(genenum_string)" *
+            "_Int$(iteration).trees"
         input_dir = joinpath(input, "g_trees$genenum_string.trees")
         output_dir = joinpath(output, output_tree_name)
 
-        # While simulating, deleting temp files from trees with repeated taxa and insufficient taxa
-        # Two files need to be deleted (only if the tree is invalid):
-        # We want to only keep the intermediate files for the valid trees 
-        # Then we can analyze it to see how many trees experiencing gene loss only 
-        # and how many trees experiencing (gene loss + gene duplication) or experiencing nothing  
+        # Keep intermediate .mapsl/.maplg files only for valid trees
+        # so postprocessing can classify loss-only vs dup+loss events.
         intermediate_file_mapsl = joinpath(input, "$genenum_string.mapsl")
         intermediate_file_maplg = joinpath(input, "$(genenum_string)l1g.maplg")
 
-        tree_repeated_taxa, tree_insufficient_taxa = modify_newicks(input_dir, 
-                                                                    output_dir, 
-                                                                    intermediate_file_mapsl, 
-                                                                    intermediate_file_maplg,
-                                                                    max_taxa_missing,
-                                                                    debug_mode
-                                                                    )
+        tree_repeated_taxa, tree_insufficient_taxa = modify_newicks(
+            input_dir, output_dir,
+            intermediate_file_mapsl, intermediate_file_maplg,
+            max_taxa_missing, debug_mode)
 
         tree_repeated_taxa_tot += tree_repeated_taxa
         tree_insufficient_taxa_tot += tree_insufficient_taxa
 
-        #= Analyze the files after each gene tree modification
-        # For the .mapsl file left after filtering: 
-        # It could be three situations: 
-        # 1) Only gene loss happenes and no gene duplication 
-            -> gene loss only but no gene duplication 
-            -> No "dup" in .mapsl file and number of "leaf" word < eight 
-            -> also count how many taxa are missing
-            -> Count how many times loss happens 
-        # 2) Gene duplication happens followed by gene loss 
-            -> This could be three senarioes (see simulation_postprocess.jl and below) 
-            -> The word "dup" in .mapsl file 
-            -> also count if and if how many taxa are missing
-            -> Count how many times loss and dup happens 
-                A few senarios could happen here: 
-                    The below cases will be handled during post-processing steps:  
-                    a. Gene loss happened after duplication and the gene copy 
-                    got duplicated and then lost. In this case, no true paralogy 
-                    is present, but the gene copy is lost 
-                        --> This is still not a hidden paralogy event
-                    In this case, I examine if all remaining gene copies
-                    are from the same accession in the locus tree. If so, this is still not a hidden paralogy event.
-                    b. Weak hidden paralogy: Gene duplication happened and then got lost. However, 
-                    locus tree has the same topology as the species tree, 
-                    the hidden paralogy changes no topology but it changes the 
-                    branch length 
-                    c. Strong hidden paralogy: the remainning gene copies
-                    are generated from duplications and the topology is changed. 
-        # 3) No gene loss and no gene duplication 
-            -> no gene duplication and no gene loss 
-            -> Should have eight "leaf"
-        # Below code will check the .mapsl file and 
-        determine if the above three situations happened =# 
+        # Classify kept trees by event type using the .mapsl file:
+        #   loss only  -> no "dup" in file, num leaf < 8*n_inds
+        #   dup + loss -> "dup" present in file
+        #   nothing    -> no dup, no loss (all 8*n_inds leaves kept)
+        # Hidden-paralogy classification is deferred to postprocessing.
         
         # If dup_rate == 0, no mapsl file so skip the below analysis 
         if dup_rate > 0 
@@ -605,12 +355,9 @@ function modify_newick_for_n_genes(input::String,
             # Both mapsl and maplg files should exist 
             # When duplicate == 0 and loss >= 0: 
             # only maplg file should exist 
-            if !isempty(intermediate_file_mapsl) && isfile(intermediate_file_mapsl) 
-                
-                # Read lines and change everything into lower case 
-                lines = lowercase.(readlines(intermediate_file_mapsl)) 
-
-                # Calculate the number of "leaf", "loss" and "dup" in the .mapsl file 
+            if !isempty(intermediate_file_mapsl) &&
+                    isfile(intermediate_file_mapsl)
+                lines = lowercase.(readlines(intermediate_file_mapsl))
                 num_leaf = count(line -> occursin(r"(?i)leaf", line), lines)
                 num_loss = count(line -> occursin(r"(?i)loss", line), lines)
                 num_dup = count(line -> occursin(r"(?i)dup", line), lines)
@@ -649,18 +396,16 @@ function modify_newick_for_n_genes(input::String,
 
 
     # This handles nan as well 
-    avg_num_leaf_left_in_trees = isempty(num_leaf_left_in_trees) ? NaN : mean(num_leaf_left_in_trees) 
-    println("Average number of leaf left in trees (one rep): $avg_num_leaf_left_in_trees")
+    avg_num_leaf_left_in_trees = isempty(num_leaf_left_in_trees) ?
+        NaN : mean(num_leaf_left_in_trees)
+    println("Avg leaves per kept tree: $avg_num_leaf_left_in_trees")
 
     #------ Finally, clean up intermediate files -------# 
     # remove intermediate files to save space under non-debugging mode  
     if debug_mode == false # debugging mode will keep intermediate files 
         
-        # check if any files ending with ".mapsl" or ".maplg" exist in the input directory 
-        # Check if any .mapsl or .maplg files exist in the input directory.
-        # If any are present, keep this folder (no-op); otherwise the existing
-        # `else` block will remove the parent iteration folder.
-        if !isempty(collect(glob("*.maplg", input))) # ONLY search maplg since dup=0 means only maplg exists 
+        # search maplg only — when dup=0, only maplg exists (no mapsl)
+        if !isempty(collect(glob("*.maplg", input)))
             # There are intermediate mapping files to keep
             # -> only remove the intermediate files that are not needed 
             # Under debug mode, only save g_trees and l_trees files 
@@ -688,16 +433,15 @@ function modify_newick_for_n_genes(input::String,
             end
 
         else 
-            # if there is no mapsl or maplg file, we can remove this interation folder 
-            # remove the previous folder layer of input directory 
+            # no mapsl or maplg file: remove the iteration folder
+            # one level up from the input directory
             parent_dir = dirname(input) # This is the interation folder 
             if isdir(parent_dir) 
                 rm(parent_dir; force=true, recursive=true)
             end 
         end 
 
-        # Move output files one level up to remove nested Int/1 folder structure
-        # Find files in the output_dir that end with .trees and move them up one level
+        # Move output files one level up, removing the nested Int/1 folder
         if isdir(input)
             # Get the parent directory (iteration folder)
             iteration_dir = dirname(input)
@@ -747,38 +491,11 @@ end
 # 2) max_iteration reaches   
 #-----------------------------------------------#
 """
-    seed_generator(master_seed::Int, n::Int, m::Int, 
-                    output_dir::String, output_file_name::String) 
+    seed_generator(master_seed, n, m, output_dir, output_file_name)
         -> Matrix{Int32}
 
-Generate a matrix of integer seeds for SimPhy simulations and write them to a file.
-
-Each seed is drawn from a `StableRNG` initialized with `master_seed`.
-A total of `n × m` seeds are generated, where `n` is the number of 
-replicates and `m` is the number of iterations per replicate.
-
-# Arguments
-- `master_seed::Int`: Master seed to start the random number generator (`Xoshiro`).
-- `n::Int`: Number of replicates (`n_reps`).
-- `m::Int`: Number of iterations per replicate (`max_iteration`).
-- `output_dir::String`: Directory where the output file will be written.
-- `output_file_name::String`: File name to write the seeds (e.g. `"random_seeds.txt"`).
-
-# Returns
-- `Matrix{Int32}`: A matrix of size `(n, m)` containing the generated seeds.
-
-# Output File Format
-- First line: column headers (`col1`, `col2`, ..., `colm`)
-- Subsequent lines: one line per rep, with `m` seed values per line (tab-separated)
-
-# Examples
-```julia-repl
-julia> seeds = seed_generator(42, 3, 4, ".", "random_seeds.txt")
-3×4 Matrix{Int32}:
- 1313536569  1702490664  1408128490  1063381724
- 1013305710  1694460136  1777051044   777323194
-  820768661  1426708740  1792281826  1724743702
-```
+Generate an n×m seed matrix via StableRNG and write it as a tab-separated
+file (header: col1…colm, one rep per row). Returns the matrix.
 """
 function seed_generator(master_seed::Int, n::Int, m::Int, 
                         output_dir::String, output_file_name::String) 
@@ -809,14 +526,9 @@ end
 """
     calculate_batch(num::Int, n_genes::Int) -> Int
 
-Estimate the number of gene trees (batch size) to simulate to reach the target count, 
-given the number of existing gene trees.
-
-This function assumes a missing rate based on how many of the `n_genes` are present.
-It then estimates how many additional trees need to be simulated to compensate 
-for expected missing ones, rounding up to the nearest integer.
-However, the estimated batch size will not exceed 3 times of the n_genes
-since otherwise it may lead to excessive resource usage.
+Estimate how many gene trees to simulate next given `num` currently valid
+trees and a target of `n_genes`. Accounts for expected missing-tree rate.
+Capped at 3× n_genes to avoid excessive resource usage.
 
 # Arguments
 - `num::Int`: Number of gene trees currently present.
@@ -847,13 +559,11 @@ function calculate_batch(num::Int, n_genes::Int)
     elseif success_rate <= 0.2
         println("success rate too small, estimated batch size = 5 * n_genes")
         estimated_batch = n_genes * 6
-        # This limits the number of genes got simulated each time 
-        # Or if success_rate is too small, the estimated batch size will be too big 
-        # This will explode the storage
+        # cap batch size; if success_rate is tiny the raw estimate explodes
     else 
         estimated_batch = round(num_missing / success_rate) 
     end 
-    # println("For replicate", n_reps, " estimated batch size = ", estimated_batch)
+    # println("For replicate $n_reps estimated batch size = $estimated_batch")
     return Int(estimated_batch)
 end 
 
@@ -865,29 +575,8 @@ end
 """
     pad_number(num::Int, range::Int) -> String
 
-Convert `num` into a zero-padded string, using the number of digits required to represent `range`.
-
-This is useful for naming consistency, e.g. when generating file names for SimPhy gene trees
-like `"g_trees001.trees"`, `"g_trees002.trees"`, etc.
-
-# Arguments
-- `num::Int`: The number to pad.
-- `range::Int`: The maximum possible value in the range, which determines the padding width.
-
-# Returns
-- `String`: A zero-padded string version of `num`.
-
-# Examples
-```julia-repl
-julia> pad_number(1, 10)
-"01"
-
-julia> pad_number(1, 5)
-"1"
-
-julia> pad_number(1, 200)
-"001"
-```
+Zero-pad `num` to as many digits as `range` requires.
+Used for consistent SimPhy-style filenames (e.g. gene 1 of 200 → "001").
 """
 function pad_number(num::Int, range::Int) 
   digits = ceil(Int, log10(range + 1))
@@ -896,36 +585,148 @@ function pad_number(num::Int, range::Int)
 end
 
 """
-    check_existing_dir(dir_input::Vector{String})
+    get_hybrid_info(n::HybridNetwork, outgroup::String="A")
 
-Interactively check if one or more directories exist, and optionally remove them.
+For an H=1 network, return the leaf sets at the hybrid node rooted on
+`outgroup`. Result: `(hybrid_taxon, major_donor, minor_donor)` as
+comma-joined strings (e.g. `"B,C"`). Returns "NA" fields on any error.
 
-This function is useful for testing simulation code repeatedly by letting the user
-decide whether to remove existing output folders before proceeding.
-
-# Behavior
-- If the path(s) exist:
-  - For multiple paths: prompts the user to remove all (`ALL`) or remove individually (`N`).
-  - For individual paths: prompts the user to remove (`Y`) or not (`N`).
-- If the user chooses not to remove a path, an error is thrown to halt execution.
-- If a path does not exist, it is ignored.
-- If the input vector is empty, an error is raised.
-
-# Arguments
-- `dir_input::Vector{String}`: A list of one or more directory paths to check.
-
-# User Inputs
-- `ALL` / `all`: Remove all directories (if multiple are provided).
-- `Y` / `y`: Remove an individual directory.
-- `N` / `n`: Skip removal of a directory (raises an error).
-- Any other input: Will be reprompted.
+`n` is mutated in-place (rerooted). Pass `deepcopy(n)` to preserve original.
+Falls back to major-edge rooting if `rootatnode!` raises `RootMismatch`.
 
 # Examples
 ```julia-repl
-julia> check_existing_dir(["sim_output1", "sim_output2"])
-Multiple directories were provided:
-Do you want to remove all directories at once? ALL/N
+julia> net = readnewick("(E,((((H,(G)#H1:::0.93)...);")
+julia> info = get_hybrid_info(net, "A")
+julia> info.hybrid_taxon   # e.g. "G"
+julia> info.major_donor    # e.g. "B,C,D,E,F,H"
+julia> info.minor_donor    # e.g. "A"
 ```
+"""
+function get_hybrid_info(n::HybridNetwork, outgroup::String="A")
+
+    # Downward-only traversal: collect leaves below start_node,
+    # never going through stop_node.
+    function leaves_below(start_node, stop_node=nothing)
+        leaves = String[]
+        stack = [start_node]
+        visited = Set{Int}()
+        while !isempty(stack)
+            curr = pop!(stack)
+            curr.number in visited && continue
+            push!(visited, curr.number)
+            if curr.leaf
+                push!(leaves, curr.name)
+            else
+                for e in curr.edge
+                    c = getchild(e)
+                    if getparent(e) === curr && c !== stop_node
+                        push!(stack, c)
+                    end
+                end
+            end
+        end
+        return sort(leaves)
+    end
+
+    # ----------------------------------------------------------------
+    # KEY FIX: start from `start_node` and try leaves_below(., hnode).
+    # If empty (because the donor parent's only child IS hnode), climb
+    # up via tree edges until a node with reachable leaves is found.
+    # This correctly scopes to the donor clade without spilling into
+    # the entire network (which the undirected traversal did).
+    #
+    # Example: 
+    #   admixb --only child--> #H1  =>  climb to rooty
+    #   leaves_below(rooty, #H1)  = {H}           [major donor] v
+    #   admixa --only child--> #H1  =>  climb to G_z
+    #   leaves_below(G_z,    #H1)  = {B, C}        [minor donor] v
+    # An example when leabes_below would fail: 
+    # (((F:0.144,((D:0.077,E:0.075)Rrrl:0.045,((B:0.04,C:0.04)B_a:0.054,
+    # (#H1:0.0::0.054)admixa:0.0)G_z:0.004)Rrrz:0.012)Rrr:0.021,
+    # (H:0.159,((G:0.081)#H1:0.0::0.946)admixb:0.072)rooty:0.134)
+    # root:0.126,A:0.126)rootb;
+    # ----------------------------------------------------------------
+    function donor_leaves(start_node, hnode)
+        current = start_node
+        while true
+            lv = leaves_below(current, hnode)
+            isempty(lv) || return lv
+
+            # Climb via the tree-parent edge only (skip hybrid edges
+            # to avoid following a reticulation upward).
+            tree_parent_edge = nothing
+            for e in current.edge
+                if getchild(e) === current && !e.hybrid
+                    tree_parent_edge = e
+                    break
+                end
+            end
+            isnothing(tree_parent_edge) && return String[]  # hit root
+            current = getparent(tree_parent_edge)
+        end
+    end
+
+    try
+        # --- Root on outgroup ---
+        try
+            rootatnode!(n, outgroup)
+        catch e
+            if isa(e, PhyloNetworks.RootMismatch)
+                target_hnode = nothing
+                for hnode in n.hybrid
+                    if outgroup in leaves_below(hnode)
+                        target_hnode = hnode
+                        break
+                    end
+                end
+                if isnothing(target_hnode)
+                    error("get_hybrid_info: could not find hybrid " *
+                          "containing '$outgroup' as descendant.")
+                end
+                e_maj, _, _ = PhyloNetworks.hybridEdges(target_hnode)
+                rootonedge!(n, e_maj)
+            else
+                rethrow(e)
+            end
+        end
+
+        directedges!(n)
+
+        # --- Validate single hybrid ---
+        if length(n.hybrid) != 1
+            @warn "get_hybrid_info: expected 1 hybrid node, " *
+                  "found $(length(n.hybrid)). Returning NA."
+            return (hybrid_taxon="NA", major_donor="NA", minor_donor="NA")
+        end
+
+        hnode   = n.hybrid[1]
+        e_major, e_minor, _ = PhyloNetworks.hybridEdges(hnode)
+
+        hybrid_leaves = leaves_below(hnode)
+        major_leaves  = donor_leaves(getparent(e_major), hnode)
+        minor_leaves  = donor_leaves(getparent(e_minor), hnode)
+
+        join_leaves(v) = isempty(v) ? "NA" : join(v, ",")
+
+        return (hybrid_taxon = join_leaves(hybrid_leaves),
+                major_donor  = join_leaves(major_leaves),
+                minor_donor  = join_leaves(minor_leaves))
+
+    catch e
+        @warn "get_hybrid_info: unexpected error, returning NA. Error: $e"
+        return (hybrid_taxon="NA", major_donor="NA", minor_donor="NA")
+    end
+end
+
+"""
+    check_existing_dir(dir_input::Vector{String})
+
+Prompt the user to delete existing output directories before a run.
+Useful when re-running simulations and you want a clean slate.
+
+Prompts: ALL (remove all at once), Y/N (per directory).
+Throws an error if the user declines removal of an existing directory.
 """
 function check_existing_dir(dir_input::Vector)
 
@@ -953,7 +754,7 @@ function check_existing_dir(dir_input::Vector)
                 println("All directories have been removed.") 
                 return    
             elseif user_input == "n"
-                println("Don't want to remove all dirs, let's remove each individual one")
+                println("Ok, removing each directory individually...")
                 break 
             else
                 println("Invalid input. Please type ALL or N.")
@@ -965,13 +766,13 @@ function check_existing_dir(dir_input::Vector)
         # If only one path in dir_input -> 
         if ispath(dir)
             while true
-                println("The directory $dir already exists. Do you want to remove it? Y/N")
+                println("Directory $dir exists. Remove it? Y/N")
                 user_input = lowercase(readline()) 
                 if user_input == "y"
                     rm(dir; recursive=true)
                     break
                 elseif user_input == "n"
-                    error("Hey! $dir already exists, and we don't want to remove it")
+                    error("$dir already exists and removal was declined")
                     return
                 else
                     println("Invalid input. Please type Y or N.")
@@ -982,31 +783,12 @@ function check_existing_dir(dir_input::Vector)
 end
 
 """
-    replace_tips_with_letters(tree::Union{HybridNetwork, String}) 
+    replace_tips_with_letters(tree::Union{HybridNetwork, String})
         -> Union{HybridNetwork, String}
 
-Replace tip labels in a tree with capital letters A–Z.
-
-This function simplifies tip names in either a Newick string or a 
-`HybridNetwork` tree object. It supports up to 26 taxa, assigning letters 
-`A`, `B`, `C`, ..., based on their order of appearance. If more than 26 
-tips are present, the original input is returned with a warning.
-
-# Arguments
-- `tree::Union{HybridNetwork, String}`: Either a Newick-formatted string or 
-  a `HybridNetwork` object.
-
-# Returns
-- `HybridNetwork`: Modified tree with simplified tip labels if input was a 
-  tree.
-- `String`: Modified Newick string with simplified tip labels if input was 
-  a string.
-
-# Notes
-- Tip names are replaced based on order of appearance, not taxonomic 
-  identity.
-- The function handles special characters like `*` and branch lengths 
-  correctly.
+Replace tip labels with capital letters A–Z (by order of appearance).
+Handles both Newick strings and HybridNetwork objects.
+Returns original with a warning if there are more than 26 tips.
 
 # Examples
 ```julia-repl
@@ -1042,8 +824,7 @@ function replace_tips_with_letters(tree::Union{HybridNetwork, String})
         tips = tiplabels(tree)
 
         if length(tips) > 26 
-            #Give an warning and return the original tree if there are more than 26 tips 
-            println("Warning: The number of tips exceeds 26. That's too much. Exiting.")
+            println("Warning: more than 26 tips, skipping label replacement.")
             return tree
         end 
     
@@ -1058,7 +839,7 @@ function replace_tips_with_letters(tree::Union{HybridNetwork, String})
         # Above -> Remove empty, :, and any string containing numbers
 
         if length(tips) > 26
-            println("Warning: The number of tips exceeds 26. That's too much. Exiting.")
+            println("Warning: more than 26 tips, skipping label replacement.")
             return tree
         end
         for (i, tip) in enumerate(tips)
@@ -1108,98 +889,11 @@ function setup_rep_output_folders(
 end 
 
 """
-    write_boostrapTrees_2_Ind_filepath(
-        file_path::String, 
-        output_dir::String, 
-        output_filename::String, 
-        relative_path::Bool
-    )
-
-Split a tree file with multiple bootstrap trees into individual files and write 
-their paths to a text file.
-
-This function is used for testing. It is not part of the main pipeline but can 
-help prepare bootstrap trees in a format compatible with bootsnaq, where input 
-should be formatted as a vector of individual tree file paths.
-
-# Arguments
-- `file_path::String`: Path to a file containing multiple Newick bootstrap trees 
-  (one per line).
-- `output_dir::String`: Directory where individual tree files will be written.
-- `output_filename::String`: Name of the output text file that will store the 
-  list of individual tree file paths.
-- `relative_path::Bool`: Whether to write tree paths as relative (`true`) or 
-  absolute (`false`).
-
-# Behavior
-- Each line in `file_path` is treated as a single tree and written to a new file.
-- File paths to all individual tree files are written to `output_filename`.
-
-# Returns
-- Nothing is returned. Files are written to disk.
-
-# Examples
-```julia-repl
-julia> write_boostrapTrees_2_Ind_filepath(
-           "bootstrap_trees.txt", 
-           "trees_split/", 
-           "tree_list.txt", 
-           true
-       )
-```
-"""
-function write_boostrapTrees_2_Ind_filepath(
-        file_path::String, 
-        output_dir::String, 
-        output_filename::String, 
-        relative_path::Bool
-        )
-    trees = readlines(file_path)
-    output_txt = joinpath(output_dir, output_filename)
-
-    open(output_txt, "w") do io 
-        for (i, tree) in enumerate(trees) 
-            if relative_path
-                tree_path = joinpath(output_dir, "tree_$i.trees")
-            else 
-                tree_path = joinpath("./", "tree_$i.trees") 
-            end 
-            open(tree_path, "w") do f
-                write(f, tree)
-            end 
-            println(io, tree_path) 
-        end 
-    end
-end
-
-"""
     replace_pop_inInd_file(input_file::String, output_file::String)
 
-Replace `"POP"` in the third column of a `.ind` file with a group label extracted 
-from the first column.
-
-This function is used to process `.ind` files where "POP" is a placeholder for 
-population labels. It assigns a population letter based on the first part of the 
-ID in column 1 (e.g., `"A_0"` or `"A_1"` → `"A"`).
-
-# Arguments
-- `input_file::String`: Path to the input `.ind` file. Each line must contain 
-  three tab-separated fields.
-- `output_file::String`: Path to the output file where the updated lines will be 
-  written.
-
-# Returns
-- Nothing. A new `.ind` file is written to `output_file` with updated population 
-  labels.
-
-# Input Format
-Each line must have exactly three tab-separated columns:
-1. Accession ID (e.g., `A_0`, `B_1`)
-2. Numeric value
-3. "POP" (which will be replaced)
-
-# Example
-Input line:
+Replace the "POP" placeholder in column 3 of an eigenstrat `.ind` file
+with the species letter extracted from column 1 (e.g. "A_0" → "A").
+Input must be tab-separated with exactly three columns per line.
 """
 function replace_pop_inInd_file(input_file::String, output_file::String)
     open(input_file, "r") do infile
@@ -1207,12 +901,12 @@ function replace_pop_inInd_file(input_file::String, output_file::String)
             for line in eachline(infile)
                 fields = split(line, '\t')
                 if length(fields) != 3
-                    error("Check $(input_file) -> .ind format should have three columns")
+                    error("$(input_file): .ind must have three columns")
                 end 
                 if fields[3] != "POP"
-                    error("Check $(input_file) -> .ind format has last column in \'POP\'")
+                    error("$(input_file): column 3 must be 'POP'")
                 end 
-                fields[3] = split(fields[1], '_')[1]  # Extract the letter before "_"
+                fields[3] = split(fields[1], '_')[1]
                 println(outfile, join(fields, '\t'))
             end
         end
@@ -1225,22 +919,9 @@ end
         software_names::Vector{String}
     ) -> Dict{String, Int}
 
-Generate a dictionary of stable random seeds for each software name using a 
-master seed.
-
-This function produces reproducible seeds for software components in a pipeline, 
-based on a given `master_seed`. The same input will always result in the same 
-set of seeds due to the use of `StableRNG`.
-
-# Arguments
-- `master_seed::Int`: The initial seed used to initialize the random number 
-  generator.
-- `software_names::Vector{String}`: A list of software names that each require 
-  a unique seed.
-
-# Returns
-- `Dict{String, Int}`: A dictionary mapping each software name to a unique 
-  stable integer seed.
+Map each software name to a stable integer seed derived from `master_seed`.
+Uses StableRNG so the same inputs always produce the same seeds across
+Julia versions.
 
 # Examples
 ```julia-repl
@@ -1255,47 +936,21 @@ Dict("SimPhy" => 1806341205,
     "SeqGen" => 1313482870, 
     "snaq" => 1234567890)
 """
-function generate_software_seeds(master_seed::Int, software_names::Vector{String})
-    rng = StableRNG(master_seed) 
-    seeds = abs.(rand(rng, Int, length(software_names)))  
-    return Dict(software_names[i] => seeds[i] for i in eachindex(software_names))
+function generate_software_seeds(master_seed::Int,
+        software_names::Vector{String})
+    rng = StableRNG(master_seed)
+    seeds = abs.(rand(rng, Int, length(software_names)))
+    return Dict(
+        software_names[i] => seeds[i] for i in eachindex(software_names))
 end
 
 """
     generate_master_seed(params::Dict{String, Any}) -> Int
-Generate a deterministic master seed based on parameter values by encoding 
-them into products of prime numbers.
 
-# Description
-- **Continuous values** (e.g., `0.01`, `0.0001`) are encoded by assigning digits 
-  after the decimal point to specific prime numbers.
-- **Categorical values** (e.g., substitution models like `"G"` or `"LG"`) are 
-  mapped to fixed primes using a hardcoded lookup (`category_map`).
-- **Integer values** are mapped to the next largest prime using `nextprime()`.
-
-The final seed is the product of all prime values assigned to each parameter.
-
-# Arguments
-- `params::Dict{String, Any}`: A dictionary where keys are parameter names and 
-  values are numeric or categorical values.
-
-# Returns
-- `Int`: A stable integer seed representing the combined encoded values of the 
-  parameters.
-
-# Notes
-- The `digit_to_prime` map converts each digit character to a unique prime.
-- Category mappings (e.g., `"ratevar"` → `"G"` or `"LG"`) are hardcoded inside 
-  the function.
-- Internally uses `big()` to avoid overflow, then converts to `Int`.
-
-# Examples
-```julia-repl
-julia> params = Dict("dup" => 0.01, "loss" => 0.01, "ratevar" => "G");
-
-julia> generate_master_seed(params)
-14613783
-```
+Build a deterministic integer seed from simulation parameters by encoding
+values as products of primes. Floats use per-digit primes; categoricals
+(e.g. ratevar) use a fixed lookup; integers map to the next prime.
+Uses `big()` internally to avoid overflow.
 """
 function generate_master_seed(params::Dict{String, Any})
     # println(params)
@@ -1336,7 +991,7 @@ function generate_master_seed(params::Dict{String, Any})
 
         elseif isa(value, Int)
             prime = nextprime(value) 
-            # Above: nextprime assigns a prime number which is bigger than the value
+            # nextprime: smallest prime >= value
         else
             error("""Oh no something is wrong with the parameters setting. 
                     Unable to generate master seed""")
@@ -1344,28 +999,16 @@ function generate_master_seed(params::Dict{String, Any})
         master_seed *= prime
     end
     return Int(master_seed) 
-    # Above: change to integer because generate_software_seeds only takes integers 
+    # generate_software_seeds requires Int
 end
 
 """
     sample_substitution_params(seed)
-Return a stable set of parameters for a given seed.
-Input: 
-- `seed`: Seed for the random number generator 
-Output: 
-- `kappa::Float64`: Transition/transversion ratio sampled from LogNormal(1.4215, 0.2798).
-- `basefreqs::Vector{Float64}`: Base frequencies sampled from Dirichlet(66.59, 38.41, 38.61, 67.12).
-- `alpha::Float64`: Gamma shape parameter sampled from Gamma(3.267, 0.109).
-# Examples
-```julia-repl
-julia> sample_substitution_params(42)
-(kappa = 3.4348167506335687, basefreqs = [0.31818654496208937, 0.21258062786139054, 0.19404110221414664, 0.27519172496237343], alpha = 0.628276797912641)
-``` 
-This information is based on the readme file: 
-- to simulate each gene with its own substitution model, use HKY with:
-  * kappa from LogNormal(μ=1.4215, σ=0.2798)
-  * frequencies from Dirichlet(66.59, 38.41, 38.61, 67.12)
-  * alpha from Gamma(α=3.267, θ=0.109). 
+
+Draw per-gene HKY substitution parameters from stable distributions:
+- kappa    ~ LogNormal(1.4215, 0.2798)
+- basefreqs ~ Dirichlet(66.59, 38.41, 38.61, 67.12)
+- alpha    ~ Gamma(3.267, 0.109)
 """
 function sample_substitution_params(seed) 
     rng = StableRNG(seed)   # stable RNG object
@@ -1408,7 +1051,7 @@ Examples:
     - `"ratevar"`: `String` — rate variation model (e.g. `"G"`, `"LG"`)
     - `"n_inds"`: `Int` — number of individuals
     - `"scaling_factor"`: `Float32` — scaling factor for seed generation
-    - `"genelen"`: `Float32` or `nothing` — gene length if provided, else `nothing` 
+    - `"genelen"`: `Float32` or `nothing` — gene length, if present
 
 # Notes
 - Parsing is done using string splitting at fixed substrings: `-LOS`, `-RV`, 
@@ -1444,8 +1087,8 @@ function get_dict_for_seed_setting(params_string::String)
     # Some legacy trails might not contain genelen info 
     has_genelen = occursin("-genelen", part5)
     if has_genelen
-        scaling_factor_str = split(part5, "-genelen")[1] # extract SF before genelen
-        part6 = split(part5, "-genelen")[2] # contains genelen 
+        scaling_factor_str = split(part5, "-genelen")[1]
+        part6 = split(part5, "-genelen")[2]
     else
         scaling_factor_str = part5
     end
@@ -1479,296 +1122,6 @@ end
 
 
 """
-    median_branch_length(tree::HybridNetwork) -> Float64
-
-Compute the median branch length of a phylogenetic tree or network.
-
-# Arguments
-- `tree::HybridNetwork`: A phylogenetic tree or network object from the 
-  PhyloNetworks package.
-
-# Returns
-- `Float64`: The median of all non-missing branch lengths in the tree.
-
-# Examples
-```julia-repl
-julia> using PhyloNetworks
-julia> tree = readnewick("(A:0.1,(B:0.2,C:0.3):0.4);");
-julia> median_branch_length(tree)
-0.25
-```
-"""
-function median_branch_length(tree::HybridNetwork)
-    branch_lengths = [e.length for e in tree.edge if !ismissing(e.length)]
-    return median(branch_lengths)
-end
-
-"""
-    transform_newick_no_lineage_tree(
-        tree::String, 
-        Ne::Int, 
-        rate_str::String
-    ) -> String
-
-Transform a Newick tree string by scaling branch lengths based on a constant 
-effective population size (Ne) and appending a mutation rate string.
-
-This function is used in testing and is not part of the main simulation pipeline.
-
-Each branch length `t` in the Newick string is replaced with `round(2Ne * t)`, 
-followed by the given `rate_str` (e.g. `*0.01`). The pattern `:([0-9.]+)` is 
-used to identify all branch lengths in the input string.
-
-# Arguments
-- `tree::String`: A Newick-formatted tree string.
-- `Ne::Int`: Effective population size, used to scale branch lengths.
-- `rate_str::String`: String to append after each scaled branch length, 
-  typically representing a per-generation mutation rate (e.g. `"0.01"`).
-
-# Returns
-- `String`: A Newick string with all branch lengths scaled and annotated.
-
-# Examples
-```julia-repl
-julia> tree = "(A:0.01,B:0.02);"
-
-julia> transform_newick_no_lineage_tree(tree, 1000, "0.01")
-"(A:20*0.01,B:40*0.01);"
-```
-"""
-function transform_newick_no_lineage_tree(tree::String, Ne::Int, rate_str::String)
-
-    pattern = r":([0-9.]+)" # Match branch lengths in the Newick string
-    result = ""
-    last_end = 0
-    factor = 2 * Ne
-
-    for m in eachmatch(pattern, tree)
-        start_idx = m.offset
-        end_idx = m.offset + length(m.match) - 1
-        cu = parse(Float64, m.captures[1])
-        scaled_int = Int(round(cu * factor))
-        transformed = ":" * string(scaled_int) * "*" * rate_str
-        result *= tree[last_end+1:start_idx-1] * transformed
-        last_end = end_idx
-    end
-
-    result *= tree[last_end+1:end]
-    return result
-end
-
-"""
-    multiple_tree_length_with_2Ne(tree::String, TwoNe::Int) -> String
-
-Multiply all branch lengths in a Newick tree string by a constant factor (2Ne).
-
-This function scales every branch length in the input Newick string by the 
-provided `TwoNe` value (typically `2 * Ne` in coalescent models). The function 
-matches branch lengths using the pattern `:[0-9.]+` and replaces each with the 
-scaled value.
-
-# Arguments
-- `tree::String`: A Newick-formatted tree string with numeric branch lengths.
-- `TwoNe::Int`: The scaling factor (usually `2 * Ne`) to multiply all branch 
-  lengths by.
-
-# Returns
-- `String`: A Newick string with all branch lengths scaled by `TwoNe`.
-
-# Examples
-```julia-repl
-julia> tree = "(A:0.01,B:0.02);";
-
-julia> multiple_tree_length_with_2Ne(tree, 1000)
-"(A:10.0,B:20.0);"
-```
-"""
-function multiple_tree_length_with_2Ne(tree::String, TwoNe::Int64)
-    pattern = r":[0-9.]+"
-    return replace(tree, pattern => s -> begin
-        value = parse(Float64, s[2:end])  # Skip the ":"
-        ":" * string(value * TwoNe)
-    end)
-end
-
-"""
-    transform_newick_with_lineage_tree(
-        tree_CU_str::String, 
-        tree_sub_str::String, 
-        Ne::Int
-    ) -> String
-
-Transform a Newick tree string by scaling branch lengths using data from a 
-coalescent-unit (CU) tree and a substitution-unit tree.
-
-Each branch is rewritten as `:generation*rate`, where:
-- `generation = CU_length * 2 * Ne`
-- `rate = substitution_length / generation`
-
-This format is useful for coalescent simulations with branch lengths in 
-generations and mutation rates per generation.
-
-# Arguments
-- `tree_CU_str::String`: A Newick-formatted string with branch lengths in 
-  coalescent units.
-- `tree_sub_str::String`: A Newick-formatted string with branch lengths in 
-  substitution units.
-- `Ne::Int`: The effective population size (used in `2 * Ne` scaling).
-
-# Returns
-- `String`: A Newick string with each branch length transformed to the format 
-  `:generation*rate`.
-
-# Notes
-- Both input trees must have the same number of branch lengths.
-- Uses a regular expression to extract branch lengths, including scientific 
-  notation (e.g., `1.0e-5`).
-
-# Examples
-```julia-repl
-julia> tree_CU_str = "(A:0.01,B:0.02);";
-
-julia> tree_sub_str = "(A:0.005,B:0.01);";
-
-julia> Ne = 1000;
-
-julia> transform_newick_with_lineage_tree(tree_CU_str, tree_sub_str, Ne)
-"(A:20000*0.00025000,B:40000*0.00025000);"
-```
-"""
-function transform_newick_with_lineage_tree(
-            tree_CU_str::String, 
-            tree_sub_str::String, 
-            Ne::Int
-            )
-    pattern = r":([0-9\.eE+-]+)"
-
-    cu_matches = collect(eachmatch(pattern, tree_CU_str))
-    sub_matches = collect(eachmatch(pattern, tree_sub_str))
-
-    if length(cu_matches) != length(sub_matches)
-        error("Mismatch in number of branch lengths between CU and substitution trees.")
-    end
-
-    result = ""
-    last_end = 0
-
-    for i in 1:length(cu_matches)
-        m_cu = cu_matches[i]
-        m_sub = sub_matches[i]
-
-        start_idx = m_cu.offset 
-        # Above: offset finds the start index of the match in the string 
-        end_idx = m_cu.offset + length(m_cu.match) - 1
-        # println("Match $i from $start_idx to $end_idx")
-
-        cu = parse(Float64, m_cu.captures[1])
-        sub = parse(Float64, m_sub.captures[1])
-
-        generation = cu * 2 * Ne
-        rate = sub / generation
-
-        transformed = @sprintf(":%d*%.8f", generation, rate)
-
-        result *= tree_CU_str[last_end+1:start_idx-1] * transformed
-        last_end = end_idx
-    end
-
-    result *= tree_CU_str[last_end+1:end]
-    return result
-end
-
-"""
-    add_outgroup_to_newick(
-        original_newick::String, 
-        out_branch::Float64
-    ) -> String
-
-Add an outgroup branch to a Newick tree string.
-
-This function is primarily used for testing, and ensures that SimPhy can 
-process a species tree where an early-diverging outgroup is added. The 
-outgroup's branch length is computed as the sum of `out_branch` and the 
-first internal branch length in the original tree.
-
-# Arguments
-- `original_newick::String`: A Newick-formatted string representing the tree.
-- `out_branch::Float64`: The branch length to add between the original tree 
-  and the new outgroup root.
-
-# Returns
-- `String`: A modified Newick string with a new outgroup `"O"` added as the 
-  sister to the original tree.
-
-# Notes
-- The new outgroup `"O"` receives a branch length equal to the sum of the 
-  first original branch length and `out_branch`.
-- The original tree is nested and attached with branch length `out_branch`.
-
-# Examples
-```julia-repl
-julia> tree = "(A:0.01,B:0.02);";
-
-julia> add_outgroup_to_newick(tree, 0.1)
-"(O:0.11,(A:0.01,B:0.02):0.1);"
-```
-"""
-function add_outgroup_to_newick(original_newick::String, out_branch::Float64)
-    
-    branch_lengths = collect(eachmatch(r"\d+\.\d+", original_newick))
-
-    first_bl = parse(Float64, branch_lengths[1].match)
-
-    outgroup_bl = first_bl + out_branch # This is the outgroup branch length 
-    trimmed_newick = endswith(original_newick, ";") ? 
-        original_newick[1:end-1] : original_newick
-    new_tree = "(" *
-        "O:$(round(outgroup_bl, digits=6)),$trimmed_newick:" *
-        "$(round(out_branch, digits=6))" * ");"
-
-    return new_tree
-end
-
-"""
-    prune_tip_from_newick(newick_str::String, prefix::String) -> String
-
-Remove all tips from a Newick tree string whose names start with a given prefix.
-
-This function parses the Newick string, finds all tips whose names begin with 
-the provided prefix, prunes them from the tree, and writes the result back to 
-Newick format.
-
-# Arguments
-- `newick_str::String`: The input Newick-formatted tree string.
-- `prefix::String`: The prefix used to identify tip names to be removed.
-
-# Returns
-- `String`: A Newick-formatted string with the specified tips removed.
-
-# Notes
-- The tree is re-rooted at the first matching tip before pruning.
-- Uses `readnewick` and `writenewick` from PhyloNetworks.
-
-# Examples
-```julia-repl
-julia> tree = "(A1:0.1,B1:0.2,C2:0.3);";
-
-julia> prune_tip_from_newick(tree, "A")
-"(B1:0.2,C2:0.3);"
-```
-"""
-function prune_tip_from_newick(newick_str::String, prefix::String)
-    tree = readnewick(newick_str)
-    tips_to_prune = [leaf.name for leaf in tree.leaf if startswith(leaf.name, prefix)]
-    rootatnode!(tree, tips_to_prune[1]) # Ensure the tree is rooted before pruning 
-    for tip in tips_to_prune
-        deleteleaf!(tree, tip)
-    end
-    return writenewick(tree) # writenewick replaces the decrepated writeTopology 
-end
-
-
-"""
     map_accessions_to_species_dict(
         gene_trees::Vector{HybridNetwork}, 
         output_dir::String, 
@@ -1787,11 +1140,12 @@ format.
   - `"snaq"`: CSV file with columns `species` and `individual` 
     (`id_to_species.csv`), for use with `snaq!`.
   - `"astral"`: Space-delimited text file with lines like 
-    `"individual species"` (`astral_mapping.txt`), for use with ASTRAL’s `-a` flag.
+    `"individual species"` (`astral_mapping.txt`), for ASTRAL’s `-a` flag.
 
 # Returns
 - `Tuple{Dict{String,String}, String}`: A tuple with:
-  1. A dictionary mapping each accession (e.g., `"A_1"`) to its species (e.g., `"A"`).
+  1. A dictionary mapping each accession (e.g., `"A_1"`) to its species
+     (e.g., `"A"`).
   2. The full path to the output mapping file.
 
 # Examples
@@ -1849,25 +1203,8 @@ end
 """
     clean_newick_nan(newick_str::String) -> String
 
-Remove NaN (Not-a-Number) values from Newick tree strings.
-
-When ASTRAL outputs trees, it sometimes includes `nan` for missing or undefined
-branch lengths (e.g., `A:nan`). These values cause parsing errors in PhyloNetworks.
-This function replaces `nan` values with a small default value (0.001) to allow
-successful parsing.
-
-# Arguments
-- `newick_str::String`: A Newick format tree string potentially containing `nan`
-
-# Returns
-- `String`: The cleaned Newick string with `nan` replaced by a smaller number. 
-
-# Examples
-```julia-repl
-julia> dirty = "((A:nan,B:0.1):0.2,C:0.3);"
-julia> clean_newick_nan(dirty)
-"((A:0.001,B:0.1):0.2,C:0.3);"
-```
+Replace `:nan` in ASTRAL newick output with `:0.000001` so PhyloNetworks
+can parse the string without errors.
 """
 function clean_newick_nan(newick_str::String)
     # Replace :nan with :0.000001 (a small default value)
@@ -1877,28 +1214,8 @@ end
 """
     simplify_tip_labels(tree::HybridNetwork) -> HybridNetwork
 
-Simplify tip labels in a hybrid network by removing locus or accession IDs 
-from the tip names.
-
-This function modifies each tip label in-place, keeping only the prefix before 
-the first underscore. For example, `"A_0"` or `"A_1"` becomes `"A"`.
-
-# Arguments
-- `tree::HybridNetwork`: A phylogenetic network whose tip labels will be 
-  simplified.
-
-# Returns
-- `HybridNetwork`: The same network object, with simplified tip names.
-
-# Examples
-```julia-repl
-julia> tree = readnewick("(A_0:0.1,B_1:0.2);");
-
-julia> simplify_tip_labels(tree);
-
-julia> tipLabels(tree)
-["A", "B"]
-```
+Strip accession IDs from tip labels in-place, keeping only the prefix
+before the first underscore (e.g. "A_0" → "A"). Modifies the network.
 """
 function simplify_tip_labels(tree::HybridNetwork)
     for tip in tree.leaf
@@ -1934,7 +1251,7 @@ end
 
 
 # The below function is used in filter() to remove rows with repeated species 
-# It is retrieved from SNAQ.jl: https://juliaphylo.github.io/SNaQ.jl/dev/man/multiplealleles/ 
+# Retrieved from SNaQ.jl multiplealleles docs.
 """
     hasrep
 
@@ -1944,7 +1261,7 @@ whose name ends with "__2". Otherwise, return false.
 Warning: this function assumes that taxon names are in columns
 "t1", "t2", "t3", "t4". For data frames with different column names,
 e.g. "taxon1", "taxon2" etc., simply edit the code below by replacing
-`:t1` by `:taxon1` (or the appropriate column name in your data).
+`:t1` by `:taxon1` 
 """
 function hasrep(row)
     occursin(r"__2$", row[:t1]) || occursin(r"__2$", row[:t2]) ||
@@ -1952,59 +1269,27 @@ function hasrep(row)
 end 
 
 """
-    set_up_paramname_root(
-        dup_rate::Float32, 
-        loss_rate::Float32, 
-        ratevar::String, 
-        n_inds::Int,
-        SF::Float32 = 1.0 
-    ) -> String 
-Generate a standardized parameter name string based based on simulation parameters.
-This function creates a concise identifier for a specific set of simulation
-parameters, which can be used in file naming and logging.   
+    set_up_paramname_root(dup_rate, loss_rate, ratevar,
+                          n_inds, scaling_factor_branch_length,
+                          gene_len) -> String
+
+Build the canonical parameter name used in directory and file naming.
+Format: `DUP<d>-LOS<l>-RV<r>-N_ind<n>-SF<s>-genelen<g>`
 """
-function set_up_paramname_root(dup_rate, loss_rate, 
-                    ratevar, n_inds, scaling_factor_branch_length, gene_len)
-  return "DUP$dup_rate-LOS$loss_rate-RV$ratevar-N_ind$n_inds-SF$scaling_factor_branch_length-genelen$gene_len"
+function set_up_paramname_root(dup_rate, loss_rate,
+        ratevar, n_inds, scaling_factor_branch_length, gene_len)
+    return "DUP$dup_rate-LOS$loss_rate-RV$ratevar" *
+        "-N_ind$n_inds-SF$scaling_factor_branch_length-genelen$gene_len"
 end
 
-
-"""
-    map_tree_based_on_mapping_file(mapping_file::String) 
-        -> Dict{String, String} 
-Create a mapping of individuals to species from an astral mapping file.
-This function reads a mapping file where each line contains an individual
-name and its corresponding species name, separated by whitespace. It returns
-a dictionary that maps each individual to its species.
-"""
-function create_mapping_file_based_on_gene_tree(mapping_file::String)
-    # Read mapping file and create individual -> species lookup
-    mapping_lines = readlines(mapping_file)
-    individual_to_species = Dict{String, String}()
-    
-    for line in mapping_lines
-        if !isempty(strip(line))
-            parts = split(strip(line))
-            if length(parts) == 2
-                individual, species = parts
-                individual_to_species[individual] = species
-            end
-        end
-    end
-
-    return individual_to_species 
-end 
 
 """
     map_gene_tree_based_on_mapping_file(
         gene_tree::HybridNetwork, 
         individual_to_species::Dict{String, String}
     ) -> HybridNetwork
-Map individuals in a gene tree to species using a provided mapping dictionary.
-This function takes a gene tree with tips labeled as individuals (e.g., "A_1
-or "B_2") and a dictionary mapping individuals to species names (e.g., "A" or "B").
-It renames the tips in the gene tree according to the mapping and returns the
-modified tree. 
+Map gene tree tip labels from individuals (e.g. "A_1", "B_2") to species
+names (e.g. "A", "B") using the provided dictionary. Returns a modified copy.
 """
 function map_gene_tree_based_on_mapping_file(
     gene_tree::HybridNetwork, 
@@ -2142,7 +1427,6 @@ Iterates over a set of examples.
 
 # Description
 This loop is intended to process or analyze each example in a collection. 
-Replace `example` with the specific variable or data structure representing your examples.
 
 # Example
 for example: 
@@ -2212,102 +1496,10 @@ function subtree_for_combination(tree, tips_to_keep)
     copy_tree = deepcopy(tree)
     tips_to_drop = setdiff(tipLabels(copy_tree), tips_to_keep)
     for t in tips_to_drop
-        deleteleaf!(copy_tree, t) # or your preferred prune function
+        deleteleaf!(copy_tree, t) 
     end
     return copy_tree
 end
-
-"""
-    scale_branch_lengths(
-        net::HybridNetwork, 
-        scale_factor::Float64
-    ) -> HybridNetwork
-
-Return a new hybrid network with all branch lengths scaled by a given factor.
-
-This function creates a deep copy of the input network and multiplies the length
-of each edge by the specified scale factor. The original network is not modified.
-
-# Arguments
-- `net::HybridNetwork`: The hybrid network whose branch lengths will be scaled.
-- `scale_factor::Float64`: The factor by which to scale each branch length.
-
-# Returns
-- `HybridNetwork`: A new network with scaled branch lengths.
-
-# Examples
-"""
-function scale_branch_lengths(
-    net::HybridNetwork, 
-    scale_factor::Float64
-    ) 
-    modified_net = deepcopy(net)
-    for edge in modified_net.edge
-        edge.length *= scale_factor 
-    end 
-    return modified_net 
-end
-
-"""
-    scale_species_tree_with_sub_scaling(
-        species_tree_with_sub_scaling::String, 
-        scaling_factor::Float64
-    ) -> String
-
-Scale all branch lengths (numbers before "*") in a species tree string 
-with substitution scaling by a given factor.
-
-This function processes a species tree string where branch lengths are 
-formatted as "length*rate" and multiplies each length component by the 
-specified scaling factor, preserving the rate component.
-
-# Arguments
-- `species_tree_with_sub_scaling::String`: A Newick tree string with branch 
-  lengths in the format "length*rate" (e.g., "A:3440*1.778")
-- `scaling_factor::Float64`: The factor by which to scale each branch length
-
-# Returns
-- `String`: A modified Newick string with scaled branch lengths, preserving 
-  the rate components
-
-# Examples
-```julia-repl
-julia> tree = "(A:3440*1.778,B:880*0.189);"
-julia> scale_species_tree_with_sub_scaling(tree, 2.0)
-"(A:6880.0*1.778,B:1760.0*0.189);"
-```
-"""
-function scale_species_tree_with_sub_scaling(
-    species_tree_with_sub_scaling::String, 
-    scaling_factor::Float64
-    ) 
-    # Pattern to match branch lengths in the format ":number*"
-    pattern = r":(\d*\.?\d+(?:[eE][+-]?\d+)?)\*" 
-    
-    # Replace each match by scaling the number before "*"
-    result = replace(species_tree_with_sub_scaling, pattern => function(match)
-        # Extract the number part (without ":" and "*")
-        number_str = match[2:end-1]  # Remove ":" at start and "*" at end
-        number = parse(Float64, number_str)
-        scaled_number = number * scaling_factor
-        return ":$(scaled_number)*"
-    end)
-    
-    return result
-end 
-
-"""
-    modify_locus_tree_labels!(locus_tree::HybridNetwork) -> HybridNetwork
-Modify tip labels in a locus tree by removing anything after "_"
-"""
-function modify_locus_tree_labels!(locus_tree::HybridNetwork) 
-    for tip in locus_tree.leaf
-        original = tip.name
-        modified = split(original, "_")[1]  # take the part before the first underscore
-        tip.name = modified
-    end
-    return locus_tree
-end 
 
 """
     get_alignment_length(fasta_file::String) -> Int
@@ -2359,38 +1551,14 @@ function get_alignment_length(fasta_file::String)
 end 
 
 """
-    diagnose_simphy_locus_trees(simphy_output_dir::String, rep::Int, iter::Int) -> String
+    diagnose_simphy_locus_trees(simphy_output_dir, rep, iter) -> String
 
-Diagnose issues with locus trees generated by SimPhy by examining the l_trees.trees file.
-
-This function checks for common issues that cause SimPhy failures:
-1. Whether the l_trees.trees file was generated
-2. Whether any locus tree has only taxa from a single species after removing "Lost-" taxa
-3. Whether any locus tree has insufficient species diversity
-
-# Arguments
-- `simphy_output_dir::String`: Path to the SimPhy output directory for this iteration
-- `rep::Int`: Replicate number (for error messages)
-- `iter::Int`: Iteration number (for error messages)
-
-# Returns
-- `String`: Detailed diagnostic message describing the failure
-
-# Examples
-```julia-repl
-julia> diagnose_simphy_locus_trees("/path/to/Int5/1", 1, 5)
-"SimPhy generated 50 locus trees but 2 are problematic:
-  Locus tree #3: Only 1 taxon (A) remains after removing Lost taxa
-  Locus tree #17: All 2 remaining taxa are from species 'H'"
-```
-
-# Notes
-- Searches for l_trees.trees in both output_dir and output_dir/1
-- Removes all tips starting with "Lost-" before analysis
-- Extracts species prefix by taking the part before the first underscore
-- Reports specific locus tree line numbers (1-indexed)
+Scan SimPhy's `l_trees.trees` and return a diagnostic string explaining
+why gene tree generation failed. Checks for missing file, single-species
+trees, and insufficient diversity after removing "Lost-" tips.
 """
-function diagnose_simphy_locus_trees(simphy_output_dir::String, rep::Int, iter::Int)
+function diagnose_simphy_locus_trees(simphy_output_dir::String,
+        rep::Int, iter::Int)
     # Check if l_trees.trees file exists
     # SimPhy may create output in a subdirectory named "1"
     l_trees_path = joinpath(simphy_output_dir, "l_trees.trees")
@@ -2398,7 +1566,8 @@ function diagnose_simphy_locus_trees(simphy_output_dir::String, rep::Int, iter::
         # Try the "1" subdirectory
         l_trees_path_alt = joinpath(simphy_output_dir, "1", "l_trees.trees")
         if !isfile(l_trees_path_alt)
-            return "SimPhy failed before generating locus tree file (l_trees.trees not found)"
+            return "SimPhy failed before generating locus tree file" *
+                " (l_trees.trees not found)"
         end
         l_trees_path = l_trees_path_alt
     end
@@ -2432,8 +1601,8 @@ function diagnose_simphy_locus_trees(simphy_output_dir::String, rep::Int, iter::
                 try
                     deleteleaf!(net, lost_tip)
                 catch e
-                    # If deletion fails, note it but continue
-                    push!(problematic_trees, (locus_id, "Failed to remove Lost tip: $lost_tip"))
+                    push!(problematic_trees,
+                        (locus_id, "Failed to remove Lost tip: $lost_tip"))
                     continue
                 end
             end
@@ -2442,7 +1611,7 @@ function diagnose_simphy_locus_trees(simphy_output_dir::String, rep::Int, iter::
             remaining_tips = [tip.name for tip in net.leaf]
             num_remaining = length(remaining_tips)
             
-            # Extract species prefixes (part before first underscore or the whole name)
+            # Extract species prefix (before first underscore)
             species_list = []
             for tip_name in remaining_tips
                 # Split by underscore and take first part as species
@@ -2457,35 +1626,887 @@ function diagnose_simphy_locus_trees(simphy_output_dir::String, rep::Int, iter::
             
             # Check for problematic patterns
             if num_remaining == 0
-                push!(problematic_trees, (locus_id, "All taxa were Lost (no remaining taxa)"))
+                push!(problematic_trees,
+                    (locus_id, "All taxa were Lost (no remaining taxa)"))
             elseif num_remaining == 1
                 # Only one taxon remains
                 species = unique_species[1]
-                push!(problematic_trees, (locus_id, "Only 1 taxon ($species) remains after removing Lost taxa"))
+                push!(problematic_trees,
+                    (locus_id,
+                    "Only 1 taxon ($species) remains after removing Lost taxa"))
             elseif num_unique_species == 1
                 # Multiple taxa but all from same species
                 species = unique_species[1]
-                push!(problematic_trees, (locus_id, "All $num_remaining remaining taxa are from species '$species' ($(join(remaining_tips, ", ")))"))
+                push!(problematic_trees,
+                    (locus_id,
+                    "All $num_remaining remaining taxa are from species " *
+                    "'$species' ($(join(remaining_tips, ", ")))"))
             elseif num_unique_species < 4
-                # Less than 4 species (not phylogenetically informative for 8-taxon tree)
-                push!(problematic_trees, (locus_id, "Only $num_unique_species species remain: $(join(unique_species, ", ")) (need ≥4 for phylogenetic inference)"))
+                push!(problematic_trees,
+                    (locus_id,
+                    "Only $num_unique_species species remain: " *
+                    "$(join(unique_species, ", ")) " *
+                    "(need ≥4 for phylogenetic inference)"))
             end
-            
+
         catch e
-            # Failed to parse or process the tree
-            push!(problematic_trees, (locus_id, "Failed to parse or process tree: $e"))
+            push!(problematic_trees,
+                (locus_id, "Failed to parse or process tree: $e"))
         end
     end
-    
+
     # Generate diagnostic message
     if isempty(problematic_trees)
-        return "SimPhy failed after generating $num_locus_trees locus trees, but cause is unknown. All locus trees appear valid. Inspect the locus tree file: $l_trees_path"
+        return "SimPhy failed after generating $num_locus_trees locus trees," *
+            " but cause is unknown. All locus trees appear valid." *
+            " Inspect the locus tree file: $l_trees_path"
     else
-        msg = "SimPhy generated $num_locus_trees locus trees but $(length(problematic_trees)) are problematic:\n"
+        n_bad = length(problematic_trees)
+        msg = "SimPhy generated $num_locus_trees locus trees" *
+            " but $n_bad are problematic:\n"
         for (locus_id, reason) in problematic_trees
             msg *= "  Locus tree #$locus_id: $reason\n"
         end
         msg *= "Locus tree file: $l_trees_path"
         return msg
     end
+end
+
+
+# ============================================================
+# Part 4 -- Summary statistics
+# ============================================================
+
+"""
+    parse_parameter_setting(parameter_setting::String)
+
+Parse parameter setting string to extract key parameters.
+Returns a dictionary with keys: ratevar, duploss_rate, SF, n_inds
+
+# Example
+- Input: "DUP0.0003-LOS0.0003-RVN-N_ind2-SF1.0-genelen1000"
+- Output: `Dict("ratevar" => "RVN", "duploss_rate" => "0.0003",
+           "SF" => "1.0", "n_inds" => "2")`
+"""
+function parse_parameter_setting(parameter_setting::String)
+    params = Dict{String, String}()
+
+    # Extract ratevar
+    m = match(r"-(RVG|RVL|RVN|RVGL)-", parameter_setting)
+    params["ratevar"] = m !== nothing ? m.captures[1] : "unknown"
+
+    # Extract duplication/loss rate
+    m = match(r"DUP([\d\.e\-]+)-LOS([\d\.e\-]+)", parameter_setting)
+    params["duploss_rate"] = m !== nothing ? m.captures[1] : "unknown"
+
+    # Extract SF (scaling factor)
+    m = match(r"SF([\d\.]+)", parameter_setting)
+    params["SF"] = m !== nothing ? m.captures[1] : "unknown"
+
+    # Extract n_inds (number of individuals)
+    m = match(r"N_ind(\d+)", parameter_setting)
+    params["n_inds"] = m !== nothing ? m.captures[1] : "unknown"
+
+    return params
+end
+
+
+"""
+    summarize_gamma_by_threshold(input_dir::String,
+                                 column_name_1::Symbol,
+                                 column_name_2::Symbol,
+                                 output_dir::String,
+                                 output_filename::String,
+                                 thresholds::Vector{Float64}=[0.05, 0.1, 0.25])
+
+Summary statistics for gamma values below given thresholds,
+grouped by parameter.
+
+# Arguments
+- `input_dir`: Directory containing CSV files
+- `column_name_1`: First gamma column
+- `column_name_2`: Second gamma column
+- `output_dir`: Directory to save output file
+- `output_filename`: Name of output file
+- `thresholds`: Vector of threshold values (default: [0.05, 0.1, 0.25])
+"""
+function summarize_gamma_by_threshold(input_dir::String,
+        column_name_1::Symbol, column_name_2::Symbol,
+        output_dir::String, output_filename::String,
+        thresholds::Vector{Float64}=[0.05, 0.1, 0.25])
+    csv_files = filter(x -> endswith(x, ".csv"), readdir(input_dir))
+
+    if isempty(csv_files)
+        println("No CSV files found in $input_dir")
+        return
+    end
+
+    mkpath(output_dir)
+
+    # Store data for each category
+    category_stats = Dict{String, Dict{String, Any}}()
+    categories = ["ratevar", "duploss_rate", "SF", "n_inds"]
+
+    for category in categories
+        category_stats[category] = Dict{String, Vector{Float64}}()
+    end
+
+    # Overall statistics
+    all_gamma_values = Float64[]
+
+    # Process each CSV file
+    for csv_file in csv_files
+        filepath = joinpath(input_dir, csv_file)
+        df = CSV.read(filepath, DataFrame)
+
+        if !hasproperty(df, column_name_1) || !hasproperty(df, column_name_2)
+            println("Warning: Columns not found in $csv_file")
+            continue
+        end
+
+        parameter_setting = replace(csv_file, r"^(SNaQ-|findgraph-)" => "")
+        parameter_setting = replace(
+            parameter_setting, r"(-summary)?\.csv$" => "")
+
+        # Parse parameters
+        params = parse_parameter_setting(parameter_setting)
+
+        # Calculate minor gamma
+        minor_gamma = min.(df[!, column_name_1], df[!, column_name_2])
+        minor_gamma = filter(!isnan, collect(skipmissing(minor_gamma)))
+
+        if isempty(minor_gamma)
+            continue
+        end
+
+        # Add to overall statistics
+        append!(all_gamma_values, minor_gamma)
+
+        # Add to category-specific statistics
+        for category in categories
+            key = params[category]
+            if haskey(category_stats[category], key)
+                append!(category_stats[category][key], minor_gamma)
+            else
+                category_stats[category][key] = copy(minor_gamma)
+            end
+        end
+    end
+
+    # Write summary to file
+    output_path = joinpath(output_dir, output_filename)
+    open(output_path, "w") do io
+        println(io, "Gamma summary statistics")
+        println(io, "Thresholds: ", join(thresholds, ", "))
+        println(io, "="^70)
+        println(io)
+
+        # Overall statistics
+        n_total = length(all_gamma_values)
+
+        println(io, "Overall statistics")
+        println(io, "-"^70)
+        println(io, "Total gamma values: $n_total")
+        println(io, "Mean: $(round(mean(all_gamma_values), digits=3))")
+        println(io, "Median: $(round(median(all_gamma_values), digits=3))")
+        println(io, "Std dev: $(round(std(all_gamma_values), digits=3))")
+        println(io)
+
+        for threshold in thresholds
+            n_below = count(x -> x < threshold, all_gamma_values)
+            pct_below = n_total > 0 ?
+                round(n_below / n_total * 100, digits=1) : 0.0
+            println(io, "  Below $threshold: $n_below ($pct_below%)")
+        end
+        println(io)
+        println(io)
+
+        # Category-specific statistics
+        for category in categories
+            println(io, "Statistics by $category")
+            println(io, "-"^70)
+
+            category_data = category_stats[category]
+            sorted_keys = sort(collect(keys(category_data)))
+
+            for key in sorted_keys
+                data = category_data[key]
+                n_total_cat = length(data)
+                mean_gamma = round(mean(data), digits=3)
+                median_gamma = round(median(data), digits=3)
+                std_gamma = round(std(data), digits=3)
+
+                println(io, "  $key:")
+                println(io,
+                    "    n=$n_total_cat, mean=$mean_gamma," *
+                    " median=$median_gamma, std=$std_gamma")
+
+                for threshold in thresholds
+                    n_below_cat = count(x -> x < threshold, data)
+                    pct_below_cat = n_total_cat > 0 ?
+                        round(n_below_cat / n_total_cat * 100, digits=2) : 0.0
+                    println(io,
+                        "    <$threshold: $n_below_cat ($pct_below_cat%)")
+                end
+                println(io)
+            end
+
+            println(io)
+        end
+
+        println(io, "="^70)
+        println(io, "Source: $input_dir")
+    end
+
+    println("Gamma summary saved to: $output_path")
+
+    # Create CSV table with all statistics
+    csv_rows = []
+
+    # Add overall statistics row
+    n_total = length(all_gamma_values)
+    mean_gamma = round(mean(all_gamma_values), digits=4)
+    median_gamma = round(median(all_gamma_values), digits=4)
+    sd_gamma = round(std(all_gamma_values), digits=4)
+
+    overall_row = Dict(
+        "category" => "Overall",
+        "value" => "all",
+        "n" => n_total,
+        "mean_gamma" => mean_gamma,
+        "median_gamma" => median_gamma,
+        "sd_gamma" => sd_gamma
+    )
+
+    for threshold in thresholds
+        n_below = count(x -> x < threshold, all_gamma_values)
+        pct_below = n_total > 0 ?
+            round(n_below / n_total * 100, digits=1) : 0.0
+        col_name = "gamma_below_$(threshold)"
+        overall_row[col_name] = pct_below
+    end
+
+    push!(csv_rows, overall_row)
+
+    # Add category-specific statistics
+    for category in categories
+        category_data = category_stats[category]
+        sorted_keys = sort(collect(keys(category_data)))
+
+        for key in sorted_keys
+            data = category_data[key]
+            n_total_cat = length(data)
+            mean_gamma_cat = round(mean(data), digits=3)
+            median_gamma_cat = round(median(data), digits=3)
+            sd_gamma_cat = round(std(data), digits=3)
+
+            row = Dict(
+                "category" => category,
+                "value" => key,
+                "n" => n_total_cat,
+                "mean_gamma" => mean_gamma_cat,
+                "median_gamma" => median_gamma_cat,
+                "sd_gamma" => sd_gamma_cat
+            )
+
+            for threshold in thresholds
+                n_below_cat = count(x -> x < threshold, data)
+                pct_below_cat = n_total_cat > 0 ?
+                    round(n_below_cat / n_total_cat * 100, digits=1) : 0.0
+                col_name = "gamma_below_$(threshold)"
+                row[col_name] = pct_below_cat
+            end
+
+            push!(csv_rows, row)
+        end
+    end
+
+    # Convert to DataFrame and save as CSV
+    summary_df = DataFrame(csv_rows)
+
+    # Reorder columns for better readability
+    col_order = [
+        "category", "value", "n",
+        "mean_gamma", "median_gamma", "sd_gamma"]
+    for threshold in thresholds
+        push!(col_order, "gamma_below_$(threshold)")
+    end
+    select!(summary_df, col_order)
+
+    # Generate CSV filename
+    csv_filename = replace(output_filename, r"\.(txt|log)$" => ".csv")
+    csv_output_path = joinpath(output_dir, csv_filename)
+
+    CSV.write(csv_output_path, summary_df)
+    println("Gamma summary CSV saved to: $csv_output_path")
+end
+
+
+"""
+    summarize_WR_by_threshold(input_dir::String,
+                              column_name::Symbol,
+                              output_dir::String,
+                              output_filename::String,
+                              metric_name::String,
+                              percentiles::Vector{Float64}=[0.95, 0.99])
+
+Summary statistics for worst residual (WR) values grouped by parameters.
+Works for single-column metrics like H0_best_tree_WR and H1_best_graph_WR.
+
+# Arguments
+- `input_dir`: Directory containing CSV files
+- `column_name`: Column to analyze (e.g., :H0_best_tree_WR)
+- `output_dir`: Directory to save output file
+- `output_filename`: Name of output file
+- `metric_name`: Display name for the metric (e.g., "H0 Best Tree WR")
+- `percentiles`: Percentiles to report (default: [0.95, 0.99])
+"""
+function summarize_WR_by_threshold(input_dir::String,
+                                   column_name::Symbol,
+                                   output_dir::String,
+                                   output_filename::String,
+                                   metric_name::String,
+                                   percentiles::Vector{Float64}=[0.95, 0.99])
+    csv_files = filter(x -> endswith(x, ".csv"), readdir(input_dir))
+
+    if isempty(csv_files)
+        println("No CSV files found in $input_dir")
+        return
+    end
+
+    mkpath(output_dir)
+
+    # Store data for each category
+    category_stats = Dict{String, Dict{String, Any}}()
+    categories = ["ratevar", "duploss_rate", "SF", "n_inds"]
+
+    for category in categories
+        category_stats[category] = Dict{String, Vector{Float64}}()
+    end
+
+    # Per-file percentile tracking (for min/max across parameter settings)
+    # Structure: category -> key -> pct -> [per_file_pct_value, ...]
+    category_per_file_pcts =
+        Dict{String, Dict{String, Dict{Float64, Vector{Float64}}}}()
+    for category in categories
+        category_per_file_pcts[category] =
+            Dict{String, Dict{Float64, Vector{Float64}}}()
+    end
+    all_per_file_pcts =
+        Dict{Float64, Vector{Float64}}(pct => Float64[] for pct in percentiles)
+
+    # ratevar x SF interaction
+    ratevar_x_SF_stats = Dict{String, Vector{Float64}}()
+    ratevar_x_SF_per_file_pcts =
+        Dict{String, Dict{Float64, Vector{Float64}}}()
+
+    # ratevar_group x ILS: (RVG+RVN vs RVL) × ILS level (from SF)
+    ils_map = Dict("1.0" => "high", "0.5" => "low")
+    ratevar_group_x_ILS_stats = Dict{String, Vector{Float64}}()
+    ratevar_group_x_ILS_per_file_pcts =
+        Dict{String, Dict{Float64, Vector{Float64}}}()
+
+    # Overall statistics
+    all_wr_values = Float64[]
+
+    # Process each CSV file
+    for csv_file in csv_files
+        filepath = joinpath(input_dir, csv_file)
+        df = CSV.read(filepath, DataFrame)
+
+        if !hasproperty(df, column_name)
+            println("Warning: Column $(column_name) not found in $csv_file")
+            continue
+        end
+
+        parameter_setting = replace(csv_file, r"^(SNaQ-|findgraph-)" => "")
+        parameter_setting = replace(
+            parameter_setting, r"(-summary)?\.csv$" => "")
+
+        # Parse parameters
+        params = parse_parameter_setting(parameter_setting)
+
+        # Extract WR values and filter NaN/missing
+        wr_values = filter(!isnan, collect(skipmissing(df[!, column_name])))
+
+        if isempty(wr_values)
+            continue
+        end
+
+        # Add to overall statistics
+        append!(all_wr_values, wr_values)
+
+        # Compute per-file percentiles and accumulate for min/max tracking
+        file_pcts =
+            Dict(pct => quantile(wr_values, pct) for pct in percentiles)
+        for pct in percentiles
+            push!(all_per_file_pcts[pct], file_pcts[pct])
+        end
+
+        # Add to category-specific statistics
+        for category in categories
+            key = params[category]
+            if haskey(category_stats[category], key)
+                append!(category_stats[category][key], wr_values)
+            else
+                category_stats[category][key] = copy(wr_values)
+            end
+            # Per-file percentile tracking
+            if !haskey(category_per_file_pcts[category], key)
+                category_per_file_pcts[category][key] =
+                    Dict(pct => Float64[] for pct in percentiles)
+            end
+            for pct in percentiles
+                push!(category_per_file_pcts[category][key][pct],
+                    file_pcts[pct])
+            end
+        end
+
+        # ratevar x SF interaction
+        rv_sf_key = "$(params["ratevar"])_SF$(params["SF"])"
+        if haskey(ratevar_x_SF_stats, rv_sf_key)
+            append!(ratevar_x_SF_stats[rv_sf_key], wr_values)
+        else
+            ratevar_x_SF_stats[rv_sf_key] = copy(wr_values)
+        end
+        if !haskey(ratevar_x_SF_per_file_pcts, rv_sf_key)
+            ratevar_x_SF_per_file_pcts[rv_sf_key] =
+                Dict(pct => Float64[] for pct in percentiles)
+        end
+        for pct in percentiles
+            push!(ratevar_x_SF_per_file_pcts[rv_sf_key][pct], file_pcts[pct])
+        end
+
+        # ratevar_group x ILS: RVG+RVN vs RVL, crossed with ILS (SF)
+        rv = params["ratevar"]
+        rv_group = (rv == "RVL") ? "RVL" : "RVG+RVN"
+        ils_level = get(ils_map, params["SF"], params["SF"])
+        rv_ils_key = "$(rv_group)_ILS$(ils_level)"
+        if haskey(ratevar_group_x_ILS_stats, rv_ils_key)
+            append!(ratevar_group_x_ILS_stats[rv_ils_key], wr_values)
+        else
+            ratevar_group_x_ILS_stats[rv_ils_key] = copy(wr_values)
+        end
+        if !haskey(ratevar_group_x_ILS_per_file_pcts, rv_ils_key)
+            ratevar_group_x_ILS_per_file_pcts[rv_ils_key] =
+                Dict(pct => Float64[] for pct in percentiles)
+        end
+        for pct in percentiles
+            push!(ratevar_group_x_ILS_per_file_pcts[rv_ils_key][pct],
+                file_pcts[pct])
+        end
+    end
+
+    # Write summary to file
+    output_path = joinpath(output_dir, output_filename)
+    open(output_path, "w") do io
+        println(io, "$metric_name summary statistics")
+        pct_labels = join(
+            map(p -> "$(round(p*100, digits=0))%", percentiles), ", ")
+        println(io, "Percentiles: ", pct_labels)
+        println(io, "="^70)
+        println(io)
+
+        # Overall statistics
+        n_total = length(all_wr_values)
+
+        println(io, "Overall statistics")
+        println(io, "-"^70)
+        println(io, "Total WR values: $n_total")
+        if !isempty(all_wr_values)
+            println(io, "Mean: $(round(mean(all_wr_values), digits=4))")
+            println(io, "Median: $(round(median(all_wr_values), digits=4))")
+            println(io, "Std dev: $(round(std(all_wr_values), digits=4))")
+        else
+            println(io, "No valid data found for this metric")
+        end
+        println(io)
+
+        # Calculate percentile values for overall data
+        for pct in percentiles
+            if !isempty(all_wr_values)
+                q_value = round(quantile(all_wr_values, pct), digits=4)
+                pct_label = round(Int, pct * 100)
+                println(io,
+                    "  $pct_label-th percentile: $q_value" *
+                    " ($(pct_label)% of values below this)")
+            end
+        end
+        println(io)
+
+        # Per-setting percentile range (min/max across parameter settings)
+        if !isempty(all_per_file_pcts[first(percentiles)])
+            n_settings = length(all_per_file_pcts[first(percentiles)])
+            println(io,
+                "  Per-setting percentile range (min/max across" *
+                " $n_settings parameter settings):")
+            for pct in percentiles
+                vals = all_per_file_pcts[pct]
+                pct_label = round(Int, pct * 100)
+                println(io,
+                    "    $pct_label-th percentile:" *
+                    " min=$(round(minimum(vals), digits=4))," *
+                    " max=$(round(maximum(vals), digits=4))")
+            end
+        end
+        println(io)
+        println(io)
+
+        # Category-specific statistics
+        for category in categories
+            println(io, "Statistics by $category")
+            println(io, "-"^70)
+
+            category_data = category_stats[category]
+            sorted_keys = sort(collect(keys(category_data)))
+
+            for key in sorted_keys
+                data = category_data[key]
+                n_total_cat = length(data)
+                if !isempty(data)
+                    mean_wr = round(mean(data), digits=4)
+                    median_wr = round(median(data), digits=4)
+                    std_wr = round(std(data), digits=4)
+
+                    println(io, "  $key:")
+                    println(io,
+                        "    n=$n_total_cat, mean=$mean_wr," *
+                        " median=$median_wr, std=$std_wr")
+
+                    for pct in percentiles
+                        if !isempty(data)
+                            q_value = round(quantile(data, pct), digits=4)
+                            pct_label = round(Int, pct * 100)
+                            println(io,
+                                "    $pct_label-th percentile (pooled):" *
+                                " $q_value")
+                        end
+                    end
+
+                    if haskey(category_per_file_pcts[category], key)
+                        per_file = category_per_file_pcts[category][key]
+                        n_settings = length(per_file[first(percentiles)])
+                        println(io,
+                            "    Per-setting range ($n_settings settings):")
+                        for pct in percentiles
+                            vals = per_file[pct]
+                            pct_label = round(Int, pct * 100)
+                            println(io,
+                                "      $pct_label-th:" *
+                                " min=$(round(minimum(vals), digits=4))," *
+                                " max=$(round(maximum(vals), digits=4))")
+                        end
+                    end
+                end
+                println(io)
+            end
+
+            println(io)
+        end
+
+        # ratevar x SF interaction statistics
+        println(io, "Statistics by ratevar x SF")
+        println(io, "-"^70)
+
+        for key in sort(collect(keys(ratevar_x_SF_stats)))
+            data = ratevar_x_SF_stats[key]
+            n_total_int = length(data)
+            if !isempty(data)
+                mean_wr = round(mean(data), digits=4)
+                median_wr = round(median(data), digits=4)
+                std_wr = round(std(data), digits=4)
+
+                println(io, "  $key:")
+                println(io,
+                    "    n=$n_total_int, mean=$mean_wr," *
+                    " median=$median_wr, std=$std_wr")
+
+                for pct in percentiles
+                    q_value = round(quantile(data, pct), digits=4)
+                    pct_label = round(Int, pct * 100)
+                    println(io,
+                        "    $pct_label-th percentile (pooled): $q_value")
+                end
+
+                if haskey(ratevar_x_SF_per_file_pcts, key)
+                    per_file = ratevar_x_SF_per_file_pcts[key]
+                    n_settings = length(per_file[first(percentiles)])
+                    println(io,
+                        "    Per-setting range ($n_settings settings):")
+                    for pct in percentiles
+                        vals = per_file[pct]
+                        pct_label = round(Int, pct * 100)
+                        println(io,
+                            "      $pct_label-th:" *
+                            " min=$(round(minimum(vals), digits=4))," *
+                            " max=$(round(maximum(vals), digits=4))")
+                    end
+                end
+            end
+            println(io)
+        end
+
+        # ratevar_group x ILS: (RVG+RVN vs RVL) × ILS level
+        println(io, "Statistics by ratevar_group x ILS")
+        println(io, "-"^70)
+
+        for key in sort(collect(keys(ratevar_group_x_ILS_stats)))
+            data = ratevar_group_x_ILS_stats[key]
+            n_total_int = length(data)
+            if !isempty(data)
+                mean_wr = round(mean(data), digits=4)
+                median_wr = round(median(data), digits=4)
+                std_wr = round(std(data), digits=4)
+
+                println(io, "  $key:")
+                println(io,
+                    "    n=$n_total_int, mean=$mean_wr," *
+                    " median=$median_wr, std=$std_wr")
+
+                for pct in percentiles
+                    q_value = round(quantile(data, pct), digits=4)
+                    pct_label = round(Int, pct * 100)
+                    println(io,
+                        "    $pct_label-th percentile (pooled): $q_value")
+                end
+
+                if haskey(ratevar_group_x_ILS_per_file_pcts, key)
+                    per_file = ratevar_group_x_ILS_per_file_pcts[key]
+                    n_settings = length(per_file[first(percentiles)])
+                    println(io,
+                        "    Per-setting range ($n_settings settings):")
+                    for pct in percentiles
+                        vals = per_file[pct]
+                        pct_label = round(Int, pct * 100)
+                        println(io,
+                            "      $pct_label-th:" *
+                            " min=$(round(minimum(vals), digits=4))," *
+                            " max=$(round(maximum(vals), digits=4))")
+                    end
+                end
+            end
+            println(io)
+        end
+
+        println(io, "")
+        println(io, "="^70)
+        println(io, "Source: $input_dir")
+    end
+
+    println("$metric_name summary saved to: $output_path")
+
+    # Create CSV table with all statistics
+    csv_rows = []
+
+    # Add overall statistics row
+    n_total = length(all_wr_values)
+    overall_row = Dict(
+        "category" => "Overall",
+        "value" => "all",
+        "n" => n_total
+    )
+
+    if !isempty(all_wr_values)
+        mean_wr = round(mean(all_wr_values), digits=4)
+        median_wr = round(median(all_wr_values), digits=4)
+        sd_wr = round(std(all_wr_values), digits=4)
+        overall_row["mean_WR"] = mean_wr
+        overall_row["median_WR"] = median_wr
+        overall_row["sd_WR"] = sd_wr
+
+        # Calculate percentile values for overall data
+        for pct in percentiles
+            q_value = round(quantile(all_wr_values, pct), digits=4)
+            pct_label = round(Int, pct * 100)
+            col_name = "percentile_$(pct_label)"
+            overall_row[col_name] = q_value
+        end
+
+        # Per-setting min/max percentiles across all settings
+        for pct in percentiles
+            vals = all_per_file_pcts[pct]
+            pct_label = round(Int, pct * 100)
+            if !isempty(vals)
+                overall_row["min_percentile_$(pct_label)"] =
+                    round(minimum(vals), digits=4)
+                overall_row["max_percentile_$(pct_label)"] =
+                    round(maximum(vals), digits=4)
+            end
+        end
+    end
+
+    push!(csv_rows, overall_row)
+
+    # Add category-specific statistics
+    for category in categories
+        category_data = category_stats[category]
+        sorted_keys = sort(collect(keys(category_data)))
+
+        for key in sorted_keys
+            data = category_data[key]
+            n_total_cat = length(data)
+
+            row = Dict(
+                "category" => category,
+                "value" => key,
+                "n" => n_total_cat
+            )
+
+            if !isempty(data)
+                mean_wr_cat = round(mean(data), digits=4)
+                median_wr_cat = round(median(data), digits=4)
+                sd_wr_cat = round(std(data), digits=4)
+
+                row["mean_WR"] = mean_wr_cat
+                row["median_WR"] = median_wr_cat
+                row["sd_WR"] = sd_wr_cat
+
+                # Calculate pooled percentile values for this category
+                for pct in percentiles
+                    q_value = round(quantile(data, pct), digits=4)
+                    pct_label = round(Int, pct * 100)
+                    col_name = "percentile_$(pct_label)"
+                    row[col_name] = q_value
+                end
+
+                # Per-setting min/max percentiles for this category value
+                if haskey(category_per_file_pcts[category], key)
+                    per_file = category_per_file_pcts[category][key]
+                    for pct in percentiles
+                        vals = per_file[pct]
+                        pct_label = round(Int, pct * 100)
+                        if !isempty(vals)
+                            row["min_percentile_$(pct_label)"] =
+                                round(minimum(vals), digits=4)
+                            row["max_percentile_$(pct_label)"] =
+                                round(maximum(vals), digits=4)
+                        end
+                    end
+                end
+            end
+
+            push!(csv_rows, row)
+        end
+    end
+
+    # Add ratevar x SF interaction rows
+    for key in sort(collect(keys(ratevar_x_SF_stats)))
+        data = ratevar_x_SF_stats[key]
+        n_total_int = length(data)
+
+        row = Dict(
+            "category" => "ratevar_x_SF",
+            "value" => key,
+            "n" => n_total_int
+        )
+
+        if !isempty(data)
+            row["mean_WR"]   = round(mean(data), digits=4)
+            row["median_WR"] = round(median(data), digits=4)
+            row["sd_WR"]     = round(std(data), digits=4)
+
+            for pct in percentiles
+                q_value   = round(quantile(data, pct), digits=4)
+                pct_label = round(Int, pct * 100)
+                row["percentile_$(pct_label)"] = q_value
+            end
+
+            if haskey(ratevar_x_SF_per_file_pcts, key)
+                per_file = ratevar_x_SF_per_file_pcts[key]
+                for pct in percentiles
+                    vals      = per_file[pct]
+                    pct_label = round(Int, pct * 100)
+                    if !isempty(vals)
+                        row["min_percentile_$(pct_label)"] =
+                            round(minimum(vals), digits=4)
+                        row["max_percentile_$(pct_label)"] =
+                            round(maximum(vals), digits=4)
+                    end
+                end
+            end
+        end
+
+        push!(csv_rows, row)
+    end
+
+    # Add ratevar_group x ILS interaction rows
+    for key in sort(collect(keys(ratevar_group_x_ILS_stats)))
+        data = ratevar_group_x_ILS_stats[key]
+        n_total_int = length(data)
+
+        row = Dict(
+            "category" => "ratevar_group_x_ILS",
+            "value" => key,
+            "n" => n_total_int
+        )
+
+        if !isempty(data)
+            row["mean_WR"]   = round(mean(data), digits=4)
+            row["median_WR"] = round(median(data), digits=4)
+            row["sd_WR"]     = round(std(data), digits=4)
+
+            for pct in percentiles
+                q_value   = round(quantile(data, pct), digits=4)
+                pct_label = round(Int, pct * 100)
+                row["percentile_$(pct_label)"] = q_value
+            end
+
+            if haskey(ratevar_group_x_ILS_per_file_pcts, key)
+                per_file = ratevar_group_x_ILS_per_file_pcts[key]
+                for pct in percentiles
+                    vals      = per_file[pct]
+                    pct_label = round(Int, pct * 100)
+                    if !isempty(vals)
+                        row["min_percentile_$(pct_label)"] =
+                            round(minimum(vals), digits=4)
+                        row["max_percentile_$(pct_label)"] =
+                            round(maximum(vals), digits=4)
+                    end
+                end
+            end
+        end
+
+        push!(csv_rows, row)
+    end
+
+    # Convert to DataFrame and save as CSV
+    summary_df = DataFrame(csv_rows)
+
+    # Reorder columns for better readability
+    col_order = ["category", "value", "n"]
+    if hasproperty(summary_df, :mean_WR)
+        push!(col_order, "mean_WR")
+    end
+    if hasproperty(summary_df, :median_WR)
+        push!(col_order, "median_WR")
+    end
+    if hasproperty(summary_df, :sd_WR)
+        push!(col_order, "sd_WR")
+    end
+    for pct in percentiles
+        pct_label = round(Int, pct * 100)
+        col_name = "percentile_$(pct_label)"
+        if hasproperty(summary_df, Symbol(col_name))
+            push!(col_order, col_name)
+        end
+    end
+    for pct in percentiles
+        pct_label = round(Int, pct * 100)
+        for prefix in ("min_percentile_", "max_percentile_")
+            col_name = "$(prefix)$(pct_label)"
+            if hasproperty(summary_df, Symbol(col_name))
+                push!(col_order, col_name)
+            end
+        end
+    end
+    if length(col_order) > 3
+        select!(summary_df, col_order)
+    end
+
+    # Generate CSV filename
+    csv_filename = replace(output_filename, r"\.(txt|log)$" => ".csv")
+    csv_output_path = joinpath(output_dir, csv_filename)
+
+    CSV.write(csv_output_path, summary_df)
+    println("$metric_name CSV summary saved to: $csv_output_path")
 end

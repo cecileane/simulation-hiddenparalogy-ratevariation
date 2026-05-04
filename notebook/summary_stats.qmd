@@ -1,0 +1,578 @@
+---
+title: "Summary Statistics"
+format: html
+execute:
+  warning: false
+  message: false
+---
+
+```{r setup}
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(stringr)
+library(kableExtra)
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+visualization_output <- "../visualization_results/combined"
+source("../scripts/visual_utilities.R")
+
+parse_params <- function(df, param_col) {
+  df %>% mutate(
+    dup_loss_rate = as.numeric(str_extract(.data[[param_col]], "(?<=DUP)[0-9]*\\.?[0-9]+(?:[eE][-+]?[0-9]+)?")),
+    RV    = factor(str_extract(.data[[param_col]], "(?<=RV)[A-Z]+"), levels = c("N", "G", "L")),
+    SF    = as.numeric(str_extract(.data[[param_col]], "(?<=SF)[0-9]*\\.?[0-9]+")),
+    N_ind = as.integer(str_extract(.data[[param_col]], "(?<=N_ind)[0-9]+")),
+    n_ind = N_ind
+  )
+}
+
+snaq_df <- read_csv("../results/SNaQ_summary.csv") %>% parse_params("parameter_setting")
+findgraph_df <- read_csv("../results/findgraph_summary.csv") %>%
+  parse_params("paramname_root") %>%
+  mutate(
+    pct_H0        = H0Accepted / total_replicates * 100,
+    pct_H0_wr_3.7 = H0Accepted_WR_3.7 / total_replicates * 100
+  )
+
+fmt_rate <- function(x) {
+  v <- as.numeric(x)
+  ifelse(v == 0, "0", sub("e-0", "e-", formatC(v, format = "e", digits = 0)))
+}
+
+tex_output_dir <- "../visualization_results/combined"
+dir.create(tex_output_dir, showWarnings = FALSE, recursive = TRUE)
+```
+
+```{r helper_functions}
+# ── Render HTML preview + write LaTeX file for any pre-formatted tibble ────────
+# fmt_tbl       : tibble already formatted as character strings
+# n_meta_cols   : number of left-aligned grouping columns
+# header_html   : named integer vector for add_header_above (HTML, Unicode ok)
+# header_latex  : named integer vector for add_header_above (LaTeX math ok)
+# caption_*     : table captions
+# label         : LaTeX \label{} key
+# tex_path      : output .tex file path
+render_kable_tables <- function(fmt_tbl, n_meta_cols,
+                                header_html, header_latex,
+                                caption_html, caption_latex,
+                                label, tex_path, scale = TRUE) {
+  n_val  <- ncol(fmt_tbl) - n_meta_cols
+  align  <- c(rep("l", n_meta_cols), rep("r", n_val))
+  l_opts <- if (scale) c("scale_down", "hold_position") else "hold_position"
+
+  # HTML
+  print(
+    fmt_tbl %>%
+      knitr::kable(format = "html", booktabs = TRUE,
+                   align = align, caption = caption_html) %>%
+      kable_styling(bootstrap_options = c("striped", "condensed"),
+                    full_width = FALSE) %>%
+      add_header_above(header_html)
+  )
+
+  # LaTeX
+  dir.create(dirname(tex_path), showWarnings = FALSE, recursive = TRUE)
+  kbl <- fmt_tbl %>%
+    knitr::kable(format = "latex", booktabs = TRUE, escape = FALSE,
+                 align = align, caption = caption_latex, label = label) %>%
+    kable_styling(latex_options = l_opts) %>%
+    add_header_above(header_latex)
+  writeLines(as.character(kbl), tex_path)
+  cat("LaTeX table written to:", tex_path, "\n")
+}
+
+# ── Compute per-factor-level marginals for a set of value columns ──────────────
+# combined_df : must have columns dup_loss_rate, RV, N_ind, ILS + value_cols
+# value_cols  : character vector of numeric column names to average
+# Returns a named list: by_duploss, by_ILS, by_RV, by_nind
+compute_marginals <- function(combined_df, value_cols) {
+  avg_by <- function(df, grp, lbl_fn) {
+    df %>%
+      group_by(across(all_of(grp))) %>%
+      summarise(across(all_of(value_cols), mean), .groups = "drop") %>%
+      mutate(Level = lbl_fn(.)) %>%
+      select(Level, all_of(value_cols))
+  }
+  list(
+    by_duploss = combined_df %>%
+      avg_by("dup_loss_rate", \(d) paste0("Dup/Loss = ", fmt_rate(d$dup_loss_rate))),
+    by_ILS = combined_df %>%
+      avg_by("ILS", \(d) d$ILS),
+    by_RV = combined_df %>%
+      mutate(RV = dplyr::recode(as.character(RV),
+                                "N" = "RV = None", "G" = "RV = Gene",
+                                "L" = "RV = Lineage")) %>%
+      avg_by("RV", \(d) d$RV),
+    by_nind = combined_df %>%
+      avg_by("N_ind", \(d) paste0("n = ", d$N_ind))
+  )
+}
+
+# ── Stack marginals with section-header spacer rows ────────────────────────────
+# marginals  : list from compute_marginals()
+# value_cols : same character vector used in compute_marginals()
+make_marginal_display_tbl <- function(marginals, value_cols) {
+  spacer <- function(label) {
+    empty <- as.list(rep(NA_real_, length(value_cols)))
+    names(empty) <- value_cols
+    tibble(Level = label, !!!empty)
+  }
+  bind_rows(
+    spacer("\\textit{By Dup/Loss Rate}"),  marginals$by_duploss,
+    spacer("\\textit{By ILS Level}"),       marginals$by_ILS,
+    spacer("\\textit{By Rate Variation}"),   marginals$by_RV,
+    spacer("\\textit{By $n$ per species}"),  marginals$by_nind
+  )
+}
+
+# ── Format grouping columns shared by all per-param tables ─────────────────────
+fmt_meta_cols <- function(df) {
+  df %>% mutate(
+    RV            = dplyr::recode(as.character(RV),
+                                  "N" = "None", "G" = "Gene", "L" = "Lineage"),
+    dup_loss_rate = fmt_rate(dup_loss_rate)
+  ) %>%
+  rename(`Rate` = dup_loss_rate, `RV` = RV, `$n$` = N_ind, `ILS` = ILS)
+}
+```
+
+# Type-I Error Rate Summary
+Average hypothesis acceptance rates (% replicates accepting H=0, H=1, H>1) grouped by
+dup/loss rate, rate variation, n_ind, and ILS level (SF).
+
+```{r hypothesis_summary}
+# ── SNaQ ─────────────────────────────────────────────────────────────────────
+snaq_summary <- snaq_df %>%
+  mutate(
+    total    = `H=0Accepted` + `H=1Accepted` + `H>1Accepted`,
+    pct_H0   = `H=0Accepted` / total * 100,
+    pct_H1   = `H=1Accepted` / total * 100,
+    pct_Hgt1 = `H>1Accepted` / total * 100,
+    ILS      = ifelse(SF == 1.0, "high (SF=1.0)", "low (SF=0.5)")
+  ) %>%
+  group_by(dup_loss_rate, RV, N_ind, ILS) %>%
+  summarise(
+    snaq_H0   = mean(pct_H0),
+    snaq_H1   = mean(pct_H1),
+    snaq_Hgt1 = mean(pct_Hgt1),
+    .groups = "drop"
+  )
+
+# ── findgraphs ────────────────────────────────────────────────────────────────
+findgraph_summary <- findgraph_df %>%
+  mutate(
+    fg_H0_wr30   = H0Accepted         / total_replicates * 100,
+    fg_H1_wr30   = H1Accepted         / total_replicates * 100,
+    fg_Hgt1_wr30 = BT1Accepted        / total_replicates * 100,
+    fg_H0_wr37   = H0Accepted_WR_3.7  / total_replicates * 100,
+    fg_H1_wr37   = H1Accepted_WR_3.7  / total_replicates * 100,
+    fg_Hgt1_wr37 = BT1Accepted_WR_3.7 / total_replicates * 100,
+    ILS          = ifelse(SF == 1.0, "high (SF=1.0)", "low (SF=0.5)")
+  ) %>%
+  group_by(dup_loss_rate, RV, N_ind, ILS) %>%
+  summarise(across(starts_with("fg_"), mean), .groups = "drop")
+
+# ── Combined ──────────────────────────────────────────────────────────────────
+combined_hyp <- snaq_summary %>%
+  left_join(findgraph_summary, by = c("dup_loss_rate", "RV", "N_ind", "ILS")) %>%
+  arrange(dup_loss_rate, RV, N_ind, ILS)
+
+print(combined_hyp, n = Inf)
+write.csv(combined_hyp,
+          file.path("..", "results", "combined_hypothesis_acceptance_summary.csv"),
+          row.names = FALSE)
+```
+
+# Full Parameter-Setting Table (LaTeX)
+
+```{r type1_error_latex_table}
+# ── Format values ─────────────────────────────────────────────────────────────
+latex_tbl <- combined_hyp %>%
+  mutate(
+    RV            = dplyr::recode(as.character(RV), "N" = "None", "G" = "Gene", "L" = "Lineage"),
+    dup_loss_rate = fmt_rate(dup_loss_rate),
+    across(where(is.numeric), ~ sprintf("%.1f", .x))
+  ) %>%
+  rename(
+    `Rate`         = dup_loss_rate,
+    `RV`           = RV,
+    `$n$`          = N_ind,
+    `ILS`          = ILS,
+    # SNaQ
+    `H=0`          = snaq_H0,
+    `H=1`          = snaq_H1,
+    `H>1`          = snaq_Hgt1,
+    # findgraphs WR<=3.0
+    `H=0 `         = fg_H0_wr30,
+    `H=1 `         = fg_H1_wr30,
+    `H>1 `         = fg_Hgt1_wr30,
+    # findgraphs WR<=3.7
+    `H=0  `        = fg_H0_wr37,
+    `H=1  `        = fg_H1_wr37,
+    `H>1  `        = fg_Hgt1_wr37
+  )
+
+# ── HTML inline preview ───────────────────────────────────────────────────────
+latex_tbl %>%
+  knitr::kable(
+    format   = "html",
+    booktabs = TRUE,
+    align    = c("l", "l", "c", "l", rep("r", 9)),
+    caption  = "Average hypothesis acceptance rates (%) by parameter setting."
+  ) %>%
+  kable_styling(bootstrap_options = c("striped", "condensed"), full_width = FALSE) %>%
+  add_header_above(c(" " = 4, "SNaQ" = 3, "findgraphs (WR\u22643.0)" = 3, "findgraphs (WR\u22643.7)" = 3))
+
+# ── Write .tex ────────────────────────────────────────────────────────────────
+tex_output_path <- file.path(tex_output_dir, "hypothesis_rates_summary.tex")
+
+kbl_latex <- latex_tbl %>%
+  knitr::kable(
+    format   = "latex",
+    booktabs = TRUE,
+    escape   = FALSE,
+    align    = c("l", "l", "c", "l", rep("r", 9)),
+    caption  = "Average hypothesis acceptance rates (\\%) by parameter setting. Columns show mean percentage of replicates accepting $H=0$, $H=1$, or $H>1$ across replicate conditions.",
+    label = "tab:hypothesis-rates"
+  ) %>%
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 4,
+                     "SNaQ" = 3,
+                     "findgraphs ($\\\\leq$3.0)" = 3,
+                     "findgraphs ($\\\\leq$3.7)" = 3))
+
+writeLines(as.character(kbl_latex), tex_output_path)
+cat("LaTeX table written to:", tex_output_path, "\n")
+```
+
+# Marginal Summary Table (averaged within each factor level)
+
+```{r marginal_summary_table}
+# Helper: compute type-I error and select output columns
+prep_marginal <- function(df) {
+  df %>%
+    mutate(
+      snaq_type1    = snaq_H1 + snaq_Hgt1,
+      fg_type1_wr30 = fg_H1_wr30 + fg_Hgt1_wr30,
+      fg_type1_wr37 = fg_H1_wr37 + fg_Hgt1_wr37
+    ) %>%
+    select(Level,
+           snaq_type1, snaq_H1, snaq_Hgt1,
+           fg_type1_wr30, fg_H1_wr30, fg_Hgt1_wr30,
+           fg_type1_wr37, fg_H1_wr37, fg_Hgt1_wr37)
+}
+
+# ── By dup/loss rate ──────────────────────────────────────────────────────────
+by_duploss <- combined_hyp %>%
+  group_by(dup_loss_rate) %>%
+  summarise(across(where(is.numeric), mean), .groups = "drop") %>%
+  mutate(Level = paste0("Dup/Loss = ", fmt_rate(dup_loss_rate))) %>%
+  prep_marginal()
+
+# ── By ILS ────────────────────────────────────────────────────────────────────
+by_ILS <- combined_hyp %>%
+  group_by(ILS) %>%
+  summarise(across(where(is.numeric), mean), .groups = "drop") %>%
+  mutate(Level = ILS) %>%
+  prep_marginal()
+
+# ── By RV ─────────────────────────────────────────────────────────────────────
+by_RV <- combined_hyp %>%
+  mutate(RV_label = dplyr::recode(as.character(RV),
+                                  "N" = "RV = None", "G" = "RV = Gene", "L" = "RV = Lineage")) %>%
+  group_by(RV_label) %>%
+  summarise(across(where(is.numeric), mean), .groups = "drop") %>%
+  rename(Level = RV_label) %>%
+  prep_marginal()
+
+# ── By n_ind ──────────────────────────────────────────────────────────────────
+by_nind <- combined_hyp %>%
+  group_by(N_ind) %>%
+  summarise(across(where(is.numeric), mean), .groups = "drop") %>%
+  mutate(Level = paste0("n = ", N_ind)) %>%
+  prep_marginal()
+
+# ── Save CSV (no spacer rows) ─────────────────────────────────────────────────
+marginal_csv <- bind_rows(
+  by_duploss %>% mutate(group = "dup_loss_rate"),
+  by_ILS     %>% mutate(group = "ILS"),
+  by_RV      %>% mutate(group = "RV"),
+  by_nind    %>% mutate(group = "N_ind")
+) %>% relocate(group)
+write.csv(marginal_csv,
+          file.path("..", "results", "combined_hypothesis_acceptance_marginal.csv"),
+          row.names = FALSE)
+cat("Marginal CSV written.\n")
+
+# ── Stack with section labels for display ─────────────────────────────────────
+section_spacer <- function(label, ncols = 9) {
+  empty <- as.list(rep(NA_real_, ncols))
+  names(empty) <- c("snaq_type1", "snaq_H1", "snaq_Hgt1",
+                    "fg_type1_wr30", "fg_H1_wr30", "fg_Hgt1_wr30",
+                    "fg_type1_wr37", "fg_H1_wr37", "fg_Hgt1_wr37")
+  tibble(Level = label, !!!empty)
+}
+
+marginal_tbl <- bind_rows(
+  section_spacer("\\textit{By Dup/Loss Rate}"),
+  by_duploss,
+  section_spacer("\\textit{By ILS Level}"),
+  by_ILS,
+  section_spacer("\\textit{By Rate Variation}"),
+  by_RV,
+  section_spacer("\\textit{By $n$ per species}"),
+  by_nind
+)
+
+marginal_fmt <- marginal_tbl %>%
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.x), "", sprintf("%.1f", .x)))) %>%
+  rename(
+    ` `        = Level,
+    `Type-I`   = snaq_type1,
+    `H=1`      = snaq_H1,
+    `H>1`      = snaq_Hgt1,
+    `Type-I `  = fg_type1_wr30,
+    `H=1 `     = fg_H1_wr30,
+    `H>1 `     = fg_Hgt1_wr30,
+    `Type-I  ` = fg_type1_wr37,
+    `H=1  `    = fg_H1_wr37,
+    `H>1  `    = fg_Hgt1_wr37
+  )
+
+# ── HTML preview ──────────────────────────────────────────────────────────────
+marginal_fmt %>%
+  knitr::kable(
+    format   = "html",
+    booktabs = TRUE,
+    align    = c("l", rep("r", 9)),
+    caption  = "Marginal average hypothesis acceptance rates (%) across parameter levels."
+  ) %>%
+  kable_styling(bootstrap_options = c("striped", "condensed"), full_width = FALSE) %>%
+  add_header_above(c(" " = 1,
+                     "SNaQ" = 3,
+                     "findgraphs (WR\u22643.0)" = 3,
+                     "findgraphs (WR\u22643.7)" = 3))
+
+# ── Write .tex ────────────────────────────────────────────────────────────────
+marginal_tex_path <- file.path(tex_output_dir, "hypothesis_rates_marginal.tex")
+
+kbl_marginal <- marginal_fmt %>%
+  knitr::kable(
+    format   = "latex",
+    booktabs = TRUE,
+    escape   = FALSE,
+    align    = c("l", rep("r", 9)),
+    caption  = "Marginal average hypothesis acceptance rates (\\%) averaged within each parameter level. Type-I error $= H\\geq1$ accepted; sections average over all other factors.",
+    label    = "tab:hypothesis-rates-marginal"
+  ) %>%
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     "SNaQ" = 3,
+                     "findgraphs ($\\\\leq$3.0)" = 3,
+                     "findgraphs ($\\\\leq$3.7)" = 3))
+
+writeLines(as.character(kbl_marginal), marginal_tex_path)
+cat("Marginal LaTeX table written to:", marginal_tex_path, "\n")
+```
+
+# True Graph Recovery Summary
+% replicates where the true H=1 network was recovered at H=1, by parameter setting.
+
+```{r graph_recovery_summary}
+# ── Build combined graph recovery table ───────────────────────────────────────
+snaq_recovery <- snaq_df %>%
+  mutate(ILS = ifelse(SF == 1.0, "high (SF=1.0)", "low (SF=0.5)")) %>%
+  group_by(dup_loss_rate, RV, N_ind, ILS) %>%
+  summarise(
+    snaq_rec_all  = mean(find_true_net1),
+    snaq_rec_noF  = mean(find_true_net1_noF),
+    .groups = "drop"
+  )
+
+findgraph_recovery <- findgraph_df %>%
+  mutate(
+    fg_rec_alltrees      = pct_true_tree_H1,
+    fg_rec_alltrees_noF  = pct_true_tree_H1_noF,
+    fg_rec_best          = count_H1_best_displays_true_tree     / total_replicates * 100,
+    fg_rec_best_noF      = count_H1_best_displays_true_tree_noF / total_replicates * 100,
+    ILS                  = ifelse(SF == 1.0, "high (SF=1.0)", "low (SF=0.5)")
+  ) %>%
+  group_by(dup_loss_rate, RV, N_ind, ILS) %>%
+  summarise(across(starts_with("fg_rec_"), mean), .groups = "drop")
+
+combined_recovery <- snaq_recovery %>%
+  left_join(findgraph_recovery, by = c("dup_loss_rate", "RV", "N_ind", "ILS")) %>%
+  arrange(dup_loss_rate, RV, N_ind, ILS)
+
+print(combined_recovery, n = Inf)
+write.csv(combined_recovery,
+          file.path("..", "results", "combined_graph_recovery_summary.csv"),
+          row.names = FALSE)
+```
+
+```{r graph_recovery_per_param_table}
+rec_val_cols <- c("snaq_rec_all", "snaq_rec_noF",
+                  "fg_rec_alltrees", "fg_rec_alltrees_noF",
+                  "fg_rec_best", "fg_rec_best_noF")
+
+rec_fmt <- combined_recovery %>%
+  mutate(across(all_of(rec_val_cols), ~ sprintf("%.1f", .x))) %>%
+  fmt_meta_cols() %>%
+  rename(
+    `All`      = snaq_rec_all,
+    `No-Fall.` = snaq_rec_noF,
+    `All `     = fg_rec_alltrees,
+    `No-Fall. `= fg_rec_alltrees_noF,
+    `Best`     = fg_rec_best,
+    `Best (noF)`= fg_rec_best_noF
+  )
+
+render_kable_tables(
+  fmt_tbl      = rec_fmt,
+  n_meta_cols  = 4,
+  header_html  = c(" " = 4, "SNaQ" = 2, "findgraphs (all trees)" = 2,
+                   "findgraphs (best graph)" = 2),
+  header_latex = c(" " = 4, "SNaQ" = 2, "findgraphs (all trees)" = 2,
+                   "findgraphs (best graph)" = 2),
+  caption_html  = "True H=1 graph recovery rate (%) by parameter setting.",
+  caption_latex = "True $H=1$ graph recovery rate (\\%) by parameter setting. \"All\" = true graph among all recovered; \"Best\" = best-scoring graph is true graph; \"No-Fall.\" excludes fallback SNaQ runs.",
+  label    = "tab:graph-recovery",
+  tex_path = file.path(tex_output_dir, "graph_recovery_summary.tex")
+)
+```
+
+```{r graph_recovery_marginal_table}
+rec_marginals <- compute_marginals(combined_recovery, rec_val_cols)
+
+# Save CSV
+marginal_rec_csv <- bind_rows(
+  rec_marginals$by_duploss %>% mutate(group = "dup_loss_rate"),
+  rec_marginals$by_ILS     %>% mutate(group = "ILS"),
+  rec_marginals$by_RV      %>% mutate(group = "RV"),
+  rec_marginals$by_nind    %>% mutate(group = "N_ind")
+) %>% relocate(group)
+write.csv(marginal_rec_csv,
+          file.path("..", "results", "combined_graph_recovery_marginal.csv"),
+          row.names = FALSE)
+
+# Format and render
+rec_marginal_fmt <- make_marginal_display_tbl(rec_marginals, rec_val_cols) %>%
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.x), "", sprintf("%.1f", .x)))) %>%
+  rename(
+    ` `          = Level,
+    `All`        = snaq_rec_all,
+    `No-Fall.`   = snaq_rec_noF,
+    `All `       = fg_rec_alltrees,
+    `No-Fall. `  = fg_rec_alltrees_noF,
+    `Best`       = fg_rec_best,
+    `Best (noF)` = fg_rec_best_noF
+  )
+
+render_kable_tables(
+  fmt_tbl      = rec_marginal_fmt,
+  n_meta_cols  = 1,
+  header_html  = c(" " = 1, "SNaQ" = 2, "findgraphs (all trees)" = 2,
+                   "findgraphs (best graph)" = 2),
+  header_latex = c(" " = 1, "SNaQ" = 2, "findgraphs (all trees)" = 2,
+                   "findgraphs (best graph)" = 2),
+  caption_html  = "Marginal true graph recovery rates (%) averaged within each factor level.",
+  caption_latex = "Marginal true $H=1$ graph recovery rates (\\%) averaged within each factor level.",
+  label    = "tab:graph-recovery-marginal",
+  tex_path = file.path(tex_output_dir, "graph_recovery_marginal.tex")
+)
+```
+
+# Minor Gamma Summary
+Mean estimated minor gamma (inheritance probability) at H=1, by parameter setting.
+
+```{r minor_gamma_summary}
+# ── Build combined minor gamma table ──────────────────────────────────────────
+snaq_gamma <- snaq_df %>%
+  mutate(ILS = ifelse(SF == 1.0, "high (SF=1.0)", "low (SF=0.5)")) %>%
+  group_by(dup_loss_rate, RV, N_ind, ILS) %>%
+  summarise(
+    snaq_gamma2 = mean(mean_gamma_2, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+findgraph_gamma <- findgraph_df %>%
+  mutate(ILS = ifelse(SF == 1.0, "high (SF=1.0)", "low (SF=0.5)")) %>%
+  group_by(dup_loss_rate, RV, N_ind, ILS) %>%
+  summarise(
+    fg_gamma2_H1   = mean(avg_gamma2_H1,   na.rm = TRUE),
+    fg_gamma2_best = mean(avg_best_gamma2,  na.rm = TRUE),
+    .groups = "drop"
+  )
+
+combined_gamma <- snaq_gamma %>%
+  left_join(findgraph_gamma, by = c("dup_loss_rate", "RV", "N_ind", "ILS")) %>%
+  arrange(dup_loss_rate, RV, N_ind, ILS)
+
+print(combined_gamma, n = Inf)
+write.csv(combined_gamma,
+          file.path("..", "results", "combined_minor_gamma_summary.csv"),
+          row.names = FALSE)
+```
+
+```{r minor_gamma_per_param_table}
+gamma_val_cols <- c("snaq_gamma2", "fg_gamma2_H1", "fg_gamma2_best")
+
+gamma_fmt <- combined_gamma %>%
+  mutate(across(all_of(gamma_val_cols), ~ sprintf("%.3f", .x))) %>%
+  fmt_meta_cols() %>%
+  rename(
+    `$\\gamma_2$`      = snaq_gamma2,
+    `$\\gamma_2$ (H1)` = fg_gamma2_H1,
+    `$\\gamma_2$ (best)`= fg_gamma2_best
+  )
+
+render_kable_tables(
+  fmt_tbl      = gamma_fmt,
+  n_meta_cols  = 4,
+  header_html  = c(" " = 4, "SNaQ" = 1, "findgraphs" = 2),
+  header_latex = c(" " = 4, "SNaQ" = 1, "findgraphs" = 2),
+  caption_html  = "Mean estimated minor gamma at H=1 by parameter setting.",
+  caption_latex = "Mean estimated minor inheritance probability $\\gamma_2$ at $H=1$ by parameter setting. SNaQ column is from $H=1$ analyses; findgraphs columns are from all $H=1$ graphs (H1) and from the best-scoring graph (best).",
+  label    = "tab:minor-gamma",
+  tex_path = file.path(tex_output_dir, "minor_gamma_summary.tex"),
+  scale    = FALSE
+)
+```
+
+```{r minor_gamma_marginal_table}
+gamma_marginals <- compute_marginals(combined_gamma, gamma_val_cols)
+
+# Save CSV
+marginal_gamma_csv <- bind_rows(
+  gamma_marginals$by_duploss %>% mutate(group = "dup_loss_rate"),
+  gamma_marginals$by_ILS     %>% mutate(group = "ILS"),
+  gamma_marginals$by_RV      %>% mutate(group = "RV"),
+  gamma_marginals$by_nind    %>% mutate(group = "N_ind")
+) %>% relocate(group)
+write.csv(marginal_gamma_csv,
+          file.path("..", "results", "combined_minor_gamma_marginal.csv"),
+          row.names = FALSE)
+
+# Format and render
+gamma_marginal_fmt <- make_marginal_display_tbl(gamma_marginals, gamma_val_cols) %>%
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.x), "", sprintf("%.3f", .x)))) %>%
+  rename(
+    ` `                  = Level,
+    `$\\gamma_2$`        = snaq_gamma2,
+    `$\\gamma_2$ (H1)`   = fg_gamma2_H1,
+    `$\\gamma_2$ (best)` = fg_gamma2_best
+  )
+
+render_kable_tables(
+  fmt_tbl      = gamma_marginal_fmt,
+  n_meta_cols  = 1,
+  header_html  = c(" " = 1, "SNaQ" = 1, "findgraphs" = 2),
+  header_latex = c(" " = 1, "SNaQ" = 1, "findgraphs" = 2),
+  caption_html  = "Marginal mean minor gamma averaged within each factor level.",
+  caption_latex = "Marginal mean estimated minor inheritance probability $\\gamma_2$ at $H=1$, averaged within each factor level.",
+  label    = "tab:minor-gamma-marginal",
+  tex_path = file.path(tex_output_dir, "minor_gamma_marginal.tex"),
+  scale    = FALSE
+)
+```

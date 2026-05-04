@@ -80,7 +80,6 @@ load_rep_data("rep05", "DUP0.0-LOS0.0-RVG-N_ind1-SF0.5-genelen1000")
 df_rep05 <- get_wr_summary(h0_graphs[[1]], h1_graphs[[1]], f2_data) 
 ```
 
-
 # DUP0.0-LOS0.0-RVN-N_ind1-SF1.0-genelen1000 | rep05
 ```{r}
 load_rep_data("rep05", "DUP0.0-LOS0.0-RVN-N_ind1-SF1.0-genelen1000")

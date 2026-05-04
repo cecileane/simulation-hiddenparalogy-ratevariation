@@ -6,7 +6,6 @@ using ArgParse
 using TimerOutputs 
 using Dates
 using TimeZones 
-using RCall 
 using CSV
 using DataFrames
 @everywhere using Printf 
@@ -40,7 +39,7 @@ function parse_commandline()
         arg_type = Int
         default = 100
       "--rep_start"
-        help = "Parameter setting (start of the range of replicates) to run snaq"
+        help = "Start of the replicate range to run snaq"
         arg_type = Int
         default = 1 # default is 1 if not specified
       "--rep_end"
@@ -82,7 +81,7 @@ function parse_commandline()
     end 
     
     parsed_args = parse_args(s)
-    if parsed_args["rep_end"] == -1 # If rep_end is not specified, set it to n_reps
+    if parsed_args["rep_end"] == -1 # default: run all reps
         parsed_args["rep_end"] = parsed_args["n_reps"]
     end
 
@@ -108,7 +107,8 @@ gene_len = parsed_args["gene_len"]
 # method to compute networks between different Hmax: 
 method = lowercase(parsed_args["method"])
 if !(method in ["snaq_bootstrap", "quartetnetworkgoodnessfit", "both"])
-    error("method should be either 'snaq_bootstrap' or 'quartetnetworkgoodnessfit' or 'both'")
+    error("method must be 'snaq_bootstrap'," *
+        " 'quartetnetworkgoodnessfit', or 'both'")
 end
 
 # set up folders: 
@@ -144,18 +144,18 @@ check_existing_dir(snaqfolder_list) # see utilies.jl.
 # 1. Generate a master seed for each parameter setting using paramname_root
 # 2. Generate a seed for each software using the master seed
 # 3. Generate a n_rep x 4 seed array for SnaQ using the seed for SnaQ
-# 4. For each replicate, select the corresponding row in the seed array to run SnaQ (see below)
+# 4. For each replicate, select the row in seed_array matching the rep index
 =#
 params_dict_for_seed_setting = get_dict_for_seed_setting(paramname_root)
 # unique master seed for each parameter setting: 
 master_seed = generate_master_seed(params_dict_for_seed_setting) 
 
 software_names = ["snaq"] 
-seed_dic = generate_software_seeds(master_seed, software_names) # see utility.jl 
+seed_dic = generate_software_seeds(master_seed, software_names)
 # This seed used to generate m (n_reps) x 2 seed array: 
 seed_snaq = seed_dic["snaq"] 
 
-# Generate a n_rep x 4 vector with random seeds generated from the master seed snaq_seed. 
+# n_reps x 6 seed array: cols 1-4 for snaq/qgof, cols 5-6 for bootstrap
 # 1st seed -> infer net 0 
 # 2nd seed -> infer net1
 # 3rd seed -> QuartetNetworkGoodnessFit for H = 0 
@@ -165,7 +165,8 @@ seed_snaq = seed_dic["snaq"]
 # kept it for legacy reason. 
 # 5th seed -> infer net0 boostrapping (might not use it)
 # 6th seed -> infer net1 boostrapping (might not use it)
-seed_array = seed_generator(seed_snaq, n_reps, 6, outfolder, "random_seed_snaq.txt") 
+seed_array = seed_generator(
+    seed_snaq, n_reps, 6, outfolder, "random_seed_snaq.txt")
 # Here, seed_array is generated using n_reps x 6. 
 # For each rep, seed is selected as [repID, i for i in 1:6] 
 
@@ -188,26 +189,16 @@ seed_array = seed_generator(seed_snaq, n_reps, 6, outfolder, "random_seed_snaq.t
 
 @everywhere begin 
 """
-  run_snaq_for_replicate(ind::Int)
-Run SNaQ analysis for a specific replicate index.
-# Arguments
-- `ind::Int`: The index of the replicate to process.
-# Description
-This function constructs and executes a command to run the SNaQ analysis
-  for the specified replicate. It utilizes various parameters and settings
-  defined in the global scope, including output directories, seeds, and
-  analysis options. The function is designed to be called in a parallel
-  processing context, allowing multiple replicates to be processed concurrently.
-# Note
-- Ensure that all required global variables are defined and accessible
-  in the scope where this function is called.
-- The function assumes that the SNaQ script (`snaq_1rep.jl`) is located
-  in the `./scripts/` directory relative to the current working directory.
+  run_snaq_for_replicate(ind)
+Run SNaQ for one replicate by shelling out to snaq_1rep.jl.
+Relies on globals broadcast to workers: seed_array, snaqfolder_list, etc.
 """
   function run_snaq_for_replicate(ind)
 
-    iqtreefolder  = setup_rep_output_folders(folder_path_list, ind, "iqtreefolder")
-    astralfolder = setup_rep_output_folders(folder_path_list, ind, "astralfolder")
+    iqtreefolder = setup_rep_output_folders(
+        folder_path_list, ind, "iqtreefolder")
+    astralfolder = setup_rep_output_folders(
+        folder_path_list, ind, "astralfolder")
     snaqfolder = snaqfolder_list[ind] 
 
     # Identify the correct rep to start with 
@@ -227,10 +218,10 @@ This function constructs and executes a command to run the SNaQ analysis
     ind for rep2 in this loop is 1, so the actual repID = 1 + 2 - 1 = 2
 
     example 2: 
-    For rep 5 and rep_start = 3 and rep_end = 10 (index_length = 10 - 3 + 1 = 8) 
+    For rep 5 and rep_start = 3 and rep_end = 10 (index_length = 8)
     ind for rep5 in this loop is 3, so actual repID = 3 + 3 - 1 = 6 
     
-    This method makes sure we selects the same seed from seed_array no matter of rep_start and rep_end 
+    seed selection is stable regardless of rep_start/rep_end
     =# 
     run(`julia ./scripts/snaq_1rep.jl \
         --outfolder $outfolder \
@@ -251,7 +242,7 @@ This function constructs and executes a command to run the SNaQ analysis
   end 
 end 
 
-data_frames = []  # A list of data frames to collect results from each replicate 
+data_frames = []
 
 @timeit to "Running SNaQ from rep$rep_start to rep$rep_end" begin  
   
@@ -278,9 +269,9 @@ SNAQ_arguments = """
   #------------------------SNaQ-------------------------#
   #=====================================================#
   ---Arguments used to run SNAQ and SNaQ bootstrap---
-  runs = $runs, number of runs for snaq on the original data & each bootstrap reps;
+  runs = $runs, number of snaq runs per dataset (original & bootstrap);
   seed_snaq = $seed_snaq, Master seed to generate seed array for SNaQ;
-  n_snaqboot_rep = $n_snaqboot_rep, Number of bootstrap replicates for SNaQ (Hmax=0,1);
+  n_snaqboot_rep = $n_snaqboot_rep, bootstrap replicates for SNaQ (Hmax=0,1);
   --- Other Information ---
   processors = $processors, Number of processors to run SNaQ (and bootsnaq);
   Server for running the script = $host_name.stat.wisc.edu
