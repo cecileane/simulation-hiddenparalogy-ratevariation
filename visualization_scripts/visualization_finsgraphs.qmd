@@ -179,7 +179,16 @@ dev.off()
 # print(p3)
 ```
 
-## Taxon Recovery Heatmap
+## Taxon Recovery Heatmap (LEGACY — disabled)
+
+> **LEGACY (disabled for Dryad/paper submission, 2026-05).** The taxon-recovery
+> heatmap is not in the published paper. The upstream input
+> (`results/findgraph_taxon_recovery.csv`) is no longer produced by
+> `scripts/summary_findgraph.jl`, and `plot_taxon_recovery_heatmaps()` in
+> `scripts/visual_utilities.R` is gated by a `stop()`. To re-enable:
+> (1) uncomment the taxon-recovery block in `scripts/summary_findgraph.jl`,
+> (2) remove the `stop()` in `plot_taxon_recovery_heatmaps()`,
+> (3) uncomment the call below and re-render.
 
 ```{r plot-taxon-recovery-heatmaps}
 #| fig-width: 15

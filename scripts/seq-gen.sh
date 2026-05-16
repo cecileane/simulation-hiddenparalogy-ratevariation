@@ -1,4 +1,23 @@
 #!/bin/bash
+# ============================================================================
+# scripts/seq-gen.sh
+#
+# Purpose : Per-gene Seq-Gen wrapper. Simulates DNA sequences along a single
+#           gene tree under HKY+Gamma with per-gene rate, kappa, and base
+#           frequencies passed in by the caller. Skips silently if the input
+#           gene-tree file is empty (removed during paralogy filtering).
+# Inputs  : $2 = gene tree file (Newick)
+# Outputs : $3 = Seq-Gen sequence file (relaxed-PHYLIP, -on)
+# Usage   : Called from simulation.jl per gene per replicate. Positional args:
+#             $1  rep_number_string   (label)
+#             $2  input_file          (gene-tree)
+#             $3  output_file         (sequence)
+#             $4  seed
+#             $5  alpha               (Gamma shape, rates across sites)
+#             $6  kappa               (transition/transversion ratio)
+#             $7-$10  base freqs A, C, G, T
+#             $11 gene_len            (bp)
+# ============================================================================
 
 # simulation.jl cannot pre-specify $input_path/$output_path, so pass as args
 rep_number_string="$1"

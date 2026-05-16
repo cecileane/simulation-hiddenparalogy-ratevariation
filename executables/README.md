@@ -31,12 +31,15 @@ Detailed, step-by-step installation instructions for each binary are provided in
 3. Verify the installation by running the binary with a help or version flag.
 
 ```bash
-# General pattern (replace <tool> and <path> accordingly)
+# General pattern (replace <tool> and <path> accordingly).
+# Set REPO_ROOT once to the absolute path of this repository on your machine.
+REPO_ROOT="/path/to/repository"
+
 cd ~/private/software/
 # ... download and build <tool> ...
-cd /path/to/simulation-reptiles
+cd "${REPO_ROOT}"
 ln -s ~/private/software/<tool-install-path>/<binary> executables/<symlink-name>
-./executables/<symlink-name> --help # Just to verify if the link works 
+./executables/<symlink-name> --help    # verify the symlink works
 ```
 
 For the full commands including exact download URLs, version pins, and build flags, see [`software_installation.sh`](software_installation.sh).

@@ -1,4 +1,20 @@
 #!/usr/bin/env julia
+# ============================================================================
+# scripts/summary_snaq.jl
+#
+# Purpose : Aggregate per-parameter SNaQ CSVs into one cross-setting summary
+#           table (hypothesis acceptance H=0/H=1/H>1, mean scores, gamma
+#           estimates, tree-recovery percentages) and produce diagnostic plots
+#           via R.
+# Inputs  : snaq_summary/SNaQ-<paramname>-summary.csv      (one per setting)
+# Outputs : results/SNaQ_summary.csv                       (cross-setting table)
+#           visualization_results/snaq/*.{png,pdf,csv}     (diagnostic plots)
+# Usage   : julia --project=. scripts/summary_snaq.jl
+#           (optional overrides: --input_dir, --output_file,
+#                                --visualization_output_dir)
+# Note    : Run after snaq_postprocess.jl has populated snaq_summary/.
+#           Taxon-recovery output is LEGACY and disabled (see block below).
+# ============================================================================
 
 using CSV
 using DataFrames
@@ -20,12 +36,15 @@ function parse_commandline()
         "--output_file"
             help = "Output CSV file path"
             default = "results/SNaQ_summary.csv"
-        "--visualization_output_dir" 
+        "--visualization_output_dir"
             help = "Output directory for visualization files"
-            default = "visualization_results/snaq" 
-        "--taxon_recovery_output"
-            help = "Output CSV for long-format taxon recovery summary"
-            default = "results/SNaQ_taxon_recovery.csv"
+            default = "visualization_results/snaq"
+        # LEGACY (disabled for Dryad/paper submission, 2026-05): taxon-recovery
+        # analysis is not used in the published paper. The argument and the
+        # functions below are kept for reference but never invoked.
+        # "--taxon_recovery_output"
+        #     help = "Output CSV for long-format taxon recovery summary"
+        #     default = "results/SNaQ_taxon_recovery.csv"
     end
     return parse_args(s)
 end
@@ -261,6 +280,16 @@ function filter_and_extract_minor_gamma(snaq_summary_dir::String,
     return result_df
 end
 
+# ─────────────────────────────────────────────────────────────────────────
+# LEGACY CODE — disabled for Dryad / paper submission (2026-05).
+# The two functions below (explode_role_column, compute_taxon_recovery_summary)
+# produce results/SNaQ_taxon_recovery.csv, which is NOT used in the published
+# paper. Kept here as inert reference. To re-enable: remove the block-comment
+# markers (the line below opens a Julia block comment; the matching closer
+# appears after the last function below), uncomment the --taxon_recovery_output
+# argument above, and uncomment the call site in main().
+# ─────────────────────────────────────────────────────────────────────────
+#=
 """
 Explode a comma-separated role column into one row per taxon.
 Carries param_setting, repID, and true_tree_recovered.
@@ -359,6 +388,8 @@ function compute_taxon_recovery_summary(input_dir::String, output_file::String)
     CSV.write(output_file, summary)
     println("Taxon recovery ($(nrow(summary)) rows) → $output_file")
 end
+=#
+# ─────────────── end LEGACY taxon-recovery block ───────────────
 
 function main()
     """Main function to process all CSV files and create summary."""
@@ -509,10 +540,12 @@ function main()
         @warn "Could not generate SNaQ visualization: $e"
     end
 
-    # Taxon recovery summary — long-format table by (param_setting, taxon, role)
-    compute_taxon_recovery_summary(snaq_summary_dir,
-        args["taxon_recovery_output"])
-    
+    # LEGACY (disabled for Dryad/paper submission, 2026-05): taxon recovery
+    # is not used in the published paper. See the LEGACY block above for the
+    # disabled helper functions.
+    # compute_taxon_recovery_summary(snaq_summary_dir,
+    #     args["taxon_recovery_output"])
+
 end
 
 # Run the main function if script is executed directly

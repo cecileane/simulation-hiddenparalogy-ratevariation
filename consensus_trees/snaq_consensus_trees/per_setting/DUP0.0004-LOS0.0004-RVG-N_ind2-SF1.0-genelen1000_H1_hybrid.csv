@@ -1,0 +1,6 @@
+blob,node_from,node_to,support_hybrid,cluster_num,cluster
+1,17,9,0.59,"7,8","G,H"
+1,14,2,0.03,2,B
+1,15,11,0.12,"4,5","D,E"
+1,16,6,0.03,6,F
+1,13,3,0.01,3,C

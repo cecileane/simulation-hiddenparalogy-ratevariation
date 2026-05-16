@@ -1,4 +1,17 @@
-# The script to run snaq 
+# ============================================================================
+# scripts/snaq_1rep.jl
+#
+# Purpose : Per-replicate SNaQ worker. Runs SNaQ at h=0 and h=1 on the
+#           ASTRAL species tree and concordance factors for a single
+#           replicate, then computes goodness-of-fit (p-values).
+# Inputs  : <outfolder>/rep<id>/astralfolder/astral.tre
+#           <outfolder>/rep<id>/iqtreefolder/CF_results.csv
+# Outputs : <outfolder>/rep<id>/snaqfolder/H0_output/H0.out
+#           <outfolder>/rep<id>/snaqfolder/H1_output/H1.out
+#           <outfolder>/rep<id>/snaqfolder/snaq_gof_results_H0.csv
+# Usage   : Not run directly; called by snaq.jl across replicates.
+# ============================================================================
+
 using Distributed
 using ArgParse
 @everywhere using CSV

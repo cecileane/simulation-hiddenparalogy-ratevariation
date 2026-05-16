@@ -1,10 +1,17 @@
 #!/usr/bin/env julia
-
-#= 
-This script concatenates all summary CSV files from simulation runs.
-It looks for summary_*.csv files in the specified directory and 
-    concatenates them into a single output CSV file.
-=# 
+# ============================================================================
+# scripts/summary_simulation.jl
+#
+# Purpose : Concatenate per-parameter simulation summary CSVs into one
+#           cross-setting table covering gene-tree counts, hidden-paralogy
+#           categories, RF distances, and branch-length statistics.
+# Inputs  : simulation_summary/summary_<paramname>.csv     (one per setting)
+# Outputs : results/summary_concatenated.csv               (cross-setting table)
+# Usage   : julia --project=. scripts/summary_simulation.jl
+#           (optional overrides: --input_dir, --output_file)
+# Note    : Run after simulation_postprocess.jl has produced per-setting CSVs
+#           and run_postprocessing.jl has staged them under simulation_summary/.
+# ============================================================================
 
 using CSV
 using DataFrames
