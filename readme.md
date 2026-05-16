@@ -120,7 +120,7 @@ In short: lineage-specific rate variation, not hidden paralogy, is the main driv
 
 ## Dependencies
 
-Check [Executables README](executables/readme.md) for details! 
+Check [Executables README](executables/README.md) for details!
 
 **Julia** (see `Project.toml`): `PhyloNetworks`, `QuartetNetworkGoodnessFit`, `PhyloPlots`, `RCall`, `CSV`, `DataFrames`, `ArgParse`, `Distributed`.
 
@@ -133,7 +133,7 @@ Check [Executables README](executables/readme.md) for details!
 After running all simulation, the folder structure should be similar to this: 
 
 ```
-simulation-reptiles/
+<repository-root>/
 ├── scripts/                        Pipeline scripts (see scripts/readme.md)
 │   ├── utilities.jl                Shared Julia helpers across all stages
 │   ├── simulation.jl               Entry point: SimPhy + seq-gen + IQ-TREE
@@ -248,16 +248,33 @@ simulation-reptiles/
 │   ├── snaq/
 │   └── findgraph/
 │
-├── plots/                          Figures and workflow diagrams
-├── notebook/                       Analysis notebooks and documentation
-├── executables/                    Executables saved here 
-├── example/                        Exploratory analyses and debugging
+├── plots/                          Figures and workflow diagrams used in the paper
+├── docs/                           Methodology notes
+│   ├── choice-seqgen-parameters.md     Justification for Seq-Gen rate / base-freq params
+│   ├── simphy_documentation.md         SimPhy Ne / substitution-rate semantics
+│   └── consensus_tree.qmd              Consensus-network analysis (supplementary)
 ├── third_party_scripts/            External scripts (Apache 2.0)
 ├── Project.toml                    Julia package environment
 ├── Manifest.toml
+├── DRYAD_README.md                 Dryad data-deposit README (column dictionaries)
 └── readme.md
 ```
 
+## Data Availability
+
+The cross-setting summary tables that underlie every figure in the paper —
+[`results/findgraph_summary.csv`](results/findgraph_summary.csv),
+[`results/SNaQ_summary.csv`](results/SNaQ_summary.csv), and
+[`results/summary_concatenated.csv`](results/summary_concatenated.csv) — are
+deposited on Dryad (DOI: **TBD on acceptance**). Column dictionaries and a
+description of how the CSVs were generated are in [DRYAD_README.md](DRYAD_README.md).
+
+To regenerate the CSVs from raw per-replicate outputs, follow the pipeline in
+[scripts/readme.md](scripts/readme.md).
+
 ## License
 
-MIT License. `third_party_scripts/vcf2eigenstrat.py` is Apache 2.0 (see `third_party_scripts/LICENSE-APACHE-2.0.txt`).
+Code: MIT License (see [LICENSE](LICENSE)).
+`third_party_scripts/vcf2eigenstrat_*.py` is Apache 2.0 (see
+[third_party_scripts/LICENSE-APACHE-2.0.txt](third_party_scripts/LICENSE-APACHE-2.0.txt)).
+Data deposited on Dryad: CC0 (per Dryad policy).

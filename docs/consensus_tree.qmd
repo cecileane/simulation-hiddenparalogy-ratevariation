@@ -1,0 +1,378 @@
+---
+title: "Consensus Trees: SNaQ and Findgraphs"
+format: html
+engine: julia
+---
+
+# Purpose
+
+Build per-setting consensus networks across the 100 replicate per-replicate
+networks produced by SNaQ and find_graphs, and summarize edge support, hybrid
+placement, and bipartition recovery.
+
+**Inputs:**
+- `output/<paramname>/rep<NN>/snaqfolder/H{0,1}_output/H{0,1}.out` (per-rep SNaQ nets)
+- `output/<paramname>/rep<NN>/findgraph/rep<NN>_admix{0,1}_unique_graphs.rds`
+
+**Outputs (written under `consensus_trees/`):**
+- `<method>_consensus_trees/per_setting/*_H{0,1}{.nwk,_edge_support.csv,_plot.pdf}`
+- `<method>_consensus_trees/by_{dup,rv,sf}/...` (aggregated views)
+
+**Notes:**
+- This analysis is supplementary and not part of the main paper's headline
+  results. Kept in the repository for completeness.
+- If `RCall` fails to load on your machine because of a libstdc++ ABI
+  mismatch, set `LIBSTDCXX_PATH` to a compatible libstdc++.so.6 before
+  rendering (see the `Libdl.dlopen` block in Setup).
+
+## Setup
+```{julia}
+#| output: false
+# Load system libstdc++ before RCall so Rcpp.so finds CXXABI_1.3.15.
+# On systems where RCall fails with "version `CXXABI_1.3.15' not found",
+# set the environment variable LIBSTDCXX_PATH to your libstdc++.so.6 (e.g.
+# from a recent conda env or a recent gcc install). Otherwise this block
+# is a no-op and Julia/RCall use the system loader as usual.
+using Libdl
+if haskey(ENV, "LIBSTDCXX_PATH") && isfile(ENV["LIBSTDCXX_PATH"])
+    Libdl.dlopen(ENV["LIBSTDCXX_PATH"], Libdl.RTLD_GLOBAL)
+end
+using PhyloNetworks, PhyloSummaries, PhyloPlots, RCall
+using DataFrames, CSV
+
+include("../scripts/utilities.jl")
+include("../third_party_scripts/interop_admixtools.jl")
+
+const OUTGROUP = "A"
+const N_REPS = 100
+
+# -------------------------------------------------------------------
+# Helpers: load per-rep networks
+# -------------------------------------------------------------------
+
+function load_snaq_h0_netsample(outfolder, n_reps=N_REPS)
+    nets = HybridNetwork[]
+    for rep in 1:n_reps
+        repstr = lpad(rep, ndigits(n_reps), '0')
+        f = joinpath(outfolder, "rep$repstr", "snaqfolder", "H0_output", "H0.out")
+        isfile(f) && push!(nets, readnewick(f))
+    end
+    nets
+end
+
+function load_snaq_h1_netsample(outfolder, n_reps=N_REPS)
+    nets = HybridNetwork[]
+    for rep in 1:n_reps
+        repstr = lpad(rep, ndigits(n_reps), '0')
+        f = joinpath(outfolder, "rep$repstr", "snaqfolder", "H1_output", "H1.out")
+        isfile(f) && push!(nets, readnewick(f))
+    end
+    nets
+end
+
+function load_findgraphs_h0_netsample(outfolder, n_reps=N_REPS)
+    R"library(admixtools)"
+    nets = HybridNetwork[]
+    for rep in 1:n_reps
+        repstr = lpad(rep, ndigits(n_reps), '0')
+        rds = joinpath(outfolder, "rep$repstr", "findgraph",
+                       "rep$(repstr)_admix0_unique_graphs.rds")
+        !isfile(rds) && continue
+        graphs = R"readRDS($rds)"
+        n_graphs = rcopy(Int, R"length($graphs)")
+        n_graphs == 0 && continue
+        el = try rcopy(R"as.data.frame($graphs[[1]]$graph)") catch; continue end
+        net = try edgelist_to_net(el) catch; continue end
+        push!(nets, net)
+    end
+    nets
+end
+
+function load_findgraphs_h1_netsample(outfolder, n_reps=N_REPS)
+    R"library(admixtools)"
+    nets = HybridNetwork[]
+    for rep in 1:n_reps
+        repstr = lpad(rep, ndigits(n_reps), '0')
+        rds = joinpath(outfolder, "rep$repstr", "findgraph",
+                       "rep$(repstr)_admix1_unique_graphs.rds")
+        !isfile(rds) && continue
+        graphs = R"readRDS($rds)"
+        n_graphs = rcopy(Int, R"length($graphs)")
+        n_graphs == 0 && continue
+        el = try rcopy(R"as.data.frame($graphs[[1]]$graph)") catch; continue end
+        net = try edgelist_to_net(el) catch; continue end
+        push!(nets, net)
+    end
+    nets
+end
+
+# -------------------------------------------------------------------
+# Helpers: load saved consensus files
+# -------------------------------------------------------------------
+
+"""Load consensus H0 tree and edge-support CSV. Returns (net, esup_df) or (nothing, nothing)."""
+function load_consensus_h0(prefix)
+    nwk = "$(prefix).nwk"
+    isfile(nwk) || return nothing, nothing
+    net = readnewick(nwk)
+    csv = "$(prefix)_edge_support.csv"
+    esup = isfile(csv) ? CSV.read(csv, DataFrame) : nothing
+    return net, esup
+end
+
+"""Load saved consensus level-1 H1 network, restoring node numbers. Returns net or nothing."""
+function load_consensus_h1(prefix)
+    nwk = "$(prefix)_net.nwk"
+    isfile(nwk) || return nothing
+    net = readnewick(nwk)
+    resetnodenumbers_fromnames!(net)
+    net
+end
+
+# -------------------------------------------------------------------
+# Helpers: plot functions
+# -------------------------------------------------------------------
+
+"""Two-panel plot: H0 consensus tree (plain + edge-support labelled)."""
+function plot_h0_consensus(net, esup, title_str; pdf_path=nothing)
+    pdf_path === nothing || R"pdf($pdf_path, width=9, height=5)"
+    R"par"(mar=[0, 0, 1.5, 0])
+    if esup !== nothing
+        R"layout"([1 2])
+        rootatnode!(net, OUTGROUP)
+        plot(net)
+        R"mtext"("H0 consensus tree", side=3, line=0)
+        ecol = Dict(r[:number] => (r[:support] < 70 ? "orange2" : "black")
+                    for r in eachrow(esup))
+        plot(net, edgelabel=esup, edgecolor=ecol)
+        R"mtext"("H0 edge support (% reps)", side=3, line=0)
+    else
+        R"layout"(1)
+        rootatnode!(net, OUTGROUP)
+        plot(net)
+        R"mtext"("H0 consensus tree – $title_str", side=3, line=0)
+    end
+    R"mtext"(title_str, outer=true, side=3, line=-1)
+    pdf_path === nothing || R"dev.off()"
+end
+
+"""Three-panel hybrid-sisters support plot for H1 consensus network."""
+function plot_h1_hybrid_support(net, netsample, title_str; pdf_path=nothing)
+    isempty(netsample) && return
+    BSe_majortree, _ = treeedges_support(netsample, net)
+    BSn, BSe, _, _, _ = hybridclades_support(netsample, net)
+
+    pdf_path === nothing || R"pdf($pdf_path, width=12, height=5)"
+    R"layout"([1 2 3])
+    R"par"(mar=[1.5, 0, 1.5, 0])
+
+    plot(net, edgelabel=BSe_majortree)
+    R"mtext"("support for edges to be in major tree", side=3, line=-1)
+    R"mtext"("support are in %, not proportions!", side=1, line=-1)
+
+    plot(net, edgelabeladj=[.5, -.2], nodelabeladj=[.5, .5],
+         edgelabelcolor="orangered", nodelabelcolor="deepskyblue4",
+         edgelabel=select(BSe, [:edge, :BS_hybrid_edge]),
+         nodelabel=select(BSn, [:hybridnode, :BS_hybrid_samesisters]))
+    R"mtext"("support for sister-hybrid relationships", side=3, line=-1)
+    R"mtext"("blue: hybrid + both sisters", side=1, line=-1)
+
+    hyb_rows = filter(row -> row[:BS_hybrid] > 0, BSn)
+    if nrow(hyb_rows) > 0
+        plot(net, edgelabeladj=[.5, -.2],
+             edgelabel=hyb_rows[!, [:edge, :BS_hybrid]])
+    else
+        plot(net)
+    end
+    R"mtext"("support for hybrid clades", side=3, line=-1)
+
+    R"mtext"(title_str, outer=true, side=3, line=-1)
+    pdf_path === nothing || R"dev.off()"
+end
+```
+
+```{julia}
+outroot = joinpath(@__DIR__, "..", "output")
+param_folders = sort(filter(isdir,
+    [joinpath(outroot, d) for d in readdir(outroot)]))
+@show length(param_folders)
+```
+
+```{julia}
+#| output: false
+
+"""Parse the `dup`, `rv`, `n_ind`, `sf` fields from an output folder name."""
+function parse_paramname(paramname::String)
+    m = match(r"DUP([\d.]+)-LOS[\d.]+-RV([A-Z]+)-N_ind(\d+)-SF([\d.]+)", paramname)
+    m === nothing && error("Cannot parse paramname: $paramname")
+    (dup=String(m[1]), rv=String(m[2]), n_ind=String(m[3]), sf=String(m[4]))
+end
+
+"""
+    group_folders(param_folders, key)
+Group output folders by a parsed field: `key` ∈ {:dup, :rv, :n_ind, :sf}.
+Returns `Dict{String,Vector{String}}` mapping group value → folder list.
+"""
+function group_folders(param_folders::Vector{String}, key::Symbol)
+    groups = Dict{String,Vector{String}}()
+    for f in param_folders
+        val = getfield(parse_paramname(basename(f)), key)
+        push!(get!(groups, val, String[]), f)
+    end
+    groups
+end
+
+"""
+    build_consensus(outfolders, load_h0, load_h1, out_dir, label)
+Load all H0/H1 networks from `outfolders`, compute greedy consensus (H0) and
+consensus level-1 network (H1), then save `.nwk`, CSVs, and PDFs under `out_dir`.
+`label` is used as the filename stem and plot title.
+"""
+function build_consensus(outfolders::Vector{String}, load_h0, load_h1,
+                         out_dir::String, label::String)
+    mkpath(out_dir)
+    safe   = replace(label, r"[^A-Za-z0-9_.\-]" => "_")
+    pfx_h0 = joinpath(out_dir, "$(safe)_H0")
+    pfx_h1 = joinpath(out_dir, "$(safe)_H1")
+
+    # ── H0 greedy consensus ──────────────────────────────────────────────────
+    nets_h0 = vcat([load_h0(f) for f in outfolders]...)
+    println("  H0: $(length(nets_h0)) trees  ($(length(outfolders)) settings)")
+    if length(nets_h0) >= 2
+        con_h0 = consensustree(nets_h0)
+        rootatnode!(con_h0, OUTGROUP)
+        writenewick(con_h0, pfx_h0 * ".nwk"; support=true)
+        esup = DataFrame(
+            number  = [e.number for e in con_h0.edge if !isexternal(e)],
+            support = [round(100 * e.y, digits=1) for e in con_h0.edge if !isexternal(e)]
+        )
+        CSV.write(pfx_h0 * "_edge_support.csv", esup)
+        plot_h0_consensus(con_h0, esup, "H0: $label"; pdf_path=pfx_h0 * "_plot.pdf")
+        println("  H0 → $(pfx_h0)_plot.pdf")
+    else
+        @warn "H0 skipped (fewer than 2 trees): $label"
+    end
+
+    # ── H1 consensus level-1 network ────────────────────────────────────────
+    nets_h1 = vcat([load_h1(f) for f in outfolders]...)
+    println("  H1: $(length(nets_h1)) networks  ($(length(outfolders)) settings)")
+    if length(nets_h1) >= 2
+        res_h1 = consensus_level1network(nets_h1, outgroup=OUTGROUP, suppressinfo=true)
+        consensus_level1network_save(res_h1, pfx_h1)
+        plot_h1_hybrid_support(res_h1[:net], nets_h1, "H1: $label";
+                               pdf_path=pfx_h1 * "_plot.pdf")
+        println("  H1 → $(pfx_h1)_plot.pdf")
+    else
+        @warn "H1 skipped (fewer than 2 networks): $label"
+    end
+end
+
+"""
+    build_consensus_grouped(param_folders, key, base_out_dir, load_h0, load_h1)
+Build one consensus per unique value of `key` ∈ {:dup, :rv, :n_ind, :sf},
+saving to `base_out_dir/by_<key>/`.
+"""
+function build_consensus_grouped(param_folders::Vector{String}, key::Symbol,
+                                  base_out_dir::String, load_h0, load_h1)
+    groups  = group_folders(param_folders, key)
+    out_dir = joinpath(base_out_dir, "by_$(key)")
+    for (val, folders) in sort(collect(groups))
+        label = "$(key)_$(val)"
+        println("\n=== $label  ($(length(folders)) settings, ≤$(100*length(folders)) reps) ===")
+        build_consensus(folders, load_h0, load_h1, out_dir, label)
+    end
+end
+```
+
+
+## Build SNaQ consensus trees (from raw replicates)
+```{julia}
+snaq_build_dir = joinpath(@__DIR__, "..", "consensus_trees", "snaq_consensus_trees")
+```
+
+### Level 1: per parameter setting (100 reps each)
+
+```{julia}
+for outfolder in param_folders
+    paramname = basename(outfolder)
+    println("\n=== $paramname ===")
+    build_consensus([outfolder], load_snaq_h0_netsample, load_snaq_h1_netsample,
+                    joinpath(snaq_build_dir, "per_setting"), paramname)
+end
+```
+
+### Level 2: by rate variation (1200 reps each)
+
+```{julia}
+build_consensus_grouped(param_folders, :rv, snaq_build_dir,
+                        load_snaq_h0_netsample, load_snaq_h1_netsample)
+```
+
+### Level 3: by dup/loss rate (1200 reps each)
+
+```{julia}
+build_consensus_grouped(param_folders, :dup, snaq_build_dir,
+                        load_snaq_h0_netsample, load_snaq_h1_netsample)
+```
+
+### Level 4: by ILS / SF (1800 reps each)
+
+```{julia}
+build_consensus_grouped(param_folders, :sf, snaq_build_dir,
+                        load_snaq_h0_netsample, load_snaq_h1_netsample)
+```
+
+### Level 5: by number of individuals (1800 reps each)
+
+```{julia}
+build_consensus_grouped(param_folders, :n_ind, snaq_build_dir,
+                        load_snaq_h0_netsample, load_snaq_h1_netsample)
+```
+
+---
+
+## Build Findgraphs consensus trees (from raw replicates)
+
+```{julia}
+R"library(admixtools)"
+fg_build_dir = joinpath(@__DIR__, "..", "consensus_trees", "findgraphs_consensus_trees")
+```
+
+### Level 1: per parameter setting (100 reps each)
+
+```{julia}
+for outfolder in param_folders
+    paramname = basename(outfolder)
+    println("\n=== $paramname ===")
+    build_consensus([outfolder], load_findgraphs_h0_netsample, load_findgraphs_h1_netsample,
+                    joinpath(fg_build_dir, "per_setting"), paramname)
+end
+```
+
+### Level 2: by rate variation (1200 reps each)
+
+```{julia}
+build_consensus_grouped(param_folders, :rv, fg_build_dir,
+                        load_findgraphs_h0_netsample, load_findgraphs_h1_netsample)
+```
+
+### Level 3: by dup/loss rate (1200 reps each)
+
+```{julia}
+build_consensus_grouped(param_folders, :dup, fg_build_dir,
+                        load_findgraphs_h0_netsample, load_findgraphs_h1_netsample)
+```
+
+### Level 4: by ILS / SF (1800 reps each)
+
+```{julia}
+build_consensus_grouped(param_folders, :sf, fg_build_dir,
+                        load_findgraphs_h0_netsample, load_findgraphs_h1_netsample)
+```
+
+### Level 5: by number of individuals (1800 reps each)
+
+```{julia}
+build_consensus_grouped(param_folders, :n_ind, fg_build_dir,
+                        load_findgraphs_h0_netsample, load_findgraphs_h1_netsample)
+```

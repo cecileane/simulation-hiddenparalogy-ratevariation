@@ -1,4 +1,20 @@
 #!/usr/bin/env Rscript
+# ============================================================================
+# scripts/visual_utilities.R
+#
+# Purpose : Shared R plotting helpers used by the summary_*.jl scripts and by
+#           the Quarto notebooks in visualization_scripts/. Defines color
+#           palettes, parameter parsers (DUP*-LOS*-RV*-N_ind*-SF*-genelen*),
+#           and per-quantity plotting functions (RF distance distributions,
+#           worst-residual histograms, gamma scatter plots, etc.).
+# Inputs  : Sourced (`source("scripts/visual_utilities.R")`) from other code;
+#           individual plot functions read CSV files from results/, snaq_summary/
+#           and findgraph_summary/.
+# Outputs : PNG / PDF figures written under visualization_results/.
+# Usage   : Not run directly. Source from another R / Julia script.
+# Note    : `plot_taxon_recovery_heatmaps()` is LEGACY and gated by stop()
+#           (see banner above that function).
+# ============================================================================
 
 library(ggplot2)
 library(dplyr)
@@ -3254,6 +3270,15 @@ plot_WR_percentiles_jitter_combined <- function(input_dir,
 }
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# LEGACY (disabled for Dryad / paper submission, 2026-05).
+# plot_taxon_recovery_heatmaps() consumes results/*_taxon_recovery.csv,
+# which are no longer produced by the pipeline (the upstream code in
+# scripts/summary_findgraph.jl and scripts/summary_snaq.jl is commented
+# out). This function is retained as inert reference and will stop() if
+# called. To re-enable: remove the stop() at the top of the function body,
+# then re-enable the upstream taxon-recovery code.
+# ─────────────────────────────────────────────────────────────────────────
 #' Plot taxon recovery heatmaps by role and parameter setting
 #'
 #' Generates two figures showing taxon recovery rates:
@@ -3305,7 +3330,11 @@ plot_taxon_recovery_heatmaps <- function(input_long,
                                         output_dir,
                                         colormap = "Blues",
                                         annotation_digits = 2) {
-  
+
+  stop("LEGACY: plot_taxon_recovery_heatmaps() is disabled for Dryad/paper ",
+       "submission (2026-05). See the banner comment above the function for ",
+       "how to re-enable.")
+
   # Fixed taxon and role orders
   taxon_order <- c("A", "B", "C", "D", "F", "G", "H")
   role_order <- c("hybrid_taxon", "major_donor", "minor_donor")

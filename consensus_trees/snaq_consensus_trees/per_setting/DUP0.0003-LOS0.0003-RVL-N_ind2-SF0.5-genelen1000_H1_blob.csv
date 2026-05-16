@@ -1,0 +1,2 @@
+blob,degree,node,hybrid,support_partition,support_circorder,support_hybrid,partition_num,hybrid_cluster_num,partition,hybrid_cluster
+1,5,10,17,0.58,0.22,0.4,"4,5|7,8|1|6|2,3",6,"D,E|G,H|A|F|B,C",F

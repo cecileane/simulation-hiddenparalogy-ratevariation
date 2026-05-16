@@ -17,7 +17,7 @@
 #
 # NOTICE: This file is adapted from the original work by Iain Mathieson (GitHub repository: https://github.com/mathii/gdc).
 # Certain functions and logic are reused here with modifications.
-# Modified by Bing Li on 2025-04-10 to integrate into the /simulation-reptiles project and to add new features as described:
+# Modified by Bing Li on 2025-04-10 to integrate into this project and to add new features as described:
 
 # The original code is written in python v2 --> changes kept in comments 
 # The below code is modified to python3

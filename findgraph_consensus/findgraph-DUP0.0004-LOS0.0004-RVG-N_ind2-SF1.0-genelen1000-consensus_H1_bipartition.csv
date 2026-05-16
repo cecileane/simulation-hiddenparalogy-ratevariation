@@ -1,0 +1,4 @@
+node1,node2,support_nonredundant,cluster_num,cluster
+12,9,0.44,"1,2,3,4,5,6","A,B,C,D,E,F"
+12,10,0.15,"2,3,4,5,6","B,C,D,E,F"
+14,11,0.08,"2,3","B,C"
