@@ -1,13 +1,21 @@
-# Document software installtion in the stats servers at UW-Madison 
+# Documented software installation steps (developed on UW-Madison stats servers,
+# Linux x86-64). This script is intended as a reproducible recipe — read it,
+# adapt the two variables below to your machine, then run sections as needed.
+#
+# REPO_ROOT      : absolute path to this repository on your machine
+# SOFTWARE_DIR   : directory where third-party binaries will be installed
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # = repo root
+SOFTWARE_DIR="${HOME}/private/software"                        # change if you wish
+mkdir -p "${SOFTWARE_DIR}"
 
-#-------------- Install julia --------------# 
-curl -fsSL https://install.julialang.org | sh # choose to proceed
-. /u/b/i/bingl/.bashrc # Depending on the path 
-. /u/b/i/bingl/.bash_profile 
-# Install packages used in Julia
+#-------------- Install julia --------------#
+curl -fsSL https://install.julialang.org | sh   # accept defaults
+. "${HOME}/.bashrc"        2>/dev/null || true
+. "${HOME}/.bash_profile"  2>/dev/null || true
+# Install packages used in Julia.
 # Project.toml and Manifest.toml in the repo root define the exact environment.
 # From the repo root, run the following to install all packages at the pinned versions:
-cd ~/PATH/TO/simulation-reptiles
+cd "${REPO_ROOT}"
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
 #-------------- Download simphy --------------# 
@@ -16,7 +24,7 @@ wget https://github.com/adamallo/SimPhy/releases/download/v1.0.2/SimPhy_1.0.2.ta
 # simphy 1.0.2 is the most updated version by Feb 5 2025 
 tar -xvf SimPhy_1.0.2.tar.gz
 chmod +x SimPhy_1.0.2/bin/simphy_lnx64
-cd ~/PATH/TO/simulation-reptiles # go back to simulation-reptiles folder 
+cd "${REPO_ROOT}"   # back to the repository root folder
 ln -s ~/private/software/SimPhy_1.0.2/bin/simphy_lnx64 executables/simphy 
 ./executables/simphy -h # test 
 
@@ -27,7 +35,7 @@ wget https://github.com/rambaut/Seq-Gen/archive/refs/tags/v1.3.5.tar.gz
 tar -xvf v1.3.5.tar.gz  
 cd Seq-Gen-1.3.5/source 
 make 
-cd ~/PATH/TO/simulation-reptiles 
+cd "${REPO_ROOT}"
 ln -s ~/private/software/Seq-Gen-1.3.5/source/seq-gen executables/seq-gen 
 executables/seq-gen -h 
 
@@ -38,7 +46,7 @@ tar -xvf iqtree-2.4.0-Linux-intel.tar.gz # Latest version on Feb 7 2025
 # Interestingly, iqtree 2.4.0 was released on Feb 7 2025. Based on the new manual, the executable is located in bin/ and could be directly used. 
 cd iqtree-2.4.0-Linux-intel 
 bin/iqtree2 -s example.phy # run an example to test installation --> work okay 
-cd ~/PATH/TO/simulation-reptiles 
+cd "${REPO_ROOT}"
 ln -s ~/private/software/iqtree-2.4.0-Linux-intel/bin/iqtree2 executables/iqtree2 
 ./executables/iqtree2 -h # test 
 
@@ -47,7 +55,7 @@ cd ~/private/software/
 wget https://github.com/chaoszhang/ASTER/archive/refs/heads/Linux.zip # Version: v1.24.4.8
 unzip Linux.zip  
 cd ASTER-Linux/ && make 
-cd ~/PATH/TO/simulation-reptiles  
+cd "${REPO_ROOT}" 
 ln -s ~/private/software/ASTER-Linux/bin/astral-pro3 executables/astral-pro3 
 ln -s ~/private/software/ASTER-Linux/bin/wastral executables/wastral 
 ln -s ~/private/software/ASTER-Linux/bin/astral executables/astral 
@@ -59,7 +67,7 @@ wget https://www.python.org/ftp/python/3.12.0/Python-3.12.0.tgz
 cd Python-3.12 
 ./configure --prefix=~/private/software/python3.12
 make -j$(nproc) 
-echo 'export PATH=/u/b/i/bingl/private/software/Python-3.12.0:$PATH' >> ~/.bashrc # where the python binary is. 
+echo "export PATH=\"${SOFTWARE_DIR}/Python-3.12.0:\$PATH\"" >> ~/.bashrc   # add python binary to PATH
 source ~/.bashrc
 python --version # double check if it is python 3.12. 
 
@@ -80,8 +88,8 @@ cd snp-sites-2.5.1/
 autoreconf -i -f
 ./configure
 make
-cd PATH/TO/MY/REPO/simulation-reptiles/
-ln -s ~/private/software/snp-sites-2.5.1/src/snp-sites executables/snp-sites 
+cd "${REPO_ROOT}"
+ln -s ~/private/software/snp-sites-2.5.1/src/snp-sites executables/snp-sites
 executables/snp-sites --help # Check if installed successfully  
 
 #--------------Install required R packages-----------# 

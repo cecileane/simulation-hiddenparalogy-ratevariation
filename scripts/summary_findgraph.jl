@@ -1,4 +1,20 @@
 #!/usr/bin/env julia
+# ============================================================================
+# scripts/summary_findgraph.jl
+#
+# Purpose : Aggregate per-parameter find_graphs CSVs into one cross-setting
+#           summary table (hypothesis acceptance, gamma estimates, tree-recovery
+#           percentages, worst-residual percentiles) and produce R-based
+#           diagnostic plots.
+# Inputs  : findgraph_summary/findgraph-<paramname>.csv    (one per setting)
+# Outputs : results/findgraph_summary.csv                  (cross-setting table)
+#           visualization_results/findgraph/*.{png,pdf}    (diagnostic plots)
+# Usage   : julia --project=. scripts/summary_findgraph.jl
+#           (optional overrides: --input_dir, --output_file,
+#                                --visualization_output_dir)
+# Note    : Run after findgraphs_postprocess.jl has populated findgraph_summary/.
+#           Taxon-recovery output is LEGACY and disabled (see block below).
+# ============================================================================
 
 using CSV
 using DataFrames
@@ -21,10 +37,13 @@ function parse_commandline()
             default = "./results/findgraph_summary.csv"
         "--visualization_output_dir"
             help = "Output directory for visualization files"
-            default = "visualization_results/findgraph" 
-        "--taxon_recovery_output"
-            help = "Output CSV for long-format taxon recovery summary"
-            default = "results/findgraph_taxon_recovery.csv"
+            default = "visualization_results/findgraph"
+        # LEGACY (disabled for Dryad/paper submission, 2026-05): taxon-recovery
+        # analysis is not used in the published paper. The argument and the
+        # functions below are kept for reference but never invoked.
+        # "--taxon_recovery_output"
+        #     help = "Output CSV for long-format taxon recovery summary"
+        #     default = "results/findgraph_taxon_recovery.csv"
     end
     return parse_args(s)
 end
@@ -104,9 +123,6 @@ function process_file(filepath::String, paramname::String)
     true_tree_h0_count = count(df.true_tree_found_in_H0 .== true)
     pct_true_tree_h0 = true_tree_h0_count / total_reps * 100
     
-    # Average num_blocks (handling missing values)
-    avg_num_blocks = mean(skipmissing(df.num_blocks))
-    
     # Average gamma values (mean of means across replicates)
     avg_gamma1_H1 = mean(skipmissing(df.avg_gamma1_H1))
     avg_gamma2_H1 = mean(skipmissing(df.avg_gamma2_H1))
@@ -155,7 +171,6 @@ function process_file(filepath::String, paramname::String)
         H1Accepted = h1_accepted,
         BT1Accepted = bt1_accepted,
         pct_true_tree_H0 = pct_true_tree_h0,
-        avg_num_blocks = avg_num_blocks,
         avg_gamma1_H1 = avg_gamma1_H1,
         avg_gamma2_H1 = avg_gamma2_H1,
         avg_best_gamma1 = avg_best_gamma1,
@@ -220,6 +235,16 @@ function validate_wr_thresholds(input_dir::String)
     return all_thresholds
 end
 
+# ─────────────────────────────────────────────────────────────────────────
+# LEGACY CODE — disabled for Dryad / paper submission (2026-05).
+# The two functions below (explode_role_column, compute_taxon_recovery_summary)
+# produce results/findgraph_taxon_recovery.csv, which is NOT used in the
+# published paper. Kept here as inert reference. To re-enable: remove the
+# block-comment markers (the line below opens a Julia block comment; the
+# matching closer appears after the last function below), uncomment the
+# --taxon_recovery_output argument above, and uncomment the call site in main().
+# ─────────────────────────────────────────────────────────────────────────
+#=
 """
 Explode a comma-separated role column into one row per taxon.
 Carries param_setting, repID, and true_tree_recovered.
@@ -313,6 +338,8 @@ function compute_taxon_recovery_summary(input_dir::String, output_file::String)
     CSV.write(output_file, summary)
     println("Taxon recovery ($(nrow(summary)) rows) → $output_file")
 end
+=#
+# ─────────────── end LEGACY taxon-recovery block ───────────────
 
 """
 Main function
@@ -491,8 +518,10 @@ function main()
     println("\nSummary written to: $output_file")
     println("Processed $(nrow(results_df)) files successfully")
 
-    # Taxon recovery summary — long-format table by (param_setting, taxon, role)
-    compute_taxon_recovery_summary(input_dir, args["taxon_recovery_output"])
+    # LEGACY (disabled for Dryad/paper submission, 2026-05): taxon recovery
+    # is not used in the published paper. See the LEGACY block above for the
+    # disabled helper functions.
+    # compute_taxon_recovery_summary(input_dir, args["taxon_recovery_output"])
 
 end
 
