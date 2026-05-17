@@ -1,8 +1,25 @@
-# SnaQ submission files 
-# This script call snaq_onedata.jl to run SnaQ. 
-# It allows to run specific replicate (red_start to rep_end). 
+# ============================================================================
+# scripts/snaq.jl
+#
+# Purpose : Entry point for SNaQ network inference across replicates of one
+#           parameter setting. For each replicate it launches snaq_1rep.jl,
+#           which runs SNaQ at h=0 (no reticulation) and h=1 (one reticulation)
+#           on the ASTRAL species tree + per-quartet concordance factors.
+# Inputs  : output/<paramname>/rep<id>/astralfolder/astral.tre
+#           output/<paramname>/rep<id>/iqtreefolder/CF_results.csv
+# Outputs : output/<paramname>/rep<id>/snaqfolder/H0_output/H0.out
+#           output/<paramname>/rep<id>/snaqfolder/H1_output/H1.out
+#           output/<paramname>/rep<id>/snaqfolder/snaq_gof_results_H0.csv
+# Usage   : julia -p 100 --project=. scripts/snaq.jl \
+#               --dup_rate 0.0003 --loss_rate 0.0003 \
+#               --ratevar G --n_reps 100 --n_inds 1 --runs 100
+#           --rep_start / --rep_end let you resume a partial run; seeds are
+#           deterministic regardless of order.
+# Note    : Steps 2 (SNaQ) and 3 (find_graphs) are independent and can run in
+#           parallel after Step 1 (simulation.jl).
+# ============================================================================
 
-using ArgParse 
+using ArgParse
 using TimerOutputs 
 using Dates
 using TimeZones 

@@ -1,6 +1,23 @@
-# This script documents using find_graphs to estimate graph 
+# ============================================================================
+# scripts/findgraphs.jl
+#
+# Purpose : Entry point for find_graphs (admixture-graph) inference across
+#           replicates of one parameter setting. For each replicate it
+#           launches findgraphs_1rep.R, which (1) extracts SNPs via snp-sites,
+#           (2) converts to eigenstrat, and (3) runs find_graphs() at h=0
+#           and h=1 from the admixtools R package.
+# Inputs  : output/<paramname>/rep<id>/iqtreefolder/concatenated.fasta
+#           (and per-rep ancillary files written by simulation.jl)
+# Outputs : output/<paramname>/rep<id>/findgraph/rep<id>_admix{0,1}_*.{rds,txt}
+#           output/<paramname>/rep<id>/findgraph/rep<id>.vcf, eigenstrat_*.*
+# Usage   : julia -p 100 --project=. scripts/findgraphs.jl \
+#               --dup_rate 0.0003 --loss_rate 0.0003 \
+#               --ratevar G --n_reps 100 --n_inds 1 --runs 100 --block 1000
+# Note    : Steps 2 (SNaQ) and 3 (find_graphs) are independent and can run in
+#           parallel after Step 1 (simulation.jl).
+# ============================================================================
 
-using ArgParse 
+using ArgParse
 using TimerOutputs 
 using Distributed
 using Dates, TimeZones 

@@ -49,7 +49,8 @@ Optional (source / destination):
                   Default: <dest>/output
                   Alias: --sources (kept for backward compatibility)
   --dest          Destination root path
-                  (default: /u/b/i/bingl/private/simulation-reptiles)
+                  (default: the repository root, auto-detected from the
+                  location of this script: scripts/../)
 
 Optional (parameter filters — if omitted, all discovered values are processed):
   --dup_rate      Filter by duplication rate        (e.g. 0.0003)
@@ -71,9 +72,9 @@ Examples:
   # Copy everything found under the default output/ folder:
   bash copy_consensus_inputs.sh --mode findgraphs
 
-  # Copy only RVN parameter sets from a remote path:
+  # Copy only RVN parameter sets from a remote source path:
   bash copy_consensus_inputs.sh --mode snaq --ratevar RVN \\
-      --input_folder /nobackup/bingli/simulation-reptiles/output
+      --input_folder /path/to/remote/sim/output
 
   # Multiple source roots (colon-separated), with a dup_rate filter:
   bash copy_consensus_inputs.sh --mode findgraphs --dup_rate 0.0003 \\
@@ -95,7 +96,10 @@ SF=""
 GENE_LEN=""
 REP_START=""
 REP_END=""
-DEST="/u/b/i/bingl/private/simulation-reptiles"
+# Default DEST: the repository root, computed from this script's own location
+# (scripts/copy_consensus_inputs.sh → repo root is one level up). Users can
+# still override with --dest.
+DEST="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DRY_RUN=false
 
 # ---------------------------------------------------------------------------
