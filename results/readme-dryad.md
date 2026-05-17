@@ -2,9 +2,8 @@
 
 This folder contains the cross-setting summary tables that underlie
 figures and tables in the paper.
-The code used to produce these tables from raw simulations is on
-[GitHub](https://github.com/cecileane/simulation-hiddenparalogy-ratevariation)
-and [Dryad](https://doi.org/10.5061/dryad.dfn2z35h7).
+See the section on [code](#3-code-and-software)
+for the code used to produce these data.
 
 ---
 
@@ -58,11 +57,12 @@ per factor level). Each file uses comma separators and a single header row.
 defined under this parameter combination"**. It is *never* used to indicate
 a measurement failure. There are two reasons it appears:
 
-- **`*_dup_and_loss`, `*_false_HP`, `*_weak_HP`, `*_strong_HP` columns are NaN
-  in the 12 rows where `DUP/LOS = 0.0`.** With no duplication or loss events,
+- `*_dup_and_loss`, `*_false_HP`, `*_weak_HP`, `*_strong_HP`
+  **columns are NaN in the 12 rows where** `DUP/LOS = 0.0`.
+  With no duplication or loss events,
   no gene tree can fall into the dup-and-loss bucket or any of the hidden-
   paralogy buckets. The category is structurally empty.
-- **The six `*_loss_only` columns are NaN in *all 36 rows*.** These columns
+- **The six `*_loss_only` columns are NaN in all 36 rows.** These columns
   are quality assurance placeholders from an earlier design that allowed missing taxa
   in simulated gene trees. The final published design requires every simulated
   gene tree to retain all taxa (gene trees with any loss are dropped during
@@ -255,7 +255,7 @@ summary tables in §2.2–§2.3 (and several paper figures) are computed from.
 Each subfolder contains **36 CSV files — one per parameter setting**, with
 **one row per replicate (typically 100 rows per file)**.
 
-**Note on the `_noF` / `_noG` / `_noH` column suffixes.** Several columns in
+**Note on the** `_noF` / `_noG` / `_noH` **column suffixes**. Several columns in
 both files come in variants suffixed with `_noF`, `_noG`, or `_noH`. These
 re-evaluate the same comparison (true-tree recovery, RF distance, etc.)
 after **pruning that single taxon — F, G, or H respectively — from both the
@@ -381,8 +381,8 @@ to the summary scripts.
 
 The [GitHub](https://github.com/cecileane/simulation-hiddenparalogy-ratevariation)
 repository (also available on [Dryad](https://doi.org/10.5061/dryad.dfn2z35h7))
-contains the full simulation pipeline, the per-setting and
-cross-setting summary scripts that produced the CSVs in this folder, and the
+contains the full pipeline to simulate the data provided here, including
+the per-setting and cross-setting summary scripts, and the
 Quarto notebooks that produce figures.
 
 **Pipeline summary** (from `readme.md` in the repository):
