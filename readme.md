@@ -130,7 +130,7 @@ Check [Executables README](executables/README.md) for details!
 
 ## Repository Layout
 
-After running all simulation, the folder structure should be similar to this:
+After running all simulations, the folder structure should be similar to this:
 
 ```
 <repository-root>/
@@ -232,6 +232,7 @@ After running all simulation, the folder structure should be similar to this:
 │       └── rep100/
 │
 ├── results/                        Aggregated summary CSVs (cross-setting + per-setting)
+│   ├── readme-dryad.md             Dryad data README (column dictionaries)
 │   ├── SNaQ_summary.csv                          Cross-setting SNaQ summary
 │   ├── findgraph_summary.csv                     Cross-setting find_graphs summary
 │   ├── summary_concatenated.csv                  Cross-setting simulation summary
@@ -262,7 +263,6 @@ After running all simulation, the folder structure should be similar to this:
 │
 ├── docs/                           Methodology notes
 │   ├── choice-seqgen-parameters.md     Justification for Seq-Gen rate / base-freq params
-│   ├── simphy_documentation.md         SimPhy Ne / substitution-rate semantics
 │   └── consensus_tree.qmd              Consensus-network analysis (supplementary)
 │
 ├── third_party_scripts/            External scripts (Apache 2.0 + MIT)
@@ -275,7 +275,6 @@ After running all simulation, the folder structure should be similar to this:
 │
 ├── Project.toml                    Julia package environment
 ├── Manifest.toml
-├── DRYAD_README.md                 Dryad data-deposit README (column dictionaries)
 ├── LICENSE
 └── readme.md
 ```
@@ -286,8 +285,9 @@ The cross-setting summary tables that underlie every figure in the paper —
 [`results/findgraph_summary.csv`](results/findgraph_summary.csv),
 [`results/SNaQ_summary.csv`](results/SNaQ_summary.csv), and
 [`results/summary_concatenated.csv`](results/summary_concatenated.csv) — are
-deposited on Dryad (DOI: **TBD on acceptance**). Column dictionaries and a
-description of how the CSVs were generated are in [DRYAD_README.md](DRYAD_README.md).
+deposited on Dryad doi: [10.5061/dryad.dfn2z35h7](https://doi.org/10.5061/dryad.dfn2z35h7).
+Column dictionaries and a description of how the CSVs were generated are in
+[`results/readme-dryad.md`](results/readme-dryad.md).
 
 To regenerate the CSVs from raw per-replicate outputs, follow the pipeline in
 [scripts/readme.md](scripts/readme.md).

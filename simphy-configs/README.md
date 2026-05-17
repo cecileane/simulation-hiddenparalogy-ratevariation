@@ -1,3 +1,14 @@
 # simphy-configs
 
-This folder holds the base SimPhy configuration template used by [scripts/simulation.jl](../scripts/simulation.jl). At startup, `simulation.jl` reads [simphysim-conf-master](simphysim-conf-master) once as a string ([simulation.jl:294-295](../scripts/simulation.jl#L294-L295)) and concatenates it with a dynamically generated parameter block to form `simphy_conf_content` ([simulation.jl:363](../scripts/simulation.jl#L363)). For every iteration/replicate, that content is combined with iteration-specific parameters and written to a temporary per-run file named `simphysim-conf-Int<iter>-Rep<rep>` ([simulation.jl:463-466](../scripts/simulation.jl#L463-L466)), which is then passed to the SimPhy executable via the `-i` flag from `run_simphy_1rep_1int()`, `rerun_simphy_1rep_1int()`, and `run_full_simphy()`. 
+This folder holds the base SimPhy configuration template used by
+[scripts/simulation.jl](../scripts/simulation.jl).
+
+At startup, `simulation.jl` reads [simphysim-conf-master](simphysim-conf-master)
+once as a string ([simulation.jl:294-295](../scripts/simulation.jl#L294-L295))
+and concatenates it with a dynamically generated parameter block to form
+`simphy_conf_content` ([simulation.jl:363](../scripts/simulation.jl#L363)).
+For every iteration/replicate, that content is combined with iteration-specific
+parameters and written to a temporary per-run file named `simphysim-conf-Int<iter>-Rep<rep>`
+([simulation.jl:463-466](../scripts/simulation.jl#L463-L466)),
+which is then passed to the SimPhy executable via the `-i` flag from
+`run_simphy_1rep_1int()`, `rerun_simphy_1rep_1int()`, and `run_full_simphy()`.

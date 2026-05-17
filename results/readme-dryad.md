@@ -1,8 +1,10 @@
-# Data from: Substitution rate variation, not hidden paralogy, drives false 
-hybridization signal in phylogenetic network inference
+# Data from: Substitution rate variation, not hidden paralogy, drives false hybridization signal in phylogenetic network inference
 
-This Dryad deposit accompanies the manuscript we submitted. It contains the cross-setting summary tables that underlie figures and statistic in the paper. 
-The code used to produce these tables from raw simulations is on GitHub (link below).
+This folder contains the cross-setting summary tables that underlie
+figures and tables in the paper.
+The code used to produce these tables from raw simulations is on
+[GitHub](https://github.com/cecileane/simulation-hiddenparalogy-ratevariation)
+and [Dryad](https://doi.org/10.5061/dryad.dfn2z35h7).
 
 ---
 
@@ -23,10 +25,13 @@ UCE data ([Crawford et al. 2012](doi:10.1098/rsbl.2012.0331)).
 | `RV` (rate variation) | N, G, L | None / Gene-specific / Lineage-specific substitution rates |
 | `N_ind` | 1, 2 | Individuals sampled per species / taxon |
 | `SF` (scale factor) | 0.5, 1.0 | Effective-population-size scaling factor; higher = more incomplete lineage sorting |
-| `genelen` | 1000 | Gene length, in base pairs (legacy function, and constant across all settings) |
+| `genelen` | 1000 | Gene length, in base pairs (legacy parameter, 1000 across all settings) |
 
 Each setting is encoded in a string of the form
-`DUP<d>-LOS<l>-RV<r>-N_ind<n>-SF<s>-genelen<g>` (e.g., `DUP0.0003-LOS0.0003-RVG-N_ind1-SF0.5-genelen1000`). This string is the row identifier. Genlen is a legacy parameter which was disabled during our simulation. In our simulation, all genlen = 1000 (number of base pair per gene) in every CSV in this deposit.
+`DUP<d>-LOS<l>-RV<r>-N_ind<n>-SF<s>-genelen<g>` (e.g., `DUP0.0003-LOS0.0003-RVG-N_ind1-SF0.5-genelen1000`).
+This string is the row identifier.
+`genlen` is a legacy parameter which was disabled during our simulation.
+In our simulation, all `genlen = 1000` (number of base pairs per gene).
 
 Per setting we ran 100 replicates of the full pipeline:
 SimPhy → paralogy / missing taxa filter → Seq-Gen → IQ-TREE → ASTRAL-IV → SNaQ + find_graphs.
@@ -35,7 +40,7 @@ SimPhy → paralogy / missing taxa filter → Seq-Gen → IQ-TREE → ASTRAL-IV 
 
 ## 2. Files and variables
 
-This deposit contains 6 top-level CSV files, plus two subfolders of
+This folder contains 6 top-level CSV files, plus two subfolders of
 per-setting per-replicate CSVs (`findgraph_summary/` and `snaq_summary/`,
 36 files each — see §2.6). The six top-level files break down as: three
 primary cross-setting summary tables, and three pre-computed cross-tabulations
@@ -327,10 +332,10 @@ One row per replicate (typically 100 per file).
 | 32 | `major_donor` | string / `"NA"` | Major-donor parent in the best H = 1 network (legacy). |
 | 33 | `minor_donor` | string / `"NA"` | Minor-donor parent in the best H = 1 network (legacy). |
 
-**Why these are included in the deposit.** The cross-setting tables in §2.2–§2.5
+**Why these are included in the folder.** The cross-setting tables in §2.2–§2.5
 only carry *means*, *medians*, and *counts* across replicates — they do not
-preserve the per-replicate values needed to redraw the worst-residual (WR)
-distribution panels and the γ (gamma) distribution panels in the paper.
+preserve the per-replicate values needed to redraw the distributions
+of worst-residual (WR) of of the minor γ (admixture weights / inheritance prob).
 Those plots are produced by `scripts/summary_findgraph.jl` and
 `scripts/summary_snaq.jl`, which read these subfolders directly:
 
@@ -348,7 +353,7 @@ Those plots are produced by `scripts/summary_findgraph.jl` and
 - `scripts/summary_snaq.jl` defaults to `--input_dir snaq_summary` and uses
   its files to compute `SNaQ_summary.csv`, the filtered
   `SNaQ_minor_gamma_filtered.csv` (replicates where neither H1 backbone
-  matches the true tree), and the corresponding R γ-distribution plots
+  matches the true tree), and the corresponding γ-distribution plots
   (`plot_overlapping_ratevar_by_n_inds_sf` reading `gamma_1` / `gamma_2`,
   and `plot_snaq_minor_gamma_by_tree_display`).
 
@@ -358,34 +363,45 @@ upstream by `scripts/findgraphs_postprocess.jl` and `scripts/snaq_postprocess.jl
 per setting) and then assembled into the central folders by
 `scripts/run_postprocessing.jl`, whose `--saved_path` defaults to
 `<project_root>/findgraph_summary` and `<project_root>/snaq_summary`
-respectively. **In the deposit (and in the repository tag the deposit
-points to), these two folders have been relocated from the project root
-into `results/findgraph_summary/` and `results/snaq_summary/`** for
-organization — the deposit groups every artifact a downstream user needs
-under `results/`. If you re-run the upstream postprocessing scripts
-yourself, they will write their output to the project root by default;
-either move the folders to `results/` afterwards, or pass
+respectively.
+**In the repository, these two folders have been relocated from the project root
+into `results`**, as `results/findgraph_summary` and `results/snaq_summary`,
+to share key results files, those of reasonable size.
+If we re-run the upstream postprocessing scripts,
+they will write their output to the project root by default
+(and will not overwrite the files in this `results/` folder).
+To keep paths consistent,
+we may either move the folders to `results/` afterwards, or pass
 `--saved_path results/<mode>_summary` and `--input_dir results/<mode>_summary`
-to the summary scripts to keep paths consistent.
+to the summary scripts.
 
 ---
 
 ## 3. Code and software
 
-All code is available on our GitHub.
-
-The repository contains the full simulation pipeline, the per-setting and
-cross-setting summary scripts that produced the CSVs in this deposit, and the
-Quarto notebooks that produce the paper figures.
+The [GitHub](https://github.com/cecileane/simulation-hiddenparalogy-ratevariation)
+repository (also available on [Dryad](https://doi.org/10.5061/dryad.dfn2z35h7))
+contains the full simulation pipeline, the per-setting and
+cross-setting summary scripts that produced the CSVs in this folder, and the
+Quarto notebooks that produce figures.
 
 **Pipeline summary** (from `readme.md` in the repository):
 
 1. `scripts/simulation.jl`         — SimPhy → paralogy filter → Seq-Gen → IQ-TREE → ASTRAL-IV (per replicate, parallel)
 2. `scripts/snaq.jl`               — SNaQ at H = 0 and H = 1 (per replicate)
 3. `scripts/findgraphs.jl`         — find_graphs / qpgraph at k = 0 and k = 1 (per replicate)
-4. `scripts/run_postprocessing.jl` — drives `scripts/snaq_postprocess.jl` and `scripts/findgraphs_postprocess.jl` over every parameter set and collects their per-setting per-replicate CSVs into `snaq_summary/` and `findgraph_summary/` (the two subfolders described in §2.6; in this deposit they live under `results/`)
-5. `scripts/summary_simulation.jl`, `scripts/summary_snaq.jl`, `scripts/summary_findgraph.jl` — read `snaq_summary/` and `findgraph_summary/` (along with the simulation outputs) to produce both the cross-setting tables `summary_concatenated.csv`, `SNaQ_summary.csv`, `findgraph_summary.csv` and the WR / γ distribution plots used in the paper (see §2.6)
-6. `visualization_scripts/visual_combined.qmd` — produces the paper's combined figure from the `combined_*.csv` files
+4. `scripts/run_postprocessing.jl` — drives `scripts/snaq_postprocess.jl` and
+   `scripts/findgraphs_postprocess.jl` over every parameter set and collects
+   their per-setting per-replicate CSVs into `snaq_summary/` and
+   `findgraph_summary/` (the two subfolders described in §2.6;
+   in this folder they live under `results/`)
+5. `scripts/summary_simulation.jl`, `scripts/summary_snaq.jl`,
+   `scripts/summary_findgraph.jl` — read `snaq_summary/` and `findgraph_summary/`
+   (along with the simulation outputs) to produce both the cross-setting tables
+   `summary_concatenated.csv`, `SNaQ_summary.csv`, `findgraph_summary.csv`
+   and the WR / γ distribution plots used in the paper (see §2.6)
+6. `visualization_scripts/visual_combined.qmd` — produces the paper's combined
+   figure from the `combined_*.csv` files
 
 **Software versions** used to produce these data (Linux x86-64). External
 binaries are listed first; Julia packages — pinned via `Project.toml` /
@@ -407,7 +423,7 @@ binaries are listed first; Julia packages — pinned via `Project.toml` /
 | `QuartetNetworkGoodnessFit.jl` | 1.0.0 | Goodness-of-fit test for SNaQ networks; produces the `p_H0`, `p_H1`, and `z_uncorrected_*` values in `snaq_summary/`. |
 | `PhyloPlots.jl` | 2.1.0 | Plotting of inferred / consensus networks. |
 | `RCall.jl` | 0.14.12 | Bridges Julia to R for the visualization layer and for `admixtools`. |
-| `CSV.jl` / `DataFrames.jl` | 0.10.16 / 1.8.1 | Tabular I/O and manipulation for every summary CSV in this deposit. |
+| `CSV.jl` / `DataFrames.jl` | 0.10.16 / 1.8.1 | Tabular I/O and manipulation for every summary CSV in this folder. |
 | `Distributions.jl` | 0.25.123 | Distributions used during simulation. |
 | `StableRNGs.jl` | 1.0.4 | Reproducible random-number generation (the deterministic seed scheme). |
 | `StatsBase.jl` / `StatsPlots.jl` / `Plots.jl` / `CairoMakie.jl` | 0.34.10 / 0.15.8 / 1.41.6 / 0.15.9 | Summary statistics and the Julia-side plotting. |
@@ -415,7 +431,7 @@ binaries are listed first; Julia packages — pinned via `Project.toml` /
 | `ArgParse.jl` / `Glob.jl` / `IterTools.jl` / `Primes.jl` / `PrettyTables.jl` / `TimerOutputs.jl` / `TimeZones.jl` / `InlineStrings.jl` | 1.2.0 / 1.4.0 / 1.10.0 / 0.5.7 / 3.3.1 / 0.5.29 / 1.22.2 / 1.4.5 | Auxiliary utilities used by the scripts. |
 
 The Julia versions above are the resolved versions recorded in
-`Manifest.toml` at the tag this deposit points to; `Project.toml` lists
+`Manifest.toml` in the repository; `Project.toml` lists
 the direct dependencies. To reproduce the exact environment, instantiate
 the project with `julia --project=. -e 'using Pkg; Pkg.instantiate()'`,
 which honors `Manifest.toml`.
@@ -427,4 +443,4 @@ scheme are documented in `scripts/readme.md` and `plots/seed_control.png`.
 
 ## 4. Access information
 
-**License**: CC0 (per Dryad policy). 
+**License**: CC0 (per Dryad policy).
