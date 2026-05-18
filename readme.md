@@ -244,16 +244,6 @@ After running all simulations, the folder structure should be similar to this:
 │   └── findgraph_summary/                        Per-setting find_graphs summary CSVs
 │       └── findgraph-<paramname>.csv
 │
-├── consensus_trees/                Consensus networks built from per-replicate SNaQ output
-│   └── snaq_consensus_trees/
-│       ├── by_dup/                 Grouped by duplication/loss rate
-│       ├── by_rv/                  Grouped by rate-variation regime
-│       ├── by_sf/                  Grouped by Ne scaling factor
-│       └── per_setting/            One consensus per parameter setting
-│
-├── findgraph_consensus/            Consensus networks built from per-replicate find_graphs output
-│   └── findgraph-<paramname>-consensus_{H0,H1}*.{nwk,csv,pdf}
-│
 ├── plots/                          Figures and workflow diagrams used in the paper
 │   ├── combined_three_panel_figure.png
 │   ├── simulation_workflow.png
@@ -262,8 +252,7 @@ After running all simulations, the folder structure should be similar to this:
 │   └── README.md
 │
 ├── docs/                           Methodology notes
-│   ├── choice-seqgen-parameters.md     Justification for Seq-Gen rate / base-freq params
-│   └── consensus_tree.qmd              Consensus-network analysis (supplementary)
+│   └── choice-seqgen-parameters.md     Justification for Seq-Gen rate / base-freq params
 │
 ├── third_party_scripts/            External scripts (Apache 2.0 + MIT)
 │   ├── vcf2eigenstrat_biallelic.py
