@@ -252,6 +252,7 @@ After running all simulations, the folder structure should be similar to this:
 │   └── README.md
 │
 ├── docs/                           Methodology notes
+|   ├── consensus_tree.qmd          some documentation for building consensus trees (legacy)
 │   └── choice-seqgen-parameters.md     Justification for Seq-Gen rate / base-freq params
 │
 ├── third_party_scripts/            External scripts (Apache 2.0 + MIT)
