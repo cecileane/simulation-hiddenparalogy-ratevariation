@@ -123,9 +123,6 @@ function process_file(filepath::String, paramname::String)
     true_tree_h0_count = count(df.true_tree_found_in_H0 .== true)
     pct_true_tree_h0 = true_tree_h0_count / total_reps * 100
     
-    # Average num_blocks (handling missing values)
-    avg_num_blocks = mean(skipmissing(df.num_blocks))
-    
     # Average gamma values (mean of means across replicates)
     avg_gamma1_H1 = mean(skipmissing(df.avg_gamma1_H1))
     avg_gamma2_H1 = mean(skipmissing(df.avg_gamma2_H1))
@@ -174,7 +171,6 @@ function process_file(filepath::String, paramname::String)
         H1Accepted = h1_accepted,
         BT1Accepted = bt1_accepted,
         pct_true_tree_H0 = pct_true_tree_h0,
-        avg_num_blocks = avg_num_blocks,
         avg_gamma1_H1 = avg_gamma1_H1,
         avg_gamma2_H1 = avg_gamma2_H1,
         avg_best_gamma1 = avg_best_gamma1,

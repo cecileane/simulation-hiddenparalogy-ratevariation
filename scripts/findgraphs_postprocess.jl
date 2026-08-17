@@ -566,8 +566,8 @@ function generate_summary_csv(outfolder::String, paramname_root::String,
     base_df[!, :true_tree_found_in_H0_noF] = fill("False", nrow(base_df)) 
     base_df[!, :true_tree_found_in_H0_noG] = fill("False", nrow(base_df))
     base_df[!, :true_tree_found_in_H0_noH] = fill("False", nrow(base_df))
-    base_df[!, :num_blocks] =
-        Vector{Union{Missing, Float64}}(fill(missing, nrow(base_df)))
+    # base_df[!, :num_blocks] =
+    #     Vector{Union{Missing, Float64}}(fill(missing, nrow(base_df)))
     base_df[!, :avg_gamma1_H1] = fill(0.0, nrow(base_df))
     base_df[!, :avg_gamma2_H1] = fill(0.0, nrow(base_df))
     base_df[!, :best_graph_gamma1] = fill(0.0, nrow(base_df))
@@ -697,18 +697,18 @@ function generate_summary_csv(outfolder::String, paramname_root::String,
                 base_df[idx, best_k_new_WR_col] = "0"
             end
 
-            if "num_blocks" in names(h0_df) && nrow(h0_df) > 0
-                # num_blocks is the same for all rows; read from first row
-                num_blocks_value = h0_df[1, :num_blocks]
-                # Handle both numeric and string types
-                if !ismissing(num_blocks_value)
-                    parsed_num_blocks =
-                        tryparse(Float64, string(num_blocks_value))
-                    if !isnothing(parsed_num_blocks)
-                        base_df[idx, :num_blocks] = parsed_num_blocks
-                    end
-                end
-            end
+            # if "num_blocks" in names(h0_df) && nrow(h0_df) > 0
+            #     # num_blocks is the same for all rows; read from first row
+            #     num_blocks_value = h0_df[1, :num_blocks]
+            #     # Handle both numeric and string types
+            #     if !ismissing(num_blocks_value)
+            #         parsed_num_blocks =
+            #             tryparse(Float64, string(num_blocks_value))
+            #         if !isnothing(parsed_num_blocks)
+            #             base_df[idx, :num_blocks] = parsed_num_blocks
+            #         end
+            #     end
+            # end
         else
             println("Warning: H0 summary file not found for rep $rep_id")
         end

@@ -1,7 +1,13 @@
-# rerun_gof.jl
-# This script reloads net0, net1, and CFs from existing SNaQ outputs
-# and reruns quarnetGoFtest! for all replicates of a given parameter setting.
-# It takes the same parameter arguments as snaq.jl.
+#= rerun_gof.jl
+This script reloads net0, net1, and CFs from existing SNaQ outputs
+and reruns quarnetGoFtest! for all replicates of a given parameter setting.
+It takes the same parameter arguments as snaq.jl.
+The purpose of this script is to rerun GoF tests with the original seeds.
+This saves as a quality assurance check for debugging and 
+    was used during the development of SNaQ.jl sript. 
+This script needs to be kept so that in the future, it 
+    is easier to rerun GoF tests with the original seeds if needed.  
+=# 
 
 using ArgParse
 using Distributed
