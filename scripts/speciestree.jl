@@ -6,8 +6,7 @@ Its branch lengths are in coalescent units.
   nexus alignments downloaded from
   [dryad](https://datadryad.org/stash/dataset/doi:10.5061/dryad.8gm85)
   which corresponds to Brown & Thomson (2017).
-- gene trees were estimated with IQ-TREE, see
-  [notes](https://github.com/cecileane/reptiles/blob/main/scripts/IQtree.md)
+- gene trees were estimated with IQ-TREE,
   using this command and option for 1000 ultra-fast bootstraps:
   `iqtree2 -S folder --prefix loci -T auto -B 1000 -wbtl`
   which creates in `folder`
@@ -15,8 +14,7 @@ Its branch lengths are in coalescent units.
   * and 1 file `loci.ufboot` containing all bootstrap trees (1000 per locus).
   followed by julia script separate-boot-bygene.jl (reptiles repo)
   to get 1 bootstrap tree file per gene, run from `crawford`:
-  `julia ../scripts/separate-boot-bygene.jl -B 1000
-    -o iqtree/bootstrap iqtree/IQ_0??/loci.ufboot`
+  `julia ../scripts/separate-boot-bygene.jl -B 1000 -o iqtree/bootstrap iqtree/IQ_0??/loci.ufboot`
   Then, a file `BSlistfiles` was created with 1 row per locus,
   giving the name of each bootstrap file.
 - species tree estimated with ASTRAL with IQTree input, using

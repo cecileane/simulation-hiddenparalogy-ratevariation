@@ -130,7 +130,7 @@ Check [Executables README](executables/README.md) for details!
 
 ## Repository Layout
 
-After running all simulation, the folder structure should be similar to this: 
+After running all simulations, the folder structure should be similar to this:
 
 ```
 <repository-root>/
@@ -144,9 +144,15 @@ After running all simulation, the folder structure should be similar to this:
 │   ├── findgraphs.jl               Entry point: find_graphs runs (parallel)
 │   ├── findgraphs_1rep.R           Per-replicate find_graphs worker (R)
 │   ├── findgraphs_postprocess.jl   Aggregate per-replicate find_graphs results
+│   ├── run_postprocessing.jl       Run postprocessing across all parameter sets
 │   ├── summary_simulation.jl       Cross-setting simulation summary CSV
 │   ├── summary_snaq.jl             Cross-setting SNaQ summary CSV
-│   ├── summary_findgraph.jl        Cross-setting find_graphs summary CSV
+│   ├── summary_findgraph.jl       Cross-setting find_graphs summary CSV
+│   ├── rerun_gof.jl                Re-run goodness-of-fit on existing SNaQ output
+│   ├── concatenate_seq.py          Concatenate per-gene sequences into a supermatrix
+│   ├── copy_consensus_inputs.sh    Helper to gather inputs for consensus-tree analysis
+│   ├── iqtree.pl                   Legacy IQ-TREE wrapper
+│   ├── seq-gen.sh                  Legacy Seq-Gen wrapper
 │   ├── visual_utilities.R          Shared R plotting helpers
 │   ├── speciestree.jl              One-time: true species tree construction
 │   ├── clean.jl                    Remove intermediate output files
@@ -157,43 +163,40 @@ After running all simulation, the folder structure should be similar to this:
 │   ├── visualization_snaq.qmd
 │   ├── visualization_finsgraphs.qmd
 │   ├── visualize_baselinetree.qmd
-│   └── visual_combined.qmd
+│   ├── visual_combined.qmd
+│   └── readme.md
 │
-├── executables/                    Symlinks to required binaries
-│   ├── simphy -> ...
-│   ├── iqtree2 -> ...
-│   ├── seq-gen -> ...
-│   ├── astral -> ...
-│   └── snp-sites -> ...
+├── executables/                    External binaries installation
+│   ├── software_installation.sh    Installs SimPhy, Seq-Gen, IQ-TREE 2, ASTRAL, snp-sites
+│   └── README.md
 │
 ├── simphy-configs/                 SimPhy configuration templates
-│   ├── Example.conf
-│   ├── simphysim-conf
-│   └── simphysim-conf-master
+│   ├── simphysim-conf-master
+│   └── README.md
 │
-├── output/               Per-replicate outputs (not tracked by Git)
+├── output/                         Per-replicate outputs (not tracked by Git)
 │   │
-|   |   # 36 parameter settings in total 
-│   │   # 12 DUP/LOSS=0.0 settings 
+│   │   # 36 parameter settings in total
+│   │   # 12 DUP/LOSS=0.0 settings
 │   ├── DUP0.0-LOS0.0-RVN-N_ind1-SF0.5-genelen1000/
-│   ├── ... 
-│   ├── DUP0.0-LOS0.0-RVL-N_ind1-SF0.5-genelen1000/
+│   ├── ...
+│   ├── DUP0.0-LOS0.0-RVL-N_ind2-SF1.0-genelen1000/
 │   │
-│   │   # 12 DUP/LOSS=0.0003 settings 
+│   │   # 12 DUP/LOSS=0.0003 settings
 │   ├── DUP0.0003-LOS0.0003-RVN-N_ind1-SF0.5-genelen1000/
 │   ├── ...
 │   ├── DUP0.0003-LOS0.0003-RVL-N_ind2-SF1.0-genelen1000/
 │   │
-│   │   # 12 DUP/LOSS=0.0004 settings 
+│   │   # 12 DUP/LOSS=0.0004 settings
 │   ├── DUP0.0004-LOS0.0004-RVN-N_ind1-SF0.5-genelen1000/
 │   ├── ...
 │   └── DUP0.0004-LOS0.0004-RVG-N_ind2-SF1.0-genelen1000/
 │
 │       # Each parameter folder shares this structure:
-|       # A brief overview of the output folder, but it contains more intermediate files 
+│       # A brief overview of the output folder, but it contains more intermediate files
 │       ├── arguments-<paramname>.log       command-line arguments used
 │       ├── simulation_<paramname>.csv      aggregated simulation results
-│       ├── random_seed_[software].txt   per-software seeds
+│       ├── random_seed_[software].txt      per-software seeds
 │       ├── screen_<paramname>.log          main worker log
 │       ├── screen_<paramname>_worker*.log  per-worker logs
 │       ├── rep001/
@@ -224,39 +227,45 @@ After running all simulation, the folder structure should be similar to this:
 │       │       ├── rep01_admix1_unique_graphs.rds
 │       │       └── rep01_f2.rds
 │       ├── rep002/
-|       ├── ... 
-|       ├── # Feel free to add more replicates but in our simulation we used 100 
-│       └── rep100/ 
+│       ├── ...
+│       ├── # Feel free to add more replicates but in our simulation we used 100
+│       └── rep100/
 │
-├── simulation_summary/             Per-setting simulation summary CSVs
-│   └── summary_<paramname>.csv
-│
-├── snaq_summary/                   Per-setting SNaQ summary CSVs
-│   └── SNaQ-<paramname>-summary.csv
-│
-├── findgraph_summary/              Per-setting find_graphs summary CSVs
-│   └── findgraph-<paramname>.csv
-│
-├── results/                        Cross-setting aggregated summary CSVs
-│   ├── SNaQ_summary.csv
-│   ├── findgraph_summary.csv
-│   ├── summary_concatenated.csv
-│   └── combined_*.csv
-│
-├── visualization_results/          Generated figures (not tracked by Git)
-│   ├── simulation/
-│   ├── snaq/
-│   └── findgraph/
+├── results/                        Aggregated summary CSVs (cross-setting + per-setting)
+│   ├── readme-dryad.md             Dryad data README (column dictionaries)
+│   ├── SNaQ_summary.csv                          Cross-setting SNaQ summary
+│   ├── findgraph_summary.csv                     Cross-setting find_graphs summary
+│   ├── summary_concatenated.csv                  Cross-setting simulation summary
+│   ├── combined_graph_recovery_summary.csv
+│   ├── combined_hypothesis_acceptance_summary.csv
+│   ├── combined_hypothesis_acceptance_marginal.csv
+│   ├── snaq_summary/                             Per-setting SNaQ summary CSVs
+│   │   └── SNaQ-<paramname>-summary.csv
+│   └── findgraph_summary/                        Per-setting find_graphs summary CSVs
+│       └── findgraph-<paramname>.csv
 │
 ├── plots/                          Figures and workflow diagrams used in the paper
+│   ├── combined_three_panel_figure.png
+│   ├── simulation_workflow.png
+│   ├── simulation_workflow.pdf
+│   ├── seed_control.png
+│   └── README.md
+│
 ├── docs/                           Methodology notes
-│   ├── choice-seqgen-parameters.md     Justification for Seq-Gen rate / base-freq params
-│   ├── simphy_documentation.md         SimPhy Ne / substitution-rate semantics
-│   └── consensus_tree.qmd              Consensus-network analysis (supplementary)
-├── third_party_scripts/            External scripts (Apache 2.0)
+|   ├── consensus_tree.qmd          some documentation for building consensus trees (legacy)
+│   └── choice-seqgen-parameters.md     Justification for Seq-Gen rate / base-freq params
+│
+├── third_party_scripts/            External scripts (Apache 2.0 + MIT)
+│   ├── vcf2eigenstrat_biallelic.py
+│   ├── vcf2eigenstrat_multiallelic.py
+│   ├── interop_admixtools.jl
+│   ├── LICENSE-APACHE-2.0.txt
+│   ├── mit-license.txt
+│   └── readme.md
+│
 ├── Project.toml                    Julia package environment
 ├── Manifest.toml
-├── DRYAD_README.md                 Dryad data-deposit README (column dictionaries)
+├── LICENSE
 └── readme.md
 ```
 
@@ -266,8 +275,9 @@ The cross-setting summary tables that underlie every figure in the paper —
 [`results/findgraph_summary.csv`](results/findgraph_summary.csv),
 [`results/SNaQ_summary.csv`](results/SNaQ_summary.csv), and
 [`results/summary_concatenated.csv`](results/summary_concatenated.csv) — are
-deposited on Dryad (DOI: **TBD on acceptance**). Column dictionaries and a
-description of how the CSVs were generated are in [DRYAD_README.md](DRYAD_README.md).
+deposited on Dryad doi: [10.5061/dryad.dfn2z35h7](https://doi.org/10.5061/dryad.dfn2z35h7).
+Column dictionaries and a description of how the CSVs were generated are in
+[`results/readme-dryad.md`](results/readme-dryad.md).
 
 To regenerate the CSVs from raw per-replicate outputs, follow the pipeline in
 [scripts/readme.md](scripts/readme.md).
