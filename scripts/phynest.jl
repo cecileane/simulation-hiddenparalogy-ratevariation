@@ -18,12 +18,14 @@
 #           output/<paramname>/phynest_summary_results.csv
 # Usage   : julia -p 100 --project=. scripts/phynest.jl \
 #               --dup_rate 0.0003 --loss_rate 0.0003 \
-#               --ratevar G --n_reps 100 --n_inds 1 --runs 10
+#               --ratevar G --n_reps 100 --n_inds 1 --runs 100
 #           --rep_start / --rep_end let you resume a partial run; seeds are
 #           deterministic regardless of order.
-# Note    : PhyNEST v0.1.x pins PhyloNetworks < 1.0, so phynest_1rep.jl is
-#           launched with --project=envs/phynest (a dedicated environment
-#           committed to the repo). Set it up once with:
+# Note    : PhyNEST v0.1.x pins PhyloNetworks < 1.0, so phynest_1rep.jl
+#           runs in a dedicated environment (envs/phynest, committed to
+#           the repo). The worker activates it and runs
+#           Pkg.instantiate() itself, so the environment is built
+#           automatically on first use; to pre-build it manually run:
 #               julia --project=envs/phynest -e 'using Pkg; Pkg.instantiate()'
 #           This step is independent of SNaQ and find_graphs and can run in
 #           parallel with them after Step 1 (simulation.jl).
@@ -91,10 +93,12 @@ function parse_commandline()
       # Specify arguments for PhyNEST:
       "--runs"
         help = "Number of independent runs per PhyNEST search
-          (PhyNEST default = 10). Used for both Hmax=0 and Hmax=1 so
-          the composite likelihood comparison stays fair."
+          (default = 100; PhyNEST's own default is 10). The same
+          number is used for Hmax=0 and Hmax=1 so the composite
+          likelihood comparison stays fair; 100 runs saturate both
+          searches (P(all starts NNI-perturbed) = 0.75^100)."
         arg_type = Int
-        default = 10
+        default = 100
       "--max_steps"
         help = "Max steps per PhyNEST search (default = 250000)"
         arg_type = Int
