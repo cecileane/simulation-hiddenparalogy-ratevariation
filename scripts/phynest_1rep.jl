@@ -14,7 +14,9 @@
 #           <phynestfolder>/H1_output/H1_hc.{log,out}
 #           <phynestfolder>/phynest_results.csv    one-row score summary
 # Usage   : Not run directly; called by phynest.jl across replicates as
-#               julia --project=envs/phynest scripts/phynest_1rep.jl ...
+#               julia scripts/phynest_1rep.jl ...
+#           (the script activates envs/phynest itself, so the
+#           --project flag is optional; passing it is harmless)
 # Note    : PhyNEST v0.1.x pins PhyloNetworks < 1.0, which conflicts with
 #           the SNaQ/PhyloSummaries stack, so this worker runs in its own
 #           Julia environment (envs/phynest) and does not include
@@ -24,6 +26,17 @@
 #           (smaller = better fit), so T = score_H0 - score_H1 >= 0 and
 #           larger T means the reticulation improves the fit more.
 # ============================================================================
+
+# Activate the dedicated PhyNEST environment (envs/phynest) so this
+# script also works without `--project=envs/phynest` on the command
+# line. The path is resolved relative to this file, so it works from
+# any working directory. Pkg.instantiate() installs the exact
+# versions pinned in envs/phynest/Manifest.toml on first use and is
+# a fast no-op afterwards.
+using Pkg
+phynest_env = normpath(joinpath(@__DIR__, "..", "envs", "phynest"))
+Pkg.activate(phynest_env; io=devnull)
+Pkg.instantiate(; io=devnull)
 
 using ArgParse
 using CSV
@@ -223,12 +236,17 @@ start_tree = root_at_outgroup(readTopology(species_tree_content), outgroup)
 #-------------------------------------#
 # phyne! has no seed argument, so seed the global RNG before each
 # search; each replicate runs in its own process, so this is stable.
+# StableRNG cannot be used here: phyne!'s internal rand() calls draw
+# from Julia's task-default RNG, which a StableRNG object cannot
+# replace. Results are exactly reproducible for a fixed Julia
+# version (same property as snaq!'s seed argument); only the seed
+# *generation* in utilities.jl needs StableRNG, and it has it.
 # The same number of runs is used for H=0 and H=1 to keep the
 # composite likelihood comparison (T statistic) fair.
 
 # hmax = 0 --> tree search; also the starting point for Hmax = 1
-println("PhyNEST Hmax=0: runs=$runs, seed=$seed_net0. Running...")
-Random.seed!(seed_net0)
+println("PhyNEST Hmax=0: runs=$runs, seed=$seed_net0. Running...") 
+Random.seed!(seed_net0) # see above comments for the reason here 
 net0 = phyne!(start_tree, p, outgroup; hmax=0,
     number_of_runs=runs, maximum_number_of_steps=max_steps,
     filename=joinpath(H0folder, "H0"))
@@ -237,7 +255,7 @@ net0 isa PhyNEST.HybridNetwork ||
 
 # hmax = 1 --> the network with one hybrid edge
 println("PhyNEST Hmax=1: runs=$runs, seed=$seed_net1. Running...")
-Random.seed!(seed_net1)
+Random.seed!(seed_net1) # see above comments for the reason here    
 net1 = phyne!(net0, p, outgroup; hmax=1,
     number_of_runs=runs, maximum_number_of_steps=max_steps,
     filename=joinpath(H1folder, "H1"))
