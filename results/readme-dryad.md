@@ -41,7 +41,9 @@ SimPhy → paralogy / missing taxa filter → Seq-Gen → IQ-TREE → ASTRAL-IV 
 
 This folder contains 6 top-level CSV files, plus two subfolders of
 per-setting per-replicate CSVs (`findgraph_summary/` and `snaq_summary/`,
-36 files each — see §2.6). The six top-level files break down as: three
+36 files each — see §2.6). The PhyNEST analysis added later (18 settings,
+one individual per species only) has its own two top-level tables and one
+subfolder, described in §2.7–§2.8. The six top-level files break down as: three
 primary cross-setting summary tables, and three pre-computed cross-tabulations
 used to make the paper's combined figure. The two subfolder contain primary 
 statistics summarized from raw graphs from SNaQ and findgraphs. All together, 
@@ -374,6 +376,125 @@ To keep paths consistent,
 we may either move the folders to `results/` afterwards, or pass
 `--saved_path results/<mode>_summary` and `--input_dir results/<mode>_summary`
 to the summary scripts.
+
+### 2.7 `PhyNEST_summary.csv`, `PhyNEST_T_threshold.csv` and `PhyNEST_T_summary_by_factor.csv` — PhyNEST cross-setting tables
+
+PhyNEST was run on the 18 settings with one individual per species
+(`N_ind1`). The three files are written by `scripts/summary_phynest.jl`.
+Model choice between h = 0 and h = 1 is based on the score difference
+T = score(h=0) − score(h=1), where the scores are negative log composite
+likelihoods of the best network found under each model (100 search runs
+each, h = 1 started from the h = 0 result). Because the composite
+likelihood sums over every site of the concatenated alignment, this raw
+difference grows linearly with the number of sites M, and M differs
+between replicates (10^6 in most; 999,000 in two replicates and
+940,000–976,000 at the highest duplication/loss rate, where fewer loci
+were retained). The statistic used in the paper is therefore the per-site
+difference T = (score(h=0) − score(h=1)) / M, with M read from the PhyNEST
+log of each replicate (column `T_per_site` of the per-setting tables; the
+raw difference is column `T`). Two rules are reported: the naive rule
+(h = 1 if the raw difference is positive, i.e. T > 0) and the calibrated
+rule (h = 1 if T > T*). As for
+the recalibrated WR ≤ 3.7 threshold of find_graphs, T* is the 95th
+percentile of T pooled over the settings without lineage rate variation
+(no and gene-specific rates, all duplication/loss rates: 6 settings, 600
+replicates); because T differs between ILS levels, one T* is computed
+per ILS level (SF) and each setting is compared with the T* of its own ILS
+level. Lineage rate variation is not part of the pool. T* is specific to
+this design: 8 taxa (70 four-taxon sets) and 100 search runs per model.
+
+#### `PhyNEST_T_threshold.csv` (2 rows)
+
+| # | Column | Type | Description |
+|--:|---|---|---|
+| 1 | `cell` | string | ILS level and individuals per species: `SF0.5-N_ind1` or `SF1.0-N_ind1`. |
+| 2 | `SF` | float | Scale factor of the cell. |
+| 3 | `n_inds` | int | Individuals per species. |
+| 4 | `n_settings` | int | Settings pooled (6: no and gene-specific rates × 3 duplication/loss rates). |
+| 5 | `n_reps` | int | Replicates pooled (600). |
+| 6 | `quantile` | float | Quantile of the pooled distribution of T used as T* (0.95). |
+| 7 | `T_star` | float | Threshold T* for the cell, on the per-site scale of T. |
+| 8 | `median_T_per_site` | float | Median of the pooled T. |
+| 9–10 | `min_setting_quantile`, `max_setting_quantile` | float | Smallest and largest 95th percentile of T among the 6 pooled settings. |
+| 11 | `T_star_null_only` | float | For reference: the 95th percentile of T in the null setting alone (`DUP0.0-LOS0.0-RVN`) of the same ILS level. |
+| 12 | `T_star_raw` | float | For reference: the 95th percentile of the unscaled T in the same pool. |
+
+#### `PhyNEST_T_summary_by_factor.csv` (9 rows)
+
+Summary statistics of T pooled within each level of each simulation
+factor, the analog of the worst-residual summary table of find_graphs.
+
+| # | Column | Type | Description |
+|--:|---|---|---|
+| 1 | `factor` | string | `overall`, `rate variation`, `duplication/loss rate` or `ILS level`. |
+| 2 | `level` | string | Level of the factor (`all`; `none`, `across genes`, `across lineages`; `0.0`, `0.0003`, `0.0004`; `low`, `high`). |
+| 3 | `n` | int | Replicates pooled. |
+| 4–8 | `mean`, `median`, `sd`, `q95`, `q99` | float | Mean, median, standard deviation, 95th and 99th percentile of T. |
+
+#### `PhyNEST_summary.csv` (18 rows)
+
+One row per parameter setting. Column names shared with `SNaQ_summary.csv`
+have the same meaning.
+
+| # | Column | Type | Description |
+|--:|---|---|---|
+| 1 | `parameter_setting` | string | Parameter-setting identifier (`DUP*-LOS*-RV*-N_ind1-SF*-genelen1000`). |
+| 2 | `n_reps` | int | Replicates contributing to this row (100). |
+| 3 | `H=0Accepted` | int | Replicates selecting the tree model under the calibrated rule (T ≤ T*). |
+| 4 | `H=1Accepted` | int | Replicates selecting one reticulation under the calibrated rule (T > T*). Since the true phylogeny is a tree, `H=1Accepted / n_reps` is the type I error rate. |
+| 5 | `H>1Accepted` | int | Always 0: only h = 0 and h = 1 were fitted. |
+| 6–7 | `H=1Accepted_CI_low`, `H=1Accepted_CI_high` | float (%) | Clopper-Pearson 95% confidence interval for the type I error rate under the calibrated rule. |
+| 8–9 | `H=0Accepted_naive`, `H=1Accepted_naive` | int | Same as columns 3–4 under the naive rule (T > 0). |
+| 10 | `T_star` | float | Threshold applied to this setting (that of its ILS level), on the per-site scale. |
+| 11–12 | `mean_n_sites`, `min_n_sites` | float, int | Mean and smallest number of sites M in the alignments of this setting. |
+| 13–14 | `median_T_per_site`, `q95_T_per_site` | float | Median and 95th percentile of T across replicates. |
+| 15–18 | `mean_T`, `median_T`, `q95_T`, `min_T` | float | Summary of the unscaled T across replicates. |
+| 19–21 | `mean_score_H0`, `mean_score_H1`, `mean_score_truetree` | float | Mean negative log composite likelihood of the best h = 0 tree, the best h = 1 network, and the true species tree (topology fixed, parameters optimized). |
+| 22–23 | `mean_gamma_1`, `mean_gamma_2` | float ∈ [0, 1] | Mean major / minor inheritance probability of the h = 1 network. |
+| 24 | `find_true_net0` | int | Replicates where the h = 0 tree equals the true species tree (RF = 0). |
+| 25 | `find_true_net0_noF` | int | Same, with taxon F pruned. |
+| 26 | `find_true_net1` | int | Replicates where the h = 1 network displays the true species tree (major or minor tree). |
+| 27 | `find_true_net1_noF` | int | Same, with taxon F pruned. |
+| 28 | `find_true_net1_major` | int | Replicates where the **major** tree of the h = 1 network is the true species tree. |
+| 29 | `find_alter_net0` | int | Replicates where the h = 0 tree is not the true tree but matches one of the three alternative placements of F (see `snaq_summary` columns). |
+| 30–35 | `find_alter{1,2,3}_net1_{major,minor}` | int | Among replicates whose h = 1 network does not display the true tree: how often its major / minor tree matches alternative 1, 2 or 3. |
+| 36–37 | `median_runs_at_best_H0`, `median_runs_at_best_H1` | float | Median (over replicates) number of the 100 search runs whose score is within 1 unit of the best run's score: a measure of search stability. |
+| 38 | `median_runs_true_H0` | float | Median number of h = 0 runs (out of 100) whose tree is the true species tree. |
+| 39 | `median_pct_runs_better_than_truetree_H0` | float (%) | Median percentage of h = 0 runs scoring better than the true species tree (0 when the search finds the true tree). |
+| 40 | `find_true_any_run_H1` | int | Replicates where at least one of the 100 h = 1 runs displays the true species tree (compare with `find_true_net1`, which uses the best run only). |
+| 41 | `median_runs_true_H1` | float | Median number of h = 1 runs whose network displays the true species tree. |
+| 42 | `median_rank_best_true_H1` | float | Median rank (1 = best score) of the best h = 1 run displaying the true tree, among the 100 runs. |
+| 43 | `median_gap_best_true_H1` | float | Median score difference between the best h = 1 run displaying the true tree and the best run overall (0 when the best run displays it). |
+| 44 | `median_pct_runs_better_than_truetree_H1` | float (%) | Median percentage of h = 1 runs whose network scores better than the true species tree without reticulation. |
+
+### 2.8 Per-setting per-replicate inputs — `phynest_summary/`
+
+`phynest_summary/PhyNEST-<paramname>-summary.csv`: 18 files, one row per
+replicate (100 rows), written by `scripts/phynest_postprocess.jl` (collected
+by `scripts/run_postprocessing.jl --mode phynest`). RF distances use
+`mudistance_semidirected` as for SNaQ and find_graphs; the `_noF` / `_noG` /
+`_noH` suffixes and the `alter1`–`alter3` trees are defined in §2.6.
+
+| # | Column | Type | Description |
+|--:|---|---|---|
+| 1 | `repID` | string | Three-digit replicate identifier. |
+| 2–3 | `score_H0`, `score_H1` | float | Negative log composite likelihood of the best h = 0 tree and best h = 1 network (minimum over the 100 runs). |
+| 4 | `T` | float | `score_H0 − score_H1`. |
+| 5 | `n_sites` | int | Number of sites M in the concatenated alignment analyzed by PhyNEST (from its log). |
+| 6 | `T_per_site` | float | `T / n_sites`, the statistic compared with T*. |
+| 7 | `score_truetree` | float | Negative log composite likelihood of the true species tree with its parameters optimized. |
+| 8 | `num_hybrid_H1` | int | Number of hybrid nodes in the h = 1 network (1 in every replicate). |
+| 9–10 | `gamma_1`, `gamma_2` | float ∈ [0, 1] | Major and minor inheritance probabilities of the h = 1 network. |
+| 11–17 | `RF_net0_true`, `RF_net0_true_noF`, `RF_net0_true_noG`, `RF_net0_true_noH`, `RF_net0_alter1`, `RF_net0_alter2`, `RF_net0_alter3` | float | RF distance of the h = 0 tree to the true species tree (full and pruned) and to the three alternative placements of F. |
+| 18–24 | `RF_net1_1_*` | float | Same seven comparisons for the **major** tree displayed in the h = 1 network. |
+| 25–31 | `RF_net1_2_*` | float | Same seven comparisons for the **minor** tree displayed in the h = 1 network. |
+| 32–34 | `hybrid_taxon`, `major_donor`, `minor_donor` | string | Leaf sets below the hybrid node and below its major / minor parent in the h = 1 network (rooted at A). |
+| 35, 41 | `n_runs_H0`, `n_runs_H1` | int | Search runs with a finite composite likelihood (a run whose optimization failed reports NaN and is not counted). |
+| 36, 42 | `n_runs_at_best_H0`, `n_runs_at_best_H1` | int | Of those runs, how many scored within 1 unit of the best run. |
+| 37, 43 | `n_runs_true_H0`, `n_runs_true_H1` | int | Runs whose tree is the true species tree (h = 0) / whose network displays it (h = 1). |
+| 38, 44 | `gap_best_true_H0`, `gap_best_true_H1` | float | Score of the best such run minus the best score overall (0 when the best run has the true tree; NaN when no run has it). |
+| 39, 45 | `rank_best_true_H0`, `rank_best_true_H1` | float | Rank of the best such run among all runs (1 = best; ties within 1 score unit share the rank; NaN when no run has it). |
+| 40, 46 | `pct_runs_better_than_truetree_H0`, `pct_runs_better_than_truetree_H1` | float (%) | Percentage of runs scoring better (by more than 1 unit) than the true species tree with its parameters optimized. |
 
 ---
 

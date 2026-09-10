@@ -102,6 +102,20 @@ dev.off()
 ``` 
 
 
+## Worst residual of the true tree in every replicate
+Point version of the WR histograms made by `summary_findgraph.jl`, in the
+layout of the PhyNEST T figure: one panel per ILS level and number of
+individuals per taxon, with the WR thresholds 3.0 and 3.7 as dashed lines.
+```{r plot-WR-jitter}
+#| fig-width: 12
+#| fig-height: 11
+p_wr <- plot_WR_distributions_jitter(
+  input_dir       = "../findgraph_summary",
+  output_dir      = visual_output,
+  output_filename = "findgraph_true_tree_WR_distributions_jitter")
+print(p_wr)
+```
+
 ## True Graph Recovery by Duplication/Loss Rate
 # plot recovery of the true tree based on all graphs found per replicate
 

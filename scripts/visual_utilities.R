@@ -643,7 +643,11 @@ plot_true_graph_recovery_lines_aggregated <- function(df,
 
   fill_values <- c(rv_colors, "hollow" = "white")
   shape_values <- setNames(c(21, 21, 24, 24), combo_levels)
-  legend_fill_override <- c("grey55", "white", "grey55", "white")
+  # legend keys: grey for n_ind = 1 (filled), white for n_ind = 2 (hollow);
+  # only the combinations present in the data get a key
+  combos_present       <- combo_levels[combo_levels %in% plot_data$combo]
+  legend_fill_override <- ifelse(grepl("n_ind=1", combos_present),
+                                 "grey55", "white")
 
   base_theme <- theme_bw() +
     theme(
@@ -959,6 +963,8 @@ plot_combined_true_graph_recovery_H1_only <- function(snaq_df,
                                            findgraph_df,
                                            h1_col_snaq      = "find_true_net1",
                                            h1_col_findgraph = "find_true_net1",
+                                           phynest_df       = NULL,
+                                           h1_col_phynest   = "find_true_net1",
                                            output_dir,
                                            output_filename,
                                            y_range = c(75, 105),
@@ -995,9 +1001,14 @@ plot_combined_true_graph_recovery_H1_only <- function(snaq_df,
       mutate(source = source_label)
   }
 
+  # PhyNEST is optional so that older calls keep working
+  source_levels <- c("find_graphs", "SNaQ")
+  if (!is.null(phynest_df)) source_levels <- c(source_levels, "PhyNEST")
+
   combined <- bind_rows(
     prep(snaq_df,      h1_col_snaq,      "SNaQ"),
-    prep(findgraph_df, h1_col_findgraph, "find_graphs")
+    prep(findgraph_df, h1_col_findgraph, "find_graphs"),
+    if (!is.null(phynest_df)) prep(phynest_df, h1_col_phynest, "PhyNEST")
   ) %>%
     mutate(
       ratevar_name = recode(as.character(droplevels(RV)),
@@ -1014,7 +1025,7 @@ plot_combined_true_graph_recovery_H1_only <- function(snaq_df,
         fmt_rate(dup_loss_rate),
         levels = fmt_rate(sort(unique(dup_loss_rate)))
       ),
-      source = factor(source, levels = c("find_graphs", "SNaQ"))
+      source = factor(source, levels = source_levels)
     ) %>%
     mutate(
       ratevar_name = factor(ratevar_name,
@@ -1093,10 +1104,10 @@ plot_combined_true_graph_recovery_H1_only <- function(snaq_df,
     )
 
   output_path <- file.path(output_dir, paste0(output_filename, ".pdf"))
-  ggsave(output_path, plot = p, width = 12, height = 8, units = "in")
+  ggsave(output_path, plot = p, width = 4 * length(source_levels) + 4,
+         height = 8, units = "in")
 
-  cat("Saved combined SNaQ/findgraphs H=1 recovery jitter plot:",
-      output_path, "\n")
+  cat("Saved combined H=1 recovery jitter plot:", output_path, "\n")
 
   invisible(p)
 }
@@ -1276,11 +1287,19 @@ plot_statistics_by_tree_display <- function(input_dir,
 #' - Red: H=1 network does NOT display the true tree
 #'
 #' @param snaq_input_dir Directory containing SNaQ summary CSV files
+#' @param method_label Method name used in the plot title (default \"SNaQ\";
+#'   PhyNEST tables share the same columns)
+#' @param split_by_placement If TRUE, one panel per reticulation placement:
+#'   between the (G,H) clade and the rest of the ingroup (hybrid clade
+#'   B,C,D,E,F with donors G and/or H) vs. elsewhere; needs the
+#'   hybrid_taxon and major_donor columns (PhyNEST tables)
 #' @param output_dir Directory to save output figure
 #' @param output_filename Output filename (without path)
 plot_snaq_minor_gamma_by_tree_display <- function(snaq_input_dir,
                                                    output_dir,
                                                    output_filename,
+                                                   method_label = "SNaQ",
+                                                   split_by_placement = FALSE,
                                                    alpha = 0.6,
                                                    color_displayed_tree = get(
                                                      "color_displayed_tree",
@@ -1298,9 +1317,11 @@ plot_snaq_minor_gamma_by_tree_display <- function(snaq_input_dir,
     return(invisible(NULL))
   }
   
-  # Initialize vectors to store data
-  minor_gamma_displays <- numeric()  # H=1 displays true tree (green)
-  minor_gamma_not_displays <- numeric()  # H=1 does NOT display true tree (red)
+  # One row per replicate: minor gamma, whether H=1 displays the true tree
+  # (green vs red), and where the reticulation was placed
+  all_data <- data.frame()
+  placement_levels <- c("reticulation between (G,H) and the rest",
+                        "reticulation elsewhere")
   
   # Process each CSV file
   for (csv_file in csv_files) {
@@ -1322,35 +1343,33 @@ plot_snaq_minor_gamma_by_tree_display <- function(snaq_input_dir,
       # Categorize rows based on whether H=1 displays true tree
       # H=1 displays true tree if RF_net1_1_true==0 OR RF_net1_2_true==0
       displays_true <- (df$RF_net1_1_true == 0.0) | (df$RF_net1_2_true == 0.0)
+      deep <- if (all(c("hybrid_taxon", "major_donor") %in% names(df))) {
+        df$hybrid_taxon == "B,C,D,E,F" & grepl("^(G,H|G|H)$", df$major_donor)
+      } else rep(FALSE, nrow(df))
       
-      minor_gamma_displays <- c(
-        minor_gamma_displays, df$minor_gamma[displays_true])
-      minor_gamma_not_displays <- c(
-        minor_gamma_not_displays, df$minor_gamma[!displays_true])
+      all_data <- rbind(all_data, data.frame(
+        minor_gamma = df$minor_gamma,
+        tree_display = ifelse(displays_true, "H=1 displays true tree",
+                              "H=1 does NOT display true tree"),
+        placement = ifelse(deep, placement_levels[1], placement_levels[2]),
+        stringsAsFactors = FALSE))
       
     }, error = function(e) {
       cat("Error reading", basename(csv_file), ":", conditionMessage(e), "\n")
     })
   }
   
-  if (length(minor_gamma_displays) == 0 &&
-      length(minor_gamma_not_displays) == 0) {
+  if (nrow(all_data) == 0) {
     cat("No valid data found\n")
     return(invisible(NULL))
   }
   
   # Prepare data for ggplot
-  plot_data <- data.frame(
-    minor_gamma = c(minor_gamma_displays, minor_gamma_not_displays),
-    tree_display = c(
-      rep("H=1 displays true tree", length(minor_gamma_displays)),
-      rep("H=1 does NOT display true tree",
-          length(minor_gamma_not_displays)))
-  )
-  
+  plot_data <- all_data
   plot_data$tree_display <- factor(plot_data$tree_display,
                                    levels = c("H=1 displays true tree",
                                              "H=1 does NOT display true tree"))
+  plot_data$placement <- factor(plot_data$placement, levels = placement_levels)
   
   # Define colors (green for displays, red for not displays)
   colors <- color_displayed_tree[c(
@@ -1364,8 +1383,10 @@ plot_snaq_minor_gamma_by_tree_display <- function(snaq_input_dir,
     scale_x_continuous(limits = c(0, 0.5), expand = c(0, 0)) +
     labs(x = "minor gamma value (estimated gene flow proportion)",
          y = "frequency",
-         title = paste0("SNaQ minor gamma distribution:\n",
+         title = paste0(method_label, " minor gamma distribution:\n",
            "H=1 network displays vs. does not display true tree")) +
+    {if (split_by_placement)
+       facet_wrap(~ placement, nrow = 1, scales = "free_y")} +
     theme_bw() +
     theme(
       plot.title        = element_text(hjust = 0.5, size = 22, face = "bold"),
@@ -1391,18 +1412,24 @@ plot_snaq_minor_gamma_by_tree_display <- function(snaq_input_dir,
       legend.margin      = margin(5, 10, 5, 10),
       legend.text        = element_text(size = 16, face = "bold"),
       legend.title       = element_text(size = 16, face = "bold"),
+      strip.text         = element_text(size = 16, face = "bold"),
+      strip.background   = element_rect(fill = "grey90"),
       panel.spacing      = unit(1.0, "lines"),
       plot.margin        = unit(c(0.5, 0.5, 0.5, 0.5), "lines")
     )
   
   # Save the plot
   output_path <- file.path(output_dir, paste0(output_filename, ".png"))
-  ggsave(output_path, plot = p, width = 7, height = 7, dpi = 300, units = "in")
+  ggsave(output_path, plot = p, width = if (split_by_placement) 13 else 7,
+         height = 7, dpi = 300, units = "in")
   
-  cat("Saved SNaQ minor gamma distribution plot:", output_path, "\n")
-  cat("H=1 displays true tree: ", length(minor_gamma_displays), " records\n")
-  cat("H=1 does NOT display true tree: ",
-      length(minor_gamma_not_displays), " records\n")
+  cat("Saved", method_label, "minor gamma distribution plot:", output_path, "\n")
+  if (split_by_placement) {
+    print(table(plot_data$placement, plot_data$tree_display))
+  } else {
+    print(table(plot_data$tree_display))
+  }
+  invisible(p)
 }
                                                   
 
@@ -1822,6 +1849,127 @@ plot_WR_distributions <- function(input_dir,
   invisible(p)
 }
 
+#' Plot the worst residual of every replicate in every parameter setting
+#'
+#' Point version of plot_WR_distributions(), in the layout of
+#' plot_T_distributions() for PhyNEST: one point per replicate, x =
+#' duplication/loss rate, color = rate variation (points of the three
+#' rate-variation levels are dodged within each rate), one panel per
+#' combination of ILS level and individuals per taxon, with the two WR
+#' thresholds (3.0 and 3.7) as dashed lines.
+#'
+#' @param input_dir Directory with findgraph-<paramname>.csv files
+#' @param wr_column Column to plot (default "true_tree_wr")
+#' @param thresholds WR thresholds drawn as horizontal lines
+plot_WR_distributions_jitter <- function(input_dir,
+                                         output_dir,
+                                         output_filename,
+                                         wr_column = "true_tree_wr",
+                                         thresholds = c(3.0, 3.7),
+                                         rv_colors = get(
+                                           "rv_colors", envir = globalenv())) {
+
+  dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+  csv_files <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
+
+  all_data <- data.frame()
+  for (csv_file in csv_files) {
+    filename     <- basename(csv_file)
+    n_inds_match <- str_match(filename, "N_ind(\\d+)")
+    sf_match     <- str_match(filename, "SF([\\d.]+)")
+    dup_match    <- str_match(filename, "DUP([0-9.eE+-]+)-LOS")
+    rv_match     <- str_match(filename, "-(RVG|RVL|RVN)-")
+    if (any(is.na(c(n_inds_match, sf_match, dup_match, rv_match)))) next
+    df <- read.csv(csv_file, stringsAsFactors = FALSE)
+    if (!(wr_column %in% names(df))) next
+    all_data <- rbind(all_data, data.frame(
+      n_inds = as.numeric(n_inds_match[2]), SF = as.numeric(sf_match[2]),
+      dup_loss_rate = dup_match[2], ratevar = rv_match[2],
+      value = df[[wr_column]], stringsAsFactors = FALSE))
+  }
+  if (nrow(all_data) == 0) {
+    cat("No valid data found\n")
+    return(invisible(NULL))
+  }
+
+  fmt_rate <- function(x) {
+    v <- as.numeric(x)
+    ifelse(v == 0, "0", sub("e-0", "e-", formatC(v, format = "e", digits = 0)))
+  }
+  plot_data <- all_data %>%
+    filter(!is.na(value)) %>%
+    mutate(
+      ratevar_name = factor(recode(ratevar, "RVG" = "gene", "RVL" = "lineage",
+                                   "RVN" = "none"),
+                            levels = c("none", "gene", "lineage")),
+      ILS = factor(paste0("ILS = ", ifelse(SF == 1.0, "high", "low")),
+                   levels = c("ILS = low", "ILS = high")),
+      n_label = factor(paste0("n = ", n_inds)),
+      dup_loss_rate_cat = factor(
+        fmt_rate(dup_loss_rate),
+        levels = fmt_rate(sort(unique(as.numeric(dup_loss_rate))))))
+
+  line_data <- data.frame(
+    threshold  = paste0("WR = ", formatC(thresholds, format = "f", digits = 1)),
+    yintercept = thresholds)
+  line_colors <- setNames(c("red", "green4", "blue", "purple")[
+    seq_along(thresholds)], line_data$threshold)
+
+  jitter <- position_jitterdodge(jitter.width = 0.3, dodge.width = 0.9,
+                                 seed = 42)
+  p <- ggplot(plot_data,
+              aes(x = dup_loss_rate_cat, y = value, color = ratevar_name)) +
+    geom_point(position = jitter, size = 2.2, alpha = 0.35)
+  # one layer per threshold, so that each line keeps its own color
+  for (i in seq_along(thresholds)) {
+    p <- p + geom_hline(data = line_data[i, ],
+                        aes(yintercept = yintercept, linetype = threshold),
+                        color = line_colors[i], linewidth = 1.1)
+  }
+  p <- p +
+    facet_grid(n_label ~ ILS) +
+    scale_color_manual(values = rv_colors,
+                       name   = "rate variation:",
+                       breaks = c("lineage", "gene", "none"),
+                       labels = c("lineage" = "across lineages",
+                                  "gene"    = "across genes",
+                                  "none"    = "none")) +
+    scale_linetype_manual(values = rep("dashed", length(thresholds)),
+                          name   = "WR threshold:") +
+    labs(x = "duplication and loss rate",
+         y = "worst residual on the true tree topology") +
+    theme_bw() +
+    theme(
+      axis.title.x     = element_text(size = 18, face = "bold",
+                                      margin = margin(t = 10)),
+      axis.title.y     = element_text(size = 18, face = "bold",
+                                      margin = margin(r = 10)),
+      axis.text.x      = element_text(size = 16, color = "black",
+                                      face = "bold"),
+      axis.text.y      = element_text(size = 16, color = "black",
+                                      face = "bold"),
+      strip.text       = element_text(size = 18, face = "bold"),
+      strip.background = element_rect(fill = "grey90"),
+      panel.border     = element_rect(color = "black", linewidth = 1.5,
+                                      fill = NA),
+      legend.position  = "bottom",
+      legend.box       = "vertical",
+      legend.text      = element_text(size = 16, face = "bold"),
+      legend.title     = element_text(size = 16, face = "bold")
+    ) +
+    guides(color = guide_legend(override.aes = list(size = 5, alpha = 1),
+                                order = 1),
+           linetype = guide_legend(
+             override.aes = list(color = unname(line_colors), linewidth = 1.3),
+             order = 2))
+
+  output_path <- file.path(output_dir, paste0(output_filename, ".png"))
+  ggsave(output_path, plot = p, width = 12, height = 11, dpi = 300,
+         units = "in")
+  cat("Saved WR jitter plot:", output_path, "\n")
+  invisible(p)
+}
+
 #' Plot combined minor gamma distributions by tree display status
 #'
 #' Creates a 2-panel facet_grid plot with SNaQ and findgraphs side-by-side:
@@ -1841,6 +1989,7 @@ plot_combined_snaq_findgraph_by_tree_display <- function(
     findgraph_input_dir,
     output_dir,
     output_filename,
+    phynest_input_dir = NULL,
     max_y = NULL,
     max_y_by_ratevar = NULL,
     alpha = 0.6,
@@ -1947,6 +2096,48 @@ plot_combined_snaq_findgraph_by_tree_display <- function(
     })
   }
 
+  # Process PhyNEST files (optional; same columns as the SNaQ tables)
+  source_levels <- c("find_graphs", "SNaQ")
+  if (!is.null(phynest_input_dir)) {
+    source_levels <- c(source_levels, "PhyNEST")
+    cat("Processing PhyNEST files for tree display analysis...\n")
+    phynest_files <- list.files(
+      phynest_input_dir, pattern = "\\.csv$", full.names = TRUE)
+    for (csv_file in phynest_files) {
+      tryCatch({
+        df <- read_csv(csv_file, show_col_types = FALSE)
+        ratevar_code  <- str_extract(basename(csv_file), "RV[GLN]")
+        ratevar_label <- case_when(
+          ratevar_code == "RVG" ~ "gene",
+          ratevar_code == "RVL" ~ "lineage",
+          ratevar_code == "RVN" ~ "none",
+          TRUE ~ NA_character_
+        )
+        if (all(c("gamma_1", "gamma_2", "RF_net1_1_true", "RF_net1_2_true")
+                %in% names(df))) {
+          temp_data <- df %>%
+            mutate(minor_gamma = pmin(gamma_1, gamma_2),
+                   tree_displays = (RF_net1_1_true == 0 | RF_net1_2_true == 0),
+                   source = "PhyNEST",
+                   ratevar = ratevar_label,
+                   tree_display_text = ifelse(tree_displays,
+                                             "True tree displayed",
+                                             "True tree NOT displayed")) %>%
+            select(minor_gamma, tree_display_text, source, ratevar) %>%
+            filter(!is.na(minor_gamma),
+                   !is.na(tree_display_text), !is.na(ratevar))
+          combined_data <- rbind(combined_data, temp_data)
+          cat("  Found", nrow(temp_data), "PhyNEST replicates\n")
+        } else {
+          cat("  Missing required columns in", basename(csv_file), "\n")
+        }
+      }, error = function(e) {
+        cat("Error reading PhyNEST file", basename(csv_file), ":",
+            conditionMessage(e), "\n")
+      })
+    }
+  }
+
   if (nrow(combined_data) == 0) {
     cat("No valid data found for tree display analysis\n")
     return(invisible(NULL))
@@ -1955,8 +2146,7 @@ plot_combined_snaq_findgraph_by_tree_display <- function(
   cat("Total records in combined data:", nrow(combined_data), "\n")
   
   # Factor levels
-  combined_data$source <- factor(combined_data$source,
-                                 levels = c("find_graphs", "SNaQ"))
+  combined_data$source <- factor(combined_data$source, levels = source_levels)
   
   combined_data$ratevar <- factor(combined_data$ratevar,
                                   levels = c("none", "gene", "lineage"),
@@ -1998,8 +2188,7 @@ plot_combined_snaq_findgraph_by_tree_display <- function(
   dummy_limits <- data.frame(
     minor_gamma       = 0,
     ratevar           = factor(ratevar_levels, levels = ratevar_levels),
-    source            = factor("find_graphs",
-      levels = c("find_graphs", "SNaQ")),
+    source            = factor("find_graphs", levels = source_levels),
     ylim_max          = unname(ylim_vals),
     tree_display_text = factor("True tree displayed",
       levels = c("True tree displayed", "True tree NOT displayed"))
@@ -2054,9 +2243,10 @@ plot_combined_snaq_findgraph_by_tree_display <- function(
   # Save the plot
   output_path <- file.path(output_dir, paste0(output_filename, ".png"))
   ggsave(output_path, plot = p,
-    width = 10.3, height = 14.1, dpi = 300, units = "in")
+    width = 10.3 + 4.5 * (length(source_levels) - 2), height = 14.1,
+    dpi = 300, units = "in")
   
-  cat("Saved combined SNaQ/findgraphs tree display plot:", output_path, "\n")
+  cat("Saved combined tree display plot:", output_path, "\n")
   
   # Print summary stats
   summary_data <- combined_data %>%
@@ -2427,6 +2617,9 @@ plot_combined_hypothesis_acceptance_H0 <- function(
     h0_col_snaq           = "pct_H0",
     h0_col_findgraph_wr30 = "pct_H0",
     h0_col_findgraph_wr37 = "pct_H0_wr_3.7",
+    phynest_df            = NULL,
+    h0_col_phynest_naive  = "pct_H0_naive",
+    h0_col_phynest_tstar  = "pct_H0",
     output_dir,
     output_filename,
     plot_title    = NULL,
@@ -2499,11 +2692,23 @@ plot_combined_hypothesis_acceptance_H0 <- function(
   source_levels <- c("find_graphs (WR ≤ 3.0)",
                      "find_graphs (WR ≤ 3.7)",
                      "SNaQ")
+  # PhyNEST is optional: calibrated rule (T > T*, T per site), preceded by
+  # the naive rule (T > 0) unless h0_col_phynest_naive is NULL
+  show_naive <- !is.null(phynest_df) && !is.null(h0_col_phynest_naive)
+  if (!is.null(phynest_df)) {
+    phynest_std   <- standardise_df(phynest_df)
+    if (show_naive) source_levels <- c(source_levels, "PhyNEST (T > 0)")
+    source_levels <- c(source_levels, "PhyNEST (T > T*)")
+  }
 
   combined <- bind_rows(
     prep(findgraph_std, h0_col_findgraph_wr30,  source_levels[1]),
     prep(findgraph_std, h0_col_findgraph_wr37,  source_levels[2]),
-    prep(snaq_std,      h0_col_snaq,            source_levels[3])
+    prep(snaq_std,      h0_col_snaq,            source_levels[3]),
+    if (show_naive)
+      prep(phynest_std, h0_col_phynest_naive, "PhyNEST (T > 0)"),
+    if (!is.null(phynest_df))
+      prep(phynest_std, h0_col_phynest_tstar, "PhyNEST (T > T*)")
   ) %>%
     mutate(
       ratevar_name = factor(ratevar_name,
@@ -2589,10 +2794,10 @@ plot_combined_hypothesis_acceptance_H0 <- function(
 
   output_path <- file.path(output_dir, paste0(output_filename, ".pdf"))
   ggsave(output_path, plot = p,
-    width = 16, height = 8, dpi = 300, units = "in")
+    width = 4 * length(source_levels) + 4, height = 8, dpi = 300,
+    units = "in")
 
-  cat("Saved combined SNaQ/findgraphs type I error jitter plot:",
-    output_path, "\n")
+  cat("Saved combined type I error jitter plot:", output_path, "\n")
 
   invisible(p)
 }
@@ -3269,6 +3474,390 @@ plot_WR_percentiles_jitter_combined <- function(input_dir,
   invisible(p)
 }
 
+
+
+#' Plot the 95th percentile of the PhyNEST statistic per parameter setting
+#'
+#' One point per setting: x = duplication/loss rate, color = rate variation,
+#' shape and fill = ILS x individuals per taxon, as in
+#' plot_WR_percentiles_jitter_combined(). The statistic is the per-site
+#' score difference T = (score(h=0) - score(h=1)) / M by default, with M the
+#' number of sites of the replicate's alignment (column T_per_site);
+#' `t_column = "T"` plots the unscaled difference instead. The
+#' calibrated thresholds T* (95th percentile of the statistic pooled over the
+#' settings without lineage rate variation, one per ILS level) are drawn as
+#' horizontal lines: solid grey for low ILS, dashed black for high ILS.
+#'
+#' @param input_dir Directory with PhyNEST-<paramname>-summary.csv files
+#' @param t_star Named numeric vector of thresholds, names "low" and "high"
+#'   (ILS level), on the scale of `t_column`; NULL draws no lines
+#' @param t_column Column holding the statistic: "T_per_site" or "T"
+#' @param label_t_star Write the value of T* at the right end of each line
+#' @param ymax Upper y limit (default: 1.05 x largest percentile)
+plot_T_percentiles_jitter <- function(input_dir,
+                                      output_dir,
+                                      output_filename,
+                                      t_star = NULL,
+                                      t_column = "T_per_site",
+                                      label_t_star = TRUE,
+                                      probs = 0.95,
+                                      ymax = NULL,
+                                      jitter_width = 0.2,
+                                      facet_label = NULL,
+                                      plot_title = NULL,
+                                      rv_colors = get(
+                                        "rv_colors", envir = globalenv())) {
+
+  dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+  csv_files <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
+  if (length(csv_files) == 0) {
+    cat("No CSV files found in", input_dir, "\n")
+    return(invisible(NULL))
+  }
+
+  all_percentiles <- data.frame()
+  for (csv_file in csv_files) {
+    filename     <- basename(csv_file)
+    n_inds_match <- str_match(filename, "N_ind(\\d+)")
+    sf_match     <- str_match(filename, "SF([\\d.]+)")
+    dup_match    <- str_match(filename, "DUP([0-9.eE+-]+)-LOS")
+    rv_match     <- str_match(filename, "-(RVG|RVL|RVN)-")
+    if (any(is.na(c(n_inds_match, sf_match, dup_match, rv_match)))) next
+
+    df <- read.csv(csv_file, stringsAsFactors = FALSE)
+    if (!(t_column %in% names(df))) next
+    values <- df[[t_column]][!is.na(df[[t_column]])]
+    if (length(values) == 0) next
+
+    all_percentiles <- rbind(all_percentiles, data.frame(
+      n_inds        = as.numeric(n_inds_match[2]),
+      SF            = as.numeric(sf_match[2]),
+      dup_loss_rate = dup_match[2],
+      ratevar       = rv_match[2],
+      value         = as.numeric(quantile(values, probs)),
+      stringsAsFactors = FALSE))
+  }
+  if (nrow(all_percentiles) == 0) {
+    cat("No valid data found\n")
+    return(invisible(NULL))
+  }
+
+  combo_levels <- c("ILS = high, n = 1", "ILS = high, n = 2",
+                    "ILS = low, n = 1",  "ILS = low, n = 2")
+  fmt_rate <- function(x) {
+    v <- as.numeric(x)
+    ifelse(v == 0, "0", sub("e-0", "e-", formatC(v, format = "e", digits = 0)))
+  }
+
+  plot_data <- all_percentiles %>%
+    mutate(
+      ratevar_name = recode(ratevar, "RVG" = "gene", "RVL" = "lineage",
+                            "RVN" = "none"),
+      ILS      = ifelse(SF == 1.0, "high", "low"),
+      fill_var = ifelse(n_inds == 1, ratevar_name, "hollow"),
+      combo    = case_when(
+        n_inds == 1 & ILS == "high" ~ combo_levels[1],
+        n_inds == 2 & ILS == "high" ~ combo_levels[2],
+        n_inds == 1 & ILS == "low"  ~ combo_levels[3],
+        n_inds == 2 & ILS == "low"  ~ combo_levels[4]),
+      dup_loss_rate_cat = factor(
+        fmt_rate(dup_loss_rate),
+        levels = fmt_rate(sort(unique(as.numeric(dup_loss_rate)))))
+    ) %>%
+    mutate(
+      ratevar_name = factor(ratevar_name, levels = c("none", "gene", "lineage")),
+      fill_var     = factor(fill_var,
+                            levels = c("none", "gene", "lineage", "hollow")),
+      combo        = factor(combo, levels = combo_levels)
+    )
+  if (!is.null(facet_label)) plot_data$panel_label <- facet_label
+  if (is.null(ymax)) ymax <- 1.05 * max(plot_data$value, t_star)
+
+  # per-site T is ~0.02; the unscaled difference is ~2e4
+  t_label <- if (t_column == "T_per_site") "T" else "unscaled T"
+  fmt_t   <- function(x) if (t_column == "T_per_site") {
+    formatC(signif(x, 2), format = "fg")
+  } else format(round(x), big.mark = ",")
+
+  fill_values  <- c(rv_colors, "hollow" = "white")
+  shape_values <- setNames(c(21, 21, 24, 24), combo_levels)
+  # legend keys: grey for n = 1 (filled), white for n = 2 (hollow);
+  # only the combinations present in the data get a key
+  combos_present       <- combo_levels[combo_levels %in% plot_data$combo]
+  legend_fill_override <- ifelse(grepl("n = 1", combos_present),
+                                 "grey55", "white")
+
+  p <- ggplot(plot_data,
+              aes(x = dup_loss_rate_cat, y = value,
+                  color = ratevar_name, fill = fill_var, shape = combo))
+  if (!is.null(t_star)) {
+    # one threshold per ILS level, without a legend: solid grey for low
+    # ILS, dashed black for high ILS (described in the figure caption)
+    t_style <- list(low  = list(color = "grey45", linetype = "solid",
+                                alpha = 0.7),
+                    high = list(color = "black", linetype = "dashed",
+                                alpha = 1))
+    for (lvl in names(t_star)) {
+      p <- p + geom_hline(yintercept = t_star[[lvl]],
+                          color = t_style[[lvl]]$color,
+                          linetype = t_style[[lvl]]$linetype,
+                          alpha = t_style[[lvl]]$alpha, linewidth = 1.2)
+      if (label_t_star)
+        p <- p + annotate("text", x = Inf, y = t_star[[lvl]],
+                          label = paste0("T* (", lvl, " ILS) = ",
+                                         fmt_t(t_star[[lvl]])),
+                          hjust = 1.05, vjust = -0.5, size = 4.5,
+                          fontface = "bold")
+    }
+  }
+  p <- p +
+    geom_jitter(size = 6.5, stroke = 1.2,
+                position = position_jitter(width = jitter_width, height = 0,
+                                           seed = 42)) +
+    scale_color_manual(values = rv_colors,
+                       name   = "rate variation:",
+                       breaks = c("lineage", "gene", "none"),
+                       labels = c("lineage" = "across lineages",
+                                  "gene"    = "across genes",
+                                  "none"    = "none")) +
+    scale_fill_manual(values = fill_values, guide = "none") +
+    scale_shape_manual(values = shape_values,
+                       name   = "ILS & individuals / taxon (n)") +
+    scale_y_continuous(limits = c(0, ymax), expand = c(0, 0),
+                       labels = scales::label_comma()) +
+    labs(x = "duplication and loss rate",
+         y = paste0(round(100 * probs), "th percentile of ", t_label),
+         title = plot_title) +
+    theme_bw() +
+    theme(
+      plot.title        = element_text(hjust = 0.5, size = 22, face = "bold"),
+      axis.title.x      = element_text(
+        size = 16, face = "bold", margin = margin(t = 10)),
+      axis.title.y      = element_text(
+        size = 16, face = "bold", margin = margin(r = 10)),
+      axis.text.x       = element_text(size = 15, angle = 45,
+                                       hjust = 1, color = "black", face = "bold"),
+      axis.text.y       = element_text(
+        size = 15, color = "black", face = "bold"),
+      axis.ticks        = element_line(color = "black", linewidth = 0.8),
+      axis.ticks.length = unit(0.2, "cm"),
+      panel.border      = element_rect(
+        color = "black", linewidth = 1.8, fill = NA),
+      panel.grid.major  = element_line(
+        color = "grey87", linewidth = 0.5, linetype = "solid"),
+      panel.grid.minor  = element_line(
+        color = "grey93", linewidth = 0.3, linetype = "dotted"),
+      legend.position    = "bottom",
+      legend.box         = "vertical",
+      legend.box.spacing = unit(0.4, "lines"),
+      legend.background  = element_blank(),
+      legend.margin      = margin(5, 10, 5, 10),
+      legend.key.size    = unit(2.0, "lines"),
+      legend.text        = element_text(size = 14, face = "bold"),
+      legend.title       = element_text(size = 14, face = "bold"),
+      plot.margin        = unit(c(0.5, 0.5, 0.8, 0.5), "lines")
+    ) +
+    guides(
+      color    = guide_legend(override.aes = list(size = 8.0, stroke = 1.6),
+                              nrow = 3, position = "right", order = 1),
+      shape    = guide_legend(override.aes = list(size   = 8.0,
+                                                  stroke = 1.6,
+                                                  fill   = legend_fill_override,
+                                                  color  = "black"),
+                              nrow = 2, position = "bottom",
+                              theme = theme(legend.background = element_rect(
+                                color = "black", linewidth = 1.0,
+                                fill = "white")))
+    )
+
+  if (!is.null(facet_label)) {
+    p <- p +
+      facet_wrap(~ panel_label) +
+      theme(strip.text       = element_text(size = 19, face = "bold"),
+            strip.background = element_rect(fill = "grey90"))
+  }
+
+  output_path <- file.path(output_dir, paste0(output_filename, ".pdf"))
+  ggsave(output_path, plot = p, width = 8, height = 8, dpi = 300, units = "in")
+  cat("Saved T percentiles jitter plot:", output_path, "\n")
+  invisible(p)
+}
+
+#' Plot the distribution of the PhyNEST statistic in every parameter setting
+#'
+#' One point per replicate (log10 scale): x = duplication/loss rate, color =
+#' rate variation (points of the three rate-variation levels are dodged
+#' within each rate), one column per ILS level, with the calibrated
+#' threshold T* of that ILS level as a dashed line. The statistic is the
+#' per-site T by default (see plot_T_percentiles_jitter()); `t_column = "T"`
+#' plots the unscaled difference. With
+#' `shape_by_placement = TRUE`, the point shape shows where the h=1 network
+#' placed its reticulation: between the (G,H) clade and the rest of the
+#' ingroup (hybrid clade B,C,D,E,F with donors G and/or H; filled triangle)
+#' or anywhere else (open circle). Replicates with T <= 0 (search failures)
+#' are dropped from the log-scale plot and counted in the console output.
+#'
+#' @param input_dir Directory with PhyNEST-<paramname>-summary.csv files
+#' @param t_star Named numeric vector of thresholds, names "low" and "high",
+#'   on the scale of `t_column`
+#' @param t_column Column holding the statistic: "T_per_site" or "T"
+#' @param shape_by_placement Encode the reticulation placement as shape
+#' @param ratevar Which rate-variation settings to show (default all)
+plot_T_distributions <- function(input_dir,
+                                 output_dir,
+                                 output_filename,
+                                 t_star = NULL,
+                                 t_column = "T_per_site",
+                                 shape_by_placement = FALSE,
+                                 ratevar = c("RVN", "RVG", "RVL"),
+                                 rv_colors = get(
+                                   "rv_colors", envir = globalenv())) {
+
+  dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+  csv_files <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
+
+  all_data <- data.frame()
+  for (csv_file in csv_files) {
+    filename  <- basename(csv_file)
+    sf_match  <- str_match(filename, "SF([\\d.]+)")
+    dup_match <- str_match(filename, "DUP([0-9.eE+-]+)-LOS")
+    rv_match  <- str_match(filename, "-(RVG|RVL|RVN)-")
+    if (any(is.na(c(sf_match, dup_match, rv_match)))) next
+    if (!(rv_match[2] %in% ratevar)) next
+    df <- read.csv(csv_file, stringsAsFactors = FALSE)
+    if (!(t_column %in% names(df))) next
+    deep <- if (all(c("hybrid_taxon", "major_donor") %in% names(df))) {
+      df$hybrid_taxon == "B,C,D,E,F" & grepl("^(G,H|G|H)$", df$major_donor)
+    } else NA
+    all_data <- rbind(all_data, data.frame(
+      SF = as.numeric(sf_match[2]), dup_loss_rate = dup_match[2],
+      ratevar = rv_match[2], value = df[[t_column]], deep = deep,
+      stringsAsFactors = FALSE))
+  }
+  if (nrow(all_data) == 0) {
+    cat("No valid data found\n")
+    return(invisible(NULL))
+  }
+
+  n_nonpositive <- sum(all_data$value <= 0, na.rm = TRUE)
+  cat("Replicates with T <= 0 (not shown on log scale):", n_nonpositive, "\n")
+
+  per_site <- t_column == "T_per_site"
+  fmt_t    <- function(x) if (per_site) formatC(signif(x, 2), format = "fg") else
+    format(round(x), big.mark = ",")
+  y_label  <- if (per_site) {
+    "T = (score(h=0) - score(h=1)) / number of sites M"
+  } else "unscaled T = score(h=0) - score(h=1)"
+
+  fmt_rate <- function(x) {
+    v <- as.numeric(x)
+    ifelse(v == 0, "0", sub("e-0", "e-", formatC(v, format = "e", digits = 0)))
+  }
+  placement_levels <- c("between (G,H) and the rest of the ingroup",
+                        "elsewhere")
+  plot_data <- all_data %>%
+    filter(!is.na(value), value > 0) %>%
+    mutate(
+      ratevar_name = factor(recode(ratevar, "RVG" = "gene", "RVL" = "lineage",
+                                   "RVN" = "none"),
+                            levels = c("none", "gene", "lineage")),
+      ILS = factor(paste0("ILS = ", ifelse(SF == 1.0, "high", "low")),
+                   levels = c("ILS = low", "ILS = high")),
+      dup_loss_rate_cat = factor(
+        fmt_rate(dup_loss_rate),
+        levels = fmt_rate(sort(unique(as.numeric(dup_loss_rate))))),
+      placement = factor(ifelse(!is.na(deep) & deep, placement_levels[1],
+                                placement_levels[2]),
+                         levels = placement_levels))
+  if (shape_by_placement) {
+    cat("Replicates by reticulation placement:\n")
+    print(table(plot_data$ILS, plot_data$placement))
+  }
+
+  jitter <- position_jitterdodge(jitter.width = 0.3, dodge.width = 0.9,
+                                 seed = 42)
+  p <- ggplot(plot_data,
+              aes(x = dup_loss_rate_cat, y = value, color = ratevar_name))
+  if (shape_by_placement) {
+    p <- p +
+      geom_point(aes(shape = placement, group = ratevar_name),
+                 position = jitter, size = 2.4, alpha = 0.45, stroke = 0.9) +
+      scale_shape_manual(values = setNames(c(17, 1), placement_levels),
+                         name = "reticulation placed:")
+  } else {
+    p <- p + geom_point(position = jitter, size = 2.2, alpha = 0.35)
+  }
+  if (!is.null(t_star)) {
+    # the threshold of each ILS level, drawn and labelled in its own panel
+    line_data <- data.frame(
+      ILS = factor(paste0("ILS = ", names(t_star)),
+                   levels = c("ILS = low", "ILS = high")),
+      yintercept = as.numeric(t_star),
+      label = paste0("T* = ", fmt_t(as.numeric(t_star))))
+    p <- p +
+      geom_hline(data = line_data, aes(yintercept = yintercept),
+                 linetype = "dashed", color = "black", linewidth = 1.1) +
+      geom_text(data = line_data, aes(x = Inf, y = yintercept, label = label),
+                inherit.aes = FALSE, hjust = 1.05, vjust = -0.5,
+                size = 5, fontface = "bold")
+  }
+  p <- p +
+    facet_wrap(~ ILS, nrow = 1) +
+    scale_color_manual(values = rv_colors,
+                       name   = "rate variation:",
+                       breaks = c("lineage", "gene", "none"),
+                       labels = c("lineage" = "across lineages",
+                                  "gene"    = "across genes",
+                                  "none"    = "none")) +
+    scale_y_log10(labels = scales::label_comma()) +
+    labs(x = "duplication and loss rate", y = y_label) +
+    theme_bw() +
+    theme(
+      axis.title.x     = element_text(size = 18, face = "bold",
+                                      margin = margin(t = 10)),
+      axis.title.y     = element_text(size = 18, face = "bold",
+                                      margin = margin(r = 10)),
+      axis.text.x      = element_text(size = 16, color = "black",
+                                      face = "bold"),
+      axis.text.y      = element_text(size = 16, color = "black",
+                                      face = "bold"),
+      strip.text       = element_text(size = 18, face = "bold"),
+      strip.background = element_rect(fill = "grey90"),
+      panel.border     = element_rect(color = "black", linewidth = 1.5,
+                                      fill = NA),
+      legend.position  = "bottom",
+      legend.box       = "vertical",
+      legend.text      = element_text(size = 16, face = "bold"),
+      legend.title     = element_text(size = 16, face = "bold")
+    ) +
+    guides(color = guide_legend(override.aes = list(size = 5, alpha = 1,
+                                                    shape = 16), order = 1),
+           shape = guide_legend(override.aes = list(size = 5, alpha = 1),
+                                order = 2))
+
+  output_path <- file.path(output_dir, paste0(output_filename, ".png"))
+  ggsave(output_path, plot = p, width = 12, height = 8, dpi = 300,
+         units = "in")
+  cat("Saved T distribution plot:", output_path, "\n")
+  invisible(p)
+}
+
+#' Plot the PhyNEST statistic T with the reticulation placement as shape
+#'
+#' Same layout as plot_T_distributions(); the point shape shows whether the
+#' h=1 network placed its reticulation between the (G,H) clade and the rest
+#' of the ingroup (filled triangle) or elsewhere (open circle). Written to
+#' explain the bimodal distribution of T.
+plot_T_by_hybrid_placement <- function(input_dir,
+                                       output_dir,
+                                       output_filename,
+                                       t_star = NULL,
+                                       t_column = "T_per_site",
+                                       ratevar = c("RVN", "RVG", "RVL")) {
+  plot_T_distributions(input_dir, output_dir, output_filename,
+                       t_star = t_star, t_column = t_column,
+                       shape_by_placement = TRUE, ratevar = ratevar)
+}
 
 # ─────────────────────────────────────────────────────────────────────────
 # LEGACY (disabled for Dryad / paper submission, 2026-05).

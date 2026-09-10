@@ -431,6 +431,17 @@ function main()
         @warn "Could not generate true tree WR plot: $e"
     end
     
+    println("Generating the true tree WR jitter plot...")
+    try
+        run(`Rscript -e "source('scripts/visual_utilities.R');
+                plot_WR_distributions_jitter('$input_dir',
+                    '$visualization_output_dir',
+                    'findgraph_true_tree_WR_distributions_jitter')"`)
+        println("True tree WR jitter plot generated successfully")
+    catch e
+        @warn "Could not generate true tree WR jitter plot: $e"
+    end
+
     println("Generating true tree WR percentiles by rate variation...")
     try
         run(`Rscript -e "source('scripts/visual_utilities.R'); 

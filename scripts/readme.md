@@ -15,10 +15,13 @@ This directory contains the pipeline for the reptile phylogenomics simulation.
 | `snaq_postprocess.jl` | Julia | Aggregate SNaQ results |
 | `findgraphs.jl` / `findgraphs_1rep.R` | Julia/R | find_graphs inference (parallel + per-replicate) |
 | `findgraphs_postprocess.jl` | Julia | Aggregate find_graphs results |
+| `phynest.jl` / `phynest_1rep.jl` | Julia | PhyNEST inference (parallel + per-replicate) |
+| `phynest_postprocess.jl` | Julia | Aggregate PhyNEST results |
 | `run_postprocessing.jl` | Julia | Batch launcher for all post-processing modes |
 | `summary_simulation.jl` | Julia | Concatenate and summarize simulation CSVs |
 | `summary_snaq.jl` | Julia | Summarize SNaQ results across parameter sets |
 | `summary_findgraph.jl` | Julia | Summarize find_graphs results + plots |
+| `summary_phynest.jl` | Julia | Summarize PhyNEST results, calibrate the T* threshold + plots |
 | `utilities.jl` | Julia | Shared helpers: seed generation, tip manipulation |
 | `seq-gen.sh` | Bash | Wrap Seq-Gen calls per gene, called in  `simulation.jl` |
 | `concatenate_seq.py` | Python | Concatenate per-gene NEXUS alignments into FASTA, called in `simulation.jl` |
@@ -45,17 +48,20 @@ After setting up following [main readme](../readme.md), let's check our major pi
 [3] FIND_GRAPHS       findgraphs.jl  +  findgraphs_1rep.R
       └─ find_graphs / qpgraph on concatenated SNPs (admixtools)
 
-[4] POST-PROCESSING   *_postprocess.jl  (or batch via run_postprocessing.jl)
+[4] PHYNEST           phynest.jl  +  phynest_1rep.jl
+      └─ PhyNEST at h=0 and h=1 on the concatenated alignment
+
+[5] POST-PROCESSING   *_postprocess.jl  (or batch via run_postprocessing.jl)
       └─ summary statistics like RF distances, worst residuals, gamma summaries, etc per parameter set
 
-[5] SUMMARY           summary_simulation.jl / summary_snaq.jl / summary_findgraph.jl
+[6] SUMMARY           summary_simulation.jl / summary_snaq.jl / summary_findgraph.jl / summary_phynest.jl
       └─ aggregate CSVs across parameter sets, compute statistics, generate plots
 
-[6] VISUALIZATION     visualization_scripts/
+[7] VISUALIZATION     visualization_scripts/
       └─ Quarto notebooks producing heatmaps, boxplots, summary tables
 ```
 
-Run all commands from the **repo root**. Steps 2–3 (SNaQ and find_graphs) are independent and can run in parallel after Step 1.
+Run all commands from the **repo root**. Steps 2–4 (SNaQ, find_graphs and PhyNEST) are independent and can run in parallel after Step 1.
 
 **Step 0 — species tree setup** *(one-time, interactive)*
 
@@ -149,6 +155,30 @@ Adds RF distances, calculates summary statistics and applies worst-residual mode
 
 ---
 
+**Step 7 — PhyNEST**
+
+```bash
+julia -p 100 scripts/phynest.jl \
+    --dup_rate 0.0003 --loss_rate 0.0003 \
+    --ratevar G --n_reps 100 --runs 100 --n_inds 1
+```
+
+Converts the concatenated alignment to PHYLIP and runs PhyNEST at h=0 (started from the ASTRAL tree) and h=1 (started from the h=0 result) per replicate (via `phynest_1rep.jl`), with `--runs` search runs under each model. Records the composite likelihood of both models, of the true species tree, and the estimated networks; no threshold is applied at this stage. `--rep_start`/`--rep_end` work as for SNaQ. PhyNEST activates its own environment in `envs/phynest` (it pins an older `PhyloNetworks`), so no `--project` flag is needed. Only one individual per species was used in the paper.
+
+---
+
+**Step 8 — PhyNEST post-processing**
+
+```bash
+julia scripts/phynest_postprocess.jl \
+    --dup_rate 0.0003 --loss_rate 0.0003 \
+    --ratevar G --n_reps 100 --n_inds 1
+```
+
+Adds RF distances of the h=0 tree and of both trees displayed in the h=1 network to the true species tree (and to the alternative placements of F), the hybrid clade and donors, the number of search runs that reached the best score, and the number of sites M of the concatenated alignment (from the PhyNEST log) together with the per-site score difference `T_per_site` = (score(h=0) - score(h=1)) / M, since the raw difference (column `T`) grows linearly with M and M is smaller in replicates where fewer loci were retained. Writes `PhyNEST-<paramname>-summary.csv`. Use `--output_dir` if the PhyNEST output folders are not under `output/`.
+
+---
+
 ## Batch post-processing: `run_postprocessing.jl`
 
 After generating output for all parameter sets, use `run_postprocessing.jl` to run the appropriate post-processing script across every parameter folder in `output/` at once.
@@ -157,13 +187,14 @@ After generating output for all parameter sets, use `run_postprocessing.jl` to r
 julia scripts/run_postprocessing.jl --mode simulation
 julia scripts/run_postprocessing.jl --mode snaq
 julia scripts/run_postprocessing.jl --mode findgraphs
+julia scripts/run_postprocessing.jl --mode phynest
 ```
 
 This scans `output/` for folders matching the `DUP*-LOS*-RV*-N_ind*-SF*-genelen*` naming pattern, calls `<mode>_postprocess.jl` for each, copies the resulting summary CSV to `<mode>_summary/`, and (for snaq and findgraphs) collects consensus network PDFs into a central directory. Use `--n_reps`, `--output_dir`, or `--saved_path` to override defaults.
 
 ---
 
-## Summary scripts: `summary_simulation.jl`, `summary_snaq.jl`, `summary_findgraph.jl`
+## Summary scripts: `summary_simulation.jl`, `summary_snaq.jl`, `summary_findgraph.jl`, `summary_phynest.jl`
 
 After post-processing, these scripts concatenate and summarize results across all parameter sets.
 
@@ -171,9 +202,12 @@ After post-processing, these scripts concatenate and summarize results across al
 julia scripts/summary_simulation.jl
 julia scripts/summary_snaq.jl
 julia scripts/summary_findgraph.jl
+julia --project=. scripts/summary_phynest.jl
 ```
 
 Each script reads the per-parameter CSVs from `<mode>_summary/`, computes aggregate statistics (e.g. type I error rates, topology recovery rates, gamma distributions), writes a combined CSV to `results/`, and generates diagnostic plots via R. `summary_findgraph.jl` also produces a taxon-level recovery table and worst-residual percentile summaries.
+
+`summary_phynest.jl` is also where the PhyNEST model-selection threshold is calibrated, following the recalibrated WR <= 3.7 threshold of find_graphs. The statistic is the per-site score difference T = (score(h=0) - score(h=1)) / M, where M is the number of sites in the replicate's concatenated alignment (10^6 in most replicates, fewer where fewer loci were retained; the raw difference scales linearly with M). T* is the 95th percentile of T pooled over the settings without lineage rate variation (no and gene-specific rates, all duplication/loss rates). Because T differs between ILS levels, one T* is computed per ILS level (SF) and number of individuals, and each setting is compared with the T* of its own ILS level. T* is specific to this design (8 taxa, hence 70 quartets, and 100 search runs per model). It writes `results/PhyNEST_T_threshold.csv` (T* per ILS level, with the per-setting quantile range, the quantile of the null setting alone and the quantile of the unscaled T for reference), `results/PhyNEST_summary.csv`, which reports model choice under both the naive rule (T > 0, columns with the `_naive` suffix) and the calibrated rule (T > T*), and `results/PhyNEST_T_summary_by_factor.csv` (summary statistics of T by factor level, the analog of the worst-residual summary table).
 
 -- 
 

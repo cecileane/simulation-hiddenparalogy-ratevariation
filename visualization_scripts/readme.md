@@ -1,6 +1,6 @@
 # Visualization Scripts
 
-Quarto notebooks (`.qmd`) that generate figures and summary tables from the aggregated CSV outputs produced by the summary scripts in `scripts/`. Run these after `summary_simulation.jl`, `summary_snaq.jl`, and `summary_findgraph.jl` have completed.
+Quarto notebooks (`.qmd`) that generate figures and summary tables from the aggregated CSV outputs produced by the summary scripts in `scripts/`. Run these after `summary_simulation.jl`, `summary_snaq.jl`, `summary_findgraph.jl` and `summary_phynest.jl` have completed.
 
 ## Notebooks
 
@@ -9,7 +9,8 @@ Quarto notebooks (`.qmd`) that generate figures and summary tables from the aggr
 | `visualization_simulation.qmd` | Gene tree discordance, RF distances, ASTRAL accuracy |
 | `visualization_snaq.qmd` | SNaQ topology recovery and model selection rates |
 | `visualization_finsgraphs.qmd` | find_graphs WR distributions, gamma estimates, type I error |
-| `visual_combined.qmd` | Side-by-side comparison of both methods across all conditions |
+| `visualization_phynest.qmd` | PhyNEST model choice (T > 0 vs T > T*), distributions of T, topology recovery, gamma estimates |
+| `visual_combined.qmd` | Side-by-side comparison of the methods across all conditions; the last chunks add PhyNEST as a third method and run only when `results/PhyNEST_summary.csv` exists |
 | `visualize_baselinetree.qmd` | Baseline (no model violation) results |
 
 ## How to render

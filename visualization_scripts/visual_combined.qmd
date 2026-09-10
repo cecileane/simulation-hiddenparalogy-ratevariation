@@ -40,6 +40,25 @@ findgraph_df <- read_csv("../results/findgraph_summary.csv") %>%
     pct_H0        = H0Accepted / total_replicates * 100,
     pct_H0_wr_3.7 = H0Accepted_WR_3.7 / total_replicates * 100
   )
+
+# PhyNEST (optional): produced by scripts/summary_phynest.jl.
+# pct_H0 uses the calibrated threshold T* on the per-site T (score
+# difference divided by the number of sites of the replicate's alignment),
+# pct_H0_naive uses the sign of the score difference (T > 0).
+phynest_input_dir <- "../phynest_summary"
+phynest_file      <- "../results/PhyNEST_summary.csv"
+phynest_df <- NULL
+if (file.exists(phynest_file)) {
+  phynest_df <- read_csv(phynest_file) %>%
+    parse_params("parameter_setting") %>%
+    mutate(
+      pct_H0       = `H=0Accepted` / n_reps * 100,
+      pct_H0_naive = `H=0Accepted_naive` / n_reps * 100
+    )
+  thresholds <- read_csv("../results/PhyNEST_T_threshold.csv")
+  t_star <- c(low  = thresholds$T_star[thresholds$cell == "SF0.5-N_ind1"],
+              high = thresholds$T_star[thresholds$cell == "SF1.0-N_ind1"])
+}
 ```
 
 # Combined Plot of minor Gamma SNaQ vs findgraph
@@ -439,3 +458,276 @@ ggsave(
 print(final_recovery)
 ```
 
+
+
+# Figures including PhyNEST
+
+The chunks below add PhyNEST as a third method. They only run when
+`results/PhyNEST_summary.csv` exists (see `scripts/summary_phynest.jl`); the
+figures above are unchanged.
+
+## H=1 true tree recovery: find_graphs (best graph) / SNaQ / PhyNEST
+
+```{r phynest_h1_recovery, fig.width=18, fig.height=9, eval=!is.null(phynest_df)}
+source("../scripts/visual_utilities.R")
+p_h1_three <- plot_combined_true_graph_recovery_H1_only(
+  snaq_df          = snaq_df,
+  findgraph_df     = findgraph_df,
+  phynest_df       = phynest_df,
+  h1_col_snaq      = "find_true_net1",
+  h1_col_findgraph = "count_H1_best_displays_true_tree",
+  h1_col_phynest   = "find_true_net1",
+  output_dir       = visualization_output,
+  output_filename  = "combined_three_methods_h1_best_graph_recovery",
+  y_range          = c(0, 102),
+  plot_title       = NULL
+)
+print(p_h1_three)
+```
+
+## Type I error: find_graphs (WR 3.0 / 3.7), SNaQ, PhyNEST (T > T*)
+
+The naive PhyNEST rule (T > 0) is not shown here (it selects h=1 in every
+replicate; see `PhyNEST_model_choice_combined.png`).
+
+```{r phynest_type1_error, fig.width=20, fig.height=9, eval=!is.null(phynest_df)}
+p_h0_three <- plot_combined_hypothesis_acceptance_H0(
+  snaq_df               = snaq_df,
+  findgraph_df          = findgraph_df,
+  phynest_df            = phynest_df,
+  h0_col_snaq           = "pct_H0",
+  h0_col_findgraph_wr30 = "pct_H0",
+  h0_col_findgraph_wr37 = "pct_H0_wr_3.7",
+  h0_col_phynest_naive  = NULL,
+  h0_col_phynest_tstar  = "pct_H0",
+  output_dir            = visualization_output,
+  output_filename       = "combined_three_methods_type1_error",
+  y_range               = c(-5, 105),
+  plot_title            = NULL
+)
+print(p_h0_three)
+```
+
+## Minor gamma by tree display: find_graphs / SNaQ / PhyNEST
+
+```{r phynest_minor_gamma_by_tree_display, fig.width=16, fig.height=18, eval=!is.null(phynest_df)}
+result_three <- plot_combined_snaq_findgraph_by_tree_display(
+  snaq_input_dir      = snaq_input_dir,
+  findgraph_input_dir = findgraph_input_dir,
+  phynest_input_dir   = phynest_input_dir,
+  output_dir          = visualization_output,
+  output_filename     = "combined_three_methods_by_tree_display",
+  max_y               = 350,
+  max_y_by_ratevar    = list(none = 250, gene = 350, lineage = 250)
+)
+print(result_three)
+```
+
+## Per-replicate WR (find_graphs) and T (PhyNEST) with their thresholds
+
+Supplementary figure: (A) worst residual of the true tree in every
+find_graphs replicate, one panel per ILS level and number of individuals;
+(B) T in every PhyNEST replicate (one individual per taxon), one panel per
+ILS level, with T*.
+
+```{r combined_WR_T_distributions_jitter, fig.width=12, fig.height=19, eval=!is.null(phynest_df)}
+p_wr_points <- plot_WR_distributions_jitter(
+  input_dir       = findgraph_input_dir,
+  output_dir      = "../visualization_results/findgraph",
+  output_filename = "findgraph_true_tree_WR_distributions_jitter"
+)
+p_T_points <- plot_T_distributions(
+  input_dir       = phynest_input_dir,
+  output_dir      = "../visualization_results/phynest",
+  output_filename = "PhyNEST_T_distributions",
+  t_star          = t_star
+)
+# the rate-variation legend is shown once, under the PhyNEST panel
+wr_T_points <- plot_grid(
+  p_wr_points + labs(title = "find_graphs") + guides(color = "none") +
+    theme(plot.title = element_text(size = 22, face = "bold", hjust = 0.5)),
+  p_T_points + labs(title = "PhyNEST") +
+    theme(plot.title = element_text(size = 22, face = "bold", hjust = 0.5)),
+  ncol = 1, rel_heights = c(11, 8), labels = c("A", "B"),
+  label_size = 26, label_fontface = "bold")
+ggsave(file.path(visualization_output,
+                 "combined_WR_T_distributions_jitter.png"),
+       wr_T_points, width = 12, height = 19, dpi = 300, units = "in",
+       bg = "white")
+print(wr_T_points)
+```
+
+## Four-panel main figure with PhyNEST
+
+Top: (A) find_graphs WR 95th percentile, (B) PhyNEST T 95th percentile
+with T*, (C) H=1 recovery for the three methods. Bottom: (D) type I error.
+Same fonts as the three-panel figure above.
+
+```{r combined_four_panel_figure_with_phynest, fig.width=20, fig.height=16, eval=!is.null(phynest_df)}
+source("../scripts/visual_utilities.R")
+
+p_wr_jitter <- plot_WR_percentiles_jitter_combined(
+  input_dir       = findgraph_input_dir,
+  wr_column       = "true_tree_wr",
+  output_dir      = visualization_output,
+  output_filename = "findgraph_true_tree_WR_95-percentiles_jitter_combined",
+  ymax            = 9,
+  facet_label     = "find_graphs"
+)
+p_T_jitter <- plot_T_percentiles_jitter(
+  input_dir       = phynest_input_dir,
+  output_dir      = visualization_output,
+  output_filename = "PhyNEST_T_95-percentiles_jitter",
+  t_star          = t_star,
+  label_t_star    = FALSE,
+  facet_label     = "PhyNEST"
+)
+
+combined_legend <- cowplot::get_legend(
+  p_h0_three +
+    guides(
+      color = guide_legend(
+        name = "rate variation:",
+        override.aes = list(size = 8, stroke = 1.6), nrow = 3,
+        theme = theme(
+          legend.background = element_rect(color = "black",
+                                           linewidth = 1.2, fill = "white"),
+          legend.text  = element_text(size = 19, face = "bold"),
+          legend.title = element_text(size = 19, face = "bold"))),
+      shape = guide_legend(
+        name = "ILS & individuals / taxon (n)",
+        override.aes = list(size = 8, stroke = 1.6,
+                            fill = c("grey55", "white", "grey55", "white"),
+                            color = "black"), nrow = 2,
+        theme = theme(
+          legend.background = element_rect(color = "black",
+                                           linewidth = 1.2, fill = "white"),
+          legend.text  = element_text(size = 19, face = "bold"),
+          legend.title = element_text(size = 19, face = "bold")))
+    ) +
+    theme(legend.position = "bottom", legend.box = "horizontal",
+          legend.spacing.x = unit(1.5, "lines")))
+
+COMMON_THEME <- theme(
+  axis.title.x     = element_blank(),
+  axis.text.x      = element_text(size = 20, angle = 45, hjust = 1,
+                                  color = "black", face = "bold"),
+  axis.text.y      = element_text(size = 20, color = "black", face = "bold"),
+  strip.text       = element_text(size = 21, face = "bold"),
+  strip.background = element_rect(fill = "grey90"),
+  legend.position  = "none"
+)
+
+pA_main <- p_wr_jitter + COMMON_THEME + guides(linetype = "none") +
+  labs(x = NULL, y = "95th percentile of worst residuals", title = NULL) +
+  theme(axis.title.y = element_text(size = 22, face = "bold",
+                                    margin = margin(r = 10)),
+        plot.margin  = unit(c(0.5, 0.5, 0.2, 0.5), "lines"))
+
+# panel B: the two T* lines (solid grey = low ILS, dashed black = high
+# ILS) are described in the caption; the shared legend covers color/shape
+pB_main <- p_T_jitter + COMMON_THEME +
+  labs(x = NULL, y = "95th percentile of T", title = NULL) +
+  theme(axis.title.y = element_text(size = 22, face = "bold",
+                                    margin = margin(r = 10)),
+        plot.margin  = unit(c(0.5, 0.5, 0.2, 1.5), "lines"))
+
+pC_main <- p_h1_three + COMMON_THEME +
+  scale_y_continuous(limits = c(0, 102), expand = c(0, 0)) +
+  labs(x = NULL, y = "prob. of displaying the true tree (%)", title = NULL) +
+  theme(axis.title.y = element_text(size = 22, face = "bold",
+                                    margin = margin(r = 10)),
+        plot.margin  = unit(c(0.5, 0.5, 0.2, 1.5), "lines"))
+
+pD_main <- p_h0_three +
+  theme(legend.position = "none",
+        axis.title.x = element_text(size = 22, face = "bold",
+                                    margin = margin(t = 10)),
+        axis.title.y = element_text(size = 22, face = "bold",
+                                    margin = margin(r = 10)),
+        axis.text.x  = element_text(size = 20, angle = 45, hjust = 1,
+                                    color = "black", face = "bold"),
+        axis.text.y  = element_text(size = 20, color = "black", face = "bold"),
+        strip.text   = element_text(size = 21, face = "bold"),
+        plot.margin  = unit(c(0.2, 0.5, 0.5, 0.5), "lines"))
+
+top_row <- plot_grid(pA_main, pB_main, pC_main, ncol = 3,
+                     rel_widths = c(1, 1.1, 2.4),
+                     align = "h", axis = "tb",
+                     labels = c("A", "B", "C"),
+                     label_x = 0.005, label_y = 0.98,
+                     label_size = 26, label_fontface = "bold")
+main_grid <- plot_grid(top_row, pD_main, nrow = 2, labels = c("", "D"),
+                       label_x = 0.005, label_y = 0.98,
+                       label_size = 26, label_fontface = "bold")
+final_figure <- plot_grid(main_grid, combined_legend, nrow = 2,
+                          rel_heights = c(1, 0.12))
+
+ggsave(file.path(visualization_output,
+                 "combined_four_panel_figure_with_phynest.pdf"),
+       final_figure, width = 20, height = 14, dpi = 300, units = "in",
+       device = cairo_pdf)
+print(final_figure)
+```
+
+## Four-panel true tree recovery: find_graphs (best) / find_graphs (all) / SNaQ / PhyNEST
+
+Requires pA, pB, parts_C, PANEL_COMMON and shared_legend from the
+three-panel recovery chunk above.
+
+```{r combined_true_graph_recovery_four_panel, fig.width=14, fig.height=26, eval=!is.null(phynest_df)}
+parts_D <- plot_true_graph_recovery_lines_aggregated(
+  phynest_df,
+  output_dir      = visualization_output,
+  output_filename = "phynest_recovery_parts",
+  y_range         = c(0, 103),
+  return_parts    = TRUE
+)
+pD_rec <- parts_D$p_no_legend +
+  PANEL_COMMON +
+  labs(title = "PhyNEST") +
+  theme(plot.margin  = unit(c(0.2, 0.5, 0.4, 0.5), "lines"),
+        axis.title.x = element_text(size = 22, face = "bold",
+                                    margin = margin(t = 10)))
+# SNaQ is no longer the bottom panel, so it loses the x-axis title
+pC_rec <- parts_C$p_no_legend + PANEL_COMMON +
+  labs(title = "SNaQ") + theme(axis.title.x = element_blank())
+
+panels4 <- plot_grid(pA, pB, pC_rec, pD_rec, ncol = 1,
+                     rel_heights = c(1, 1, 1, 1.15),
+                     labels = c("A", "B", "C", "D"), label_size = 28,
+                     label_fontface = "bold", label_x = 0.005, label_y = 0.995)
+final_recovery4 <- plot_grid(panels4, shared_legend, ncol = 1,
+                             rel_heights = c(1, 0.1))
+ggsave(file.path(visualization_output,
+                 "combined_true_graph_recovery_four_panel.pdf"),
+       final_recovery4, width = 12, height = 26, dpi = 300, units = "in")
+print(final_recovery4)
+```
+
+## True tree recovery split in two figures: find_graphs / SNaQ + PhyNEST
+
+Same panels as the four-panel figure, as two supplementary figures of two
+panels each, both with the shared legend.
+
+```{r combined_true_graph_recovery_split, fig.width=12, fig.height=14, eval=!is.null(phynest_df)}
+X_TITLE <- theme(axis.title.x = element_text(size = 22, face = "bold",
+                                             margin = margin(t = 10)),
+                 plot.margin  = unit(c(0.2, 0.5, 0.4, 0.5), "lines"))
+two_panels <- function(top, bottom, filename) {
+  fig <- plot_grid(
+    plot_grid(top, bottom, ncol = 1, rel_heights = c(1, 1.15),
+              labels = c("A", "B"), label_size = 28, label_fontface = "bold",
+              label_x = 0.005, label_y = 0.995),
+    shared_legend, ncol = 1, rel_heights = c(1, 0.16))
+  ggsave(file.path(visualization_output, filename), fig,
+         width = 12, height = 14, dpi = 300, units = "in")
+  fig
+}
+recovery_fg <- two_panels(pA, pB + X_TITLE,
+                          "combined_true_graph_recovery_findgraphs.pdf")
+recovery_sp <- two_panels(pC_rec, pD_rec,
+                          "combined_true_graph_recovery_snaq_phynest.pdf")
+print(recovery_fg)
+print(recovery_sp)
+```

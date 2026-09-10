@@ -4,10 +4,11 @@ Coordinator script to run postprocessing across all parameter sets in output/.
 
 Usage:
     julia -p N scripts/run_postprocessing.jl \
-        --mode <simulation|snaq|findgraphs> [options]
+        --mode <simulation|snaq|findgraphs|phynest> [options]
 
 Options:
-    --mode          Postprocessing mode: simulation, snaq, or findgraphs
+    --mode          Postprocessing mode: simulation, snaq, findgraphs
+                    or phynest
     --n_reps        Number of replicates per parameter set (default: 100)
     --output_dir    Directory with parameter folders (default: "output")
     --saved_path    Directory to copy summary CSVs into after each run
@@ -18,6 +19,8 @@ Example:
     julia -p 10 scripts/run_postprocessing.jl --mode snaq
     julia -p 4  scripts/run_postprocessing.jl --mode findgraphs --n_reps 10
     julia       scripts/run_postprocessing.jl --mode simulation --n_procs 8
+    julia       scripts/run_postprocessing.jl --mode phynest \
+                    --output_dir Phynest_results
 =#
 
 using Distributed
@@ -34,7 +37,8 @@ function parse_commandline()
 
     @add_arg_table s begin
         "--mode"
-            help    = "Postprocessing mode: simulation, snaq, or findgraphs. " *
+            help    = "Postprocessing mode: simulation, snaq, findgraphs " *
+                      "or phynest. " *
                       "snaq and findgraphs also copy consensus results to " *
                       "<project_root>/snaq_consensus_tree or " *
                       "findgraphs_consensus_tree."
@@ -104,6 +108,9 @@ function summary_file_path(output_dir::String, paramname::String, mode::String)
         return joinpath(output_dir, paramname, "SNaQ-$(paramname)-summary.csv")
     elseif mode == "findgraphs"
         return joinpath(output_dir, paramname, "findgraph-$(paramname).csv")
+    elseif mode == "phynest"
+        return joinpath(output_dir, paramname,
+                        "PhyNEST-$(paramname)-summary.csv")
     else
         error("Unknown mode: $mode")
     end
@@ -113,7 +120,7 @@ end
 Build the shell command that runs the appropriate sub-script.
 """
 function build_cmd(mode::String, script_dir::String, params,
-    n_reps::Int, n_procs::Int)
+    n_reps::Int, n_procs::Int, output_dir::String)
     script = joinpath(script_dir, "$(mode)_postprocess.jl")
 
     julia_flags = n_procs > 0 ? ["-p", string(n_procs)] : String[]
@@ -127,6 +134,11 @@ function build_cmd(mode::String, script_dir::String, params,
         "--SF",        string(params.SF),
         "--gene_len",  string(params.gene_len),
     ]
+    # only phynest_postprocess.jl takes the input directory as an argument;
+    # the other sub-scripts read from output/
+    if mode == "phynest"
+        append!(args, ["--output_dir", output_dir])
+    end
 
     return Cmd(vcat(["julia"], julia_flags, [script], args))
 end
@@ -145,7 +157,7 @@ function main()
     n_procs    = parsed_args["n_procs"]
 
     # Validate mode
-    valid_modes = ("simulation", "snaq", "findgraphs")
+    valid_modes = ("simulation", "snaq", "findgraphs", "phynest")
     if !(mode in valid_modes)
         error("Invalid --mode '$mode'. Options: $(join(valid_modes, ", "))")
     end
@@ -219,7 +231,8 @@ function main()
         println("-" ^ 60)
         println("Processing: $paramname")
 
-        cmd = build_cmd(base_mode, script_dir, params, n_reps, n_procs)
+        cmd = build_cmd(base_mode, script_dir, params, n_reps, n_procs,
+                        output_dir)
         println("Running: $cmd\n")
 
         # Run from the project root so relative paths inside the sub-script

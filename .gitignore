@@ -16,6 +16,7 @@ visualization_results/
 simulation_summary/
 snaq_summary/
 findgraph_summary/
+phynest_summary/
 
 # Machine-specific symlinks to third-party binaries (recreate via executables/software_installation.sh)
 executables/astral

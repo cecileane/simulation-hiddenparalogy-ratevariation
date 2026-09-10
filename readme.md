@@ -11,9 +11,10 @@ Ready to dive deep? Let's go!
 | 1. Simulation | `simulation.jl` | SimPhy → filter paralogs → Seq-Gen → IQ-TREE → ASTRAL-IV |
 | 2. SNaQ | `snaq.jl` | Network inference at h=0 and h=1 |
 | 3. find\_graphs | `findgraphs.jl` | Admixture graph inference via f-statistics |
-| 4. Post-processing | `run_postprocessing.jl` | Aggregate results across all parameter sets |
-| 5. Summary | `summary_*.jl` | Compute statistics and generate plots |
-| 6. Visualization | `visualization_scripts/` | Quarto notebooks for paper figures |
+| 4. PhyNEST | `phynest.jl` | Network inference at h=0 and h=1 from site patterns |
+| 5. Post-processing | `run_postprocessing.jl` | Aggregate results across all parameter sets |
+| 6. Summary | `summary_*.jl` | Compute statistics and generate plots |
+| 7. Visualization | `visualization_scripts/` | Quarto notebooks for paper figures |
 
 Details on each script - Check this out [scripts/readme.md](scripts/readme.md).
 
@@ -27,7 +28,7 @@ Binary and R executables go in `executables/`. See [software_installation.sh](ex
 
 ```bash
 bash executables/software_installation.sh   # external binaries
-julia -e 'using Pkg; Pkg.instantiate()'     # Julia packages
+julia --project=. -e 'using Pkg; Pkg.instantiate()'   # Julia packages (pinned in Manifest.toml)
 ```
 
 **1. Run simulation** (one parameter set, 100 replicates, multiple processors)
@@ -89,6 +90,7 @@ julia -p 100 scripts/findgraphs.jl \
 julia -p 10 scripts/run_postprocessing.jl --mode simulation
 julia -p 10 scripts/run_postprocessing.jl --mode snaq
 julia -p 10 scripts/run_postprocessing.jl --mode findgraphs
+julia scripts/run_postprocessing.jl --mode phynest
 ```
 
 Or you can postprocess the results from simulation, snaq and find_graphs individually. 
@@ -105,6 +107,7 @@ julia -p 100 scripts/snaq_postprocess.jl --dup_rate 0 --loss_rate 0 --ratevar N 
 julia scripts/summary_simulation.jl
 julia scripts/summary_snaq.jl
 julia scripts/summary_findgraph.jl
+julia scripts/summary_phynest.jl
 quarto render visualization_scripts/visual_combined.qmd  # and any other visualization file
 ```
 
@@ -116,13 +119,15 @@ Visualization scripts were saved in [visualization_scripts](visualization_script
 
 **(A)** Under constant or gene-specific rate variation, the 95th percentile of the worst residuals (WR) from fitting the true species tree exceeded the standard threshold of 3.0, so we also evaluated a more permissive WR ≤ 3.7 threshold. Under lineage-specific rates, WR reached 6–8, making model selection unreliable at any common threshold. **(B)** Both find\_graphs and SNaQ recovered the true species tree topology in ~87% of replicates under h=1. **(C)** Hidden paralogy had little effect on type I error for either method, but lineage-specific rate variation drove false reticulation detection to near 100% in find\_graphs even under WR ≤ 3.7, while SNaQ remained conservative throughout.
 
+PhyNEST (18 settings with one individual per taxon) was added later. Its score difference T = score(h=0) − score(h=1) favors a reticulation in every replicate, so we select h=1 only when the per-site score difference T (score difference divided by the number of sites M of the replicate's alignment) exceeds a calibrated threshold T* (95th percentile of T pooled over the settings without lineage-specific rates, one per ILS level; see `scripts/summary_phynest.jl`). With this rule, PhyNEST's type I error stays below ~12% without lineage-specific rates but reaches 68–98% with them, and its h=1 network displays the true tree in only ~45–58% of replicates (18–32% under lineage-specific rates).
+
 In short: lineage-specific rate variation, not hidden paralogy, is the main driver of spurious reticulation signal. The standard WR threshold in find\_graphs is too strict under the realistic conditions we examined here, and even the permissive threshold breaks down under lineage-specific rates.
 
 ## Dependencies
 
 Check [Executables README](executables/README.md) for details!
 
-**Julia** (see `Project.toml`): `PhyloNetworks`, `QuartetNetworkGoodnessFit`, `PhyloPlots`, `RCall`, `CSV`, `DataFrames`, `ArgParse`, `Distributed`.
+**Julia** (see `Project.toml`): `PhyloNetworks`, `SNaQ`, `QuartetNetworkGoodnessFit`, `PhyloPlots`, `RCall`, `CSV`, `DataFrames`, `ArgParse`, `Distributed`. The SNaQ and PhyNEST scripts activate their pinned environments themselves, so no `--project` flag is needed when launching them.
 
 **External binaries** (symlinked in `executables/`): SimPhy, Seq-Gen, IQ-TREE 2, astral, snp-sites.
 
@@ -144,10 +149,14 @@ After running all simulations, the folder structure should be similar to this:
 │   ├── findgraphs.jl               Entry point: find_graphs runs (parallel)
 │   ├── findgraphs_1rep.R           Per-replicate find_graphs worker (R)
 │   ├── findgraphs_postprocess.jl   Aggregate per-replicate find_graphs results
+│   ├── phynest.jl                  Entry point: PhyNEST runs (parallel)
+│   ├── phynest_1rep.jl             Per-replicate PhyNEST worker
+│   ├── phynest_postprocess.jl      Aggregate per-replicate PhyNEST results
 │   ├── run_postprocessing.jl       Run postprocessing across all parameter sets
 │   ├── summary_simulation.jl       Cross-setting simulation summary CSV
 │   ├── summary_snaq.jl             Cross-setting SNaQ summary CSV
 │   ├── summary_findgraph.jl       Cross-setting find_graphs summary CSV
+│   ├── summary_phynest.jl          Cross-setting PhyNEST summary CSV + T* calibration
 │   ├── rerun_gof.jl                Re-run goodness-of-fit on existing SNaQ output
 │   ├── concatenate_seq.py          Concatenate per-gene sequences into a supermatrix
 │   ├── copy_consensus_inputs.sh    Helper to gather inputs for consensus-tree analysis
@@ -235,14 +244,19 @@ After running all simulations, the folder structure should be similar to this:
 │   ├── readme-dryad.md             Dryad data README (column dictionaries)
 │   ├── SNaQ_summary.csv                          Cross-setting SNaQ summary
 │   ├── findgraph_summary.csv                     Cross-setting find_graphs summary
+│   ├── PhyNEST_summary.csv                       Cross-setting PhyNEST summary
+│   ├── PhyNEST_T_threshold.csv                   Calibrated PhyNEST thresholds T*
+│   ├── PhyNEST_T_summary_by_factor.csv           per-site T summary statistics by factor level
 │   ├── summary_concatenated.csv                  Cross-setting simulation summary
 │   ├── combined_graph_recovery_summary.csv
 │   ├── combined_hypothesis_acceptance_summary.csv
 │   ├── combined_hypothesis_acceptance_marginal.csv
 │   ├── snaq_summary/                             Per-setting SNaQ summary CSVs
 │   │   └── SNaQ-<paramname>-summary.csv
-│   └── findgraph_summary/                        Per-setting find_graphs summary CSVs
-│       └── findgraph-<paramname>.csv
+│   ├── findgraph_summary/                        Per-setting find_graphs summary CSVs
+│   │   └── findgraph-<paramname>.csv
+│   └── phynest_summary/                          Per-setting PhyNEST summary CSVs
+│       └── PhyNEST-<paramname>-summary.csv
 │
 ├── plots/                          Figures and workflow diagrams used in the paper
 │   ├── combined_three_panel_figure.png

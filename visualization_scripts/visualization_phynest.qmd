@@ -1,0 +1,153 @@
+---
+title: "PhyNEST Results Visualization"
+format: html
+execute:
+  warning: false
+  message: false
+---
+
+```{r setup}
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(stringr)
+library(cowplot)
+visual_output <- "../visualization_results/phynest"
+phynest_input_dir <- "../phynest_summary"
+
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+source("../scripts/visual_utilities.R")
+```
+
+## Load and Parse Data
+`results/PhyNEST_summary.csv` and `results/PhyNEST_T_threshold.csv` are
+written by `scripts/summary_phynest.jl`. Model choice columns without suffix
+use the calibrated threshold T* on the per-site statistic
+T = (score(h=0) - score(h=1)) / M, where M is the number of sites in the
+replicate's alignment (the score difference grows linearly with M, and M is
+smaller where fewer loci were retained; column `T_per_site`, the unscaled
+difference is column `T`): T* is the 95th percentile of T pooled over the settings without
+lineage rate variation (no and gene-specific rates, all duplication/loss
+rates), computed separately for each ILS level, as for the WR <= 3.7
+threshold of find_graphs. The `_naive` columns use T > 0.
+```{r load-parse}
+df <- read_csv("../results/PhyNEST_summary.csv") %>%
+  mutate(
+    dup_loss_rate = as.numeric(
+      str_extract(parameter_setting, "(?<=DUP)[0-9.]+")),
+    RV = factor(str_extract(parameter_setting, "(?<=RV)[A-Z]+"),
+                levels = c("N", "G", "L", "GL")),
+    SF = as.numeric(str_extract(parameter_setting, "(?<=SF)[0-9.]+")),
+    n_ind = as.integer(str_extract(parameter_setting, "(?<=N_ind)[0-9]+")),
+    pct_H0 = `H=0Accepted` / n_reps * 100,
+    pct_H1 = `H=1Accepted` / n_reps * 100,
+    pct_H_greater = `H>1Accepted` / n_reps * 100,
+    pct_H0_naive = `H=0Accepted_naive` / n_reps * 100,
+    pct_H1_naive = `H=1Accepted_naive` / n_reps * 100
+  ) %>%
+  filter(!is.na(RV))
+
+thresholds <- read_csv("../results/PhyNEST_T_threshold.csv")
+t_star <- c(low  = thresholds$T_star[thresholds$cell == "SF0.5-N_ind1"],
+            high = thresholds$T_star[thresholds$cell == "SF1.0-N_ind1"])
+t_star
+```
+
+## Model choice: naive rule (T > 0) vs calibrated rule (T > T*)
+```{r plot-model-choice}
+#| fig-width: 14
+#| fig-height: 16
+source("../scripts/visual_utilities.R")
+p_naive <- plot_hypothesis_acceptance_grid(df,
+  h0_col = "pct_H0_naive",
+  h1_col = "pct_H1_naive",
+  h_greater_col = "pct_H_greater",
+  output_dir = visual_output,
+  plot_title = "PhyNEST model choice when T > 0",
+  output_filename = "PhyNEST_model_choice_naive.png") +
+  theme(legend.position = "none", axis.title.x = element_blank())
+
+p_tstar <- plot_hypothesis_acceptance_grid(df,
+  value_col_prefix = "pct_",
+  h_greater_col = "pct_H_greater",
+  output_dir = visual_output,
+  plot_title = "PhyNEST model choice when T > T*",
+  output_filename = "PhyNEST_model_choice_Tstar.png")
+
+combined <- plot_grid(p_naive, p_tstar, ncol = 1,
+                      labels = c("A", "B"), label_size = 18)
+png(filename = file.path(visual_output, "PhyNEST_model_choice_combined.png"),
+    width = 14, height = 16, units = "in", res = 300)
+print(combined)
+dev.off()
+```
+
+## 95th percentile of T per setting, with T*
+Analog of the worst-residual percentile plot for find_graphs: the settings
+without lineage rate variation define T*, one per ILS level. Pass
+`t_column = "T"` to the plotting functions to see the unscaled T instead.
+```{r plot-T-percentiles}
+#| fig-width: 8
+#| fig-height: 8
+p_T <- plot_T_percentiles_jitter(
+  input_dir       = phynest_input_dir,
+  output_dir      = visual_output,
+  output_filename = "PhyNEST_T_95-percentiles_jitter",
+  t_star          = t_star,
+  facet_label     = "PhyNEST")
+print(p_T)
+```
+
+## Distribution of T in every setting
+```{r plot-T-distributions}
+#| fig-width: 12
+#| fig-height: 7
+p_Tdist <- plot_T_distributions(
+  input_dir       = phynest_input_dir,
+  output_dir      = visual_output,
+  output_filename = "PhyNEST_T_distributions",
+  t_star          = t_star)
+print(p_Tdist)
+```
+
+## Why T is bimodal: where the reticulation is placed
+In the settings without lineage rate variation, T has two modes. The upper
+mode is the replicates whose h=1 network puts the reticulation between the
+(G,H) clade and the rest of the ingroup (hybrid clade B,C,D,E,F with donors
+G and/or H); every other placement gives a much smaller gain.
+```{r plot-T-by-hybrid-placement}
+#| fig-width: 17
+#| fig-height: 8
+p_placement <- plot_T_by_hybrid_placement(
+  input_dir       = phynest_input_dir,
+  output_dir      = visual_output,
+  output_filename = "PhyNEST_T_by_hybrid_placement",
+  t_star          = t_star,
+  ratevar         = c("RVN", "RVG"))
+print(p_placement)
+```
+
+## True tree recovery (h=0 exact, h=1 displayed, h=1 with F pruned)
+```{r plot-true-tree-recovery}
+#| fig-width: 16
+#| fig-height: 8
+p_recovery <- plot_true_graph_recovery_lines_aggregated(df,
+  output_dir      = visual_output,
+  output_filename = "PhyNEST_true_graph_recovery_lines_aggregated.png",
+  y_range         = c(0, 102),
+  plot_title      = NULL)
+print(p_recovery)
+```
+
+## Estimated gene flow proportion (minor gamma)
+Produced by `summary_phynest.jl`; regenerated here for convenience.
+```{r plot-minor-gamma}
+#| fig-width: 14
+#| fig-height: 8
+plot_overlapping_ratevar_by_n_inds_sf(phynest_input_dir,
+  "gamma_1", "gamma_2", visual_output, "PhyNEST_minorG", 70)
+plot_snaq_minor_gamma_by_tree_display(phynest_input_dir,
+  visual_output, "PhyNEST_minor_gamma_by_tree_display",
+  method_label = "PhyNEST", split_by_placement = TRUE)
+```
