@@ -75,3 +75,11 @@ sim-phy-outfiles
 seq-gen-outfiles
 raxml-outfiles
 astral-outfiles
+
+# Empirical 1KP data for the angiosperm species tree (large / regeneratable; see scripts/angiosperm/)
+data/onekp/alignments-FNA2AA.tar.bz
+data/onekp/FNA2AA/
+data/onekp/SupFigs1-3-FigTree.tre
+data/onekp/subset_*/iqtree/
+data/onekp/subset_*/subtree/pergene/
+data/onekp/subset_*/BSlistfiles
