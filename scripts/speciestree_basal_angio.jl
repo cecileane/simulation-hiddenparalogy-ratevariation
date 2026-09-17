@@ -40,21 +40,25 @@ historically unstable taxon (H; lizard + snake).
   Nymphaea 349, Brasenia 346, Schisandra 353, Chloranthus 352,
   Liriodendron 351, Ceratophyllum 289; 260 genes have all 8 taxa.
 - gene trees were estimated with IQ-TREE (v3.1.3 here; v2.4.0 for the
-  reptile trees, same options), one tree per gene, 1000 ultra-fast
-  bootstraps, HKY+F+G per gene so that kappa, base frequencies and the
-  gamma shape can be re-fitted as in notes/choice-seqgen-parameters.md:
+  reptile trees, same options), one run per gene, 1000 ultra-fast
+  bootstraps, HKY+F+G so that kappa, base frequencies and the gamma
+  shape can be re-fitted as in notes/choice-seqgen-parameters.md:
   cd data/a353/<name>
-  iqtree -S alignments -st DNA --prefix iqtree/loci -T 4 -B 1000 -wbtl \
-         -m MFP -mset HKY -mrate G -mfreq F -seed 1
+  for f in alignments/*.fasta; do g=$(basename $f .fasta)
+    iqtree -s $f -st DNA -B 1000 -wbtl -m MFP -mset HKY -mrate G \
+           -mfreq F -seed 1 -T 1 --prefix iqtree_pergene/$g
+  done
   (-st DNA: Kew pads low-coverage regions with N, which can defeat
-  IQ-TREE's automatic detection of the sequence type)
-  which creates in `iqtree/`
-  * a single file `loci.treefile` with the ML tree, one per locus,
-  * 1 file `loci.ufboot` with all bootstrap trees (1000 per locus),
-  * `loci.best_model.nex` with the per-gene HKY+F+G parameters.
-  followed by (same as separate-boot-bygene.jl in the reptiles repo):
-  python3 ../../../scripts/angiosperm/split_bootstraps.py iqtree 1000
-  to get 1 bootstrap file per gene and the list `BSlistfiles`.
+  IQ-TREE's automatic detection of the sequence type.
+  One run per gene rather than one partitioned run `iqtree -S`: with -S,
+  the bootstrap trees of genes lacking some taxa were written with wrong
+  tip names by IQ-TREE 3.1.3, which corrupted ASTRAL's bootstrap support;
+  the reptile UCE loci all had all taxa, so -S was fine there.)
+  followed by (replaces separate-boot-bygene.jl in the reptiles repo):
+  python3 ../../../scripts/angiosperm/collect_pergene.py
+  which writes `loci.txt` (gene names), `iqtree/loci.treefile` (ML trees,
+  same order), `iqtree/bootstrap/<gene>.ufboot`, the list `BSlistfiles`,
+  and `seqgen_params.csv` (per-gene kappa, gamma shape, base frequencies).
 - species tree estimated with ASTRAL (v5.7.8) with IQ-TREE input, using
   astral -i iqtree/loci.treefile -b BSlistfiles -r 1000 -o astral/species.tre
   The output file has 1002 lines: 1000 bootstrap trees, then the ASTRAL
@@ -131,7 +135,9 @@ Topology, for both outgroups:
    (Schisandra,(Ceratophyllum,(Chloranthus,Liriodendron))))))
 which matches Zuntini et al. 2024 once monocots and eudicots are dropped.
 All bootstrap supports are 100 except Amborella alone as sister to the
-other angiosperms: 99.3 (pinus).
+other angiosperms: 95.7 (pinus); 100 (ginkgo).
+ginkgo set: (AMBTRI,(GINBIL,((SCHCHI,(CERDEM,(CHLSES,LIRCHI)100.0:0.34)
+100.0:0.93)100.0:0.74,(NYMNOU,BRASCH)100.0:4.61)100.0:0.25):0.0);
 =#
 tree = readnewick(speciestree_string)
 # remove bootstrap values from node names (SimPhy doesn't accept them)
@@ -188,8 +194,10 @@ println("ultrametric tree, coalescent units:\n", writenewick(tree))
 #= we get this below:
 pinus: (PINPON:5.13,(((NYMNOU:0.5,BRASCH:0.5):3.93,(SCHCHI:3.7,(CERDEM:2.81,
        (CHLSES:2.48,LIRCHI:2.48):0.33):0.89):0.73):0.2,AMBTRI:4.63):0.5);
-total length: 28.86 CU (pinus); reptile tree: 17.48 CU.
-height: 5.13 (pinus); reptile tree: 3.44.
+ginkgo: (GINBIL:5.86,(((SCHCHI:4.37,(CERDEM:3.44,(CHLSES:3.1,LIRCHI:3.1)
+       :0.34):0.93):0.74,(BRASCH:0.5,NYMNOU:0.5):4.61):0.25,AMBTRI:5.36):0.5);
+total length: 28.86 CU (pinus), 33.02 (ginkgo); reptile tree: 17.48 CU.
+height: 5.13 (pinus), 5.86 (ginkgo); reptile tree: 3.44.
 The angiosperm tree is taller: with genome-quality sequences, gene trees
 are less discordant, which ASTRAL translates into longer branches in CU.
 =#
@@ -214,12 +222,8 @@ pinus: (A:5130,(((C:500,D:500):3930,(E:3700,(H:2810,(F:2480,G:2480):330)
 #--------------------------------------------------------------------#
 # 3. gene trees: check for saturated loci, locus heights d_l
 #--------------------------------------------------------------------#
-# names of loci, in the order used by IQ-TREE (= order in loci.treefile)
-locusnames = String[]
-for l in readlines(joinpath(datadir, "iqtree", "loci.best_scheme.nex"))
-    m = match(r"^\s*charset\s+(\S+)\s*=", l)
-    isnothing(m) || push!(locusnames, m.captures[1])
-end
+# names of loci, in the order of loci.treefile (see collect_pergene.py)
+locusnames = filter(!isempty, readlines(joinpath(datadir, "loci.txt")))
 genetrees_all = readmultinewick(joinpath(datadir, "iqtree", "loci.treefile"))
 length(genetrees_all) == length(locusnames) ||
     error("number of gene trees != number of loci")
@@ -274,8 +278,10 @@ mean_d = mean(d_l)
         length(d_l), mean_d)
 @printf("median = %.4f, min = %.4f, max = %.4f\n",
         median(d_l), minimum(d_l), maximum(d_l))
-#= pinus: 31 loci without the outgroup; 322 loci with outgroup;
-   d_l: mean = 0.714083, median 0.6628, min 0.3663, max 3.0948
+#= pinus:  31 loci without the outgroup; 322 loci with outgroup;
+   d_l: mean = 0.713752, median 0.6629, min 0.3663, max 3.1012
+   ginkgo: 160 loci without the outgroup (Ginkgo is a fragmentary 1KP
+   transcriptome); 193 loci with outgroup; d_l: mean = 0.664268
    reptile UCEs (1,145 loci): mean = 0.096825
    d_l is ~7x larger than for the reptile UCEs, although both trees span
    ~310 My from the root: protein-coding genes with all 3 codon positions
@@ -305,7 +311,8 @@ sigma_gene = fit(LogNormal, rel).σ
 mu_gene = -sigma_gene^2 / 2
 @printf("SimPhy option for rate variation across genes: -hl ln:%.6f,%.6f\n",
         mu_gene, sigma_gene)
-#= pinus:   -hl ln:-0.031260,0.250041
+#= pinus:   -hl ln:-0.031126,0.249505
+   ginkgo:  -hl ln:-0.034203,0.261546
    reptile: -hl ln:-0.19,0.6164414002968976
 =#
 
@@ -328,7 +335,7 @@ D_mean = D_sum ./ D_n
 println("loci per pair of taxa used in the mean distances: min = ",
         minimum(D_n[i, j] for i in 1:ntax for j in 1:ntax if i != j),
         ", max = ", maximum(D_n))
-# pinus: min = 267, max = 322
+# pinus: min = 267, max = 322 ; ginkgo: min = 164, max = 193
 # fit these distances to the species tree topology with ordinary least
 # squares. ultrametric=false (the default is true): a clock would erase
 # the rate variation across lineages that we want to capture.
@@ -361,20 +368,21 @@ tl = tiplabels(sub_tree)
 idx = [findfirst(==(code2letter[c]), tl) for c in codes]
 @printf("max |D_mean - D_fit| = %.5f\n",
         maximum(abs.(D_mean .- D_fit[idx, idx])))
-# pinus: 0.00730
+# pinus: 0.00730 ; ginkgo: 0.01638
 
 #--------------------------------------------------------------------#
 # 6. genome-wide rate, and per-branch multipliers m_i
 #--------------------------------------------------------------------#
 cu_total = totallength(tree_cu)     # 28.86 (pinus)
 sub_total = totallength(sub_tree)   #  2.0036 (pinus)
-sub_per_cu = sub_total / cu_total   # bar_r: 0.069424 (pinus);
+sub_per_cu = sub_total / cu_total   # bar_r: 0.069393 (pinus),
+                                    # 0.058034 (ginkgo);
                                     # reptile: 0.019526
 @printf("bar_r = %.6f substitutions per site per coalescent unit\n",
         sub_per_cu)
 # SimPhy baseline substitution rate, per site per generation: bar_r / 2Ne
 @printf("SimPhy -su f:%.10e\n", sub_per_cu / eff_pop)
-# pinus: 6.9423846e-5 ; reptile: 1.9526e-5
+# pinus: 6.939262e-5 ; ginkgo: 5.803402e-5 ; reptile: 1.9526e-5
 
 #= per-branch multiplier: m_i = d_i / (bar_r * tau_i), dimensionless,
    so that SimPhy's expected substitutions along branch i are
@@ -437,6 +445,52 @@ Fastest lineages: the two water lilies (3.7-3.9x) and Ceratophyllum
 is inflated by its 0.5 CU convention (3.6x in the reptile tree).
 Multiplier range 0.54-3.9 at the tips, vs 0.19-9.2 for the reptile tree
 (snake 9.2x, lizard 4.1x, alligator 0.19x).
+ginkgo:
+"(A:5860*0.590137,(((E:4370*0.647977,(H:3440*1.593824,(F:3100*0.805864,
+G:3100*0.73324):340*1.356683):930*0.562365):740*0.463047,(D:500*4.654533,
+C:500*4.524783):4610*0.677257):250*1.027253,B:5360*0.802687):500*6.916408);"
+(water lilies 4.5-4.7x, Ceratophyllum 1.6x, Ginkgo 0.59x)
+=#
+
+#--------------------------------------------------------------------#
+# 7. Seq-Gen parameters: distribution across genes of the HKY+G model
+#--------------------------------------------------------------------#
+# same recipe as notes/choice-seqgen-parameters.md for the reptile UCEs:
+# per-gene estimates from IQ-TREE (seqgen_params.csv, written by
+# collect_pergene.py), then a parametric family fitted across genes.
+sg = CSV.read(joinpath(datadir, "seqgen_params.csv"), DataFrame)
+println("Seq-Gen parameters, from ", nrow(sg), " genes:")
+# shape alpha of the Gamma distribution of rates across sites
+for family in [Normal, LogNormal, Gamma]
+    d = fit(family, sg.alpha)
+    println("  alpha: loglik=$(round(sum(logpdf.(d, sg.alpha)),digits=1)), $d")
+end
+alpha_fit = fit(Gamma, sg.alpha)
+# transition/transversion ratio kappa
+for family in [Normal, LogNormal, Gamma]
+    d = fit(family, sg.kappa)
+    println("  kappa: loglik=$(round(sum(logpdf.(d, sg.kappa)),digits=1)), $d")
+end
+kappa_fit = fit(LogNormal, sg.kappa)
+# base frequencies: Dirichlet (one column per gene for `fit`)
+freqmat = permutedims(Matrix{Float64}(sg[:, [:fA, :fC, :fG, :fT]]))
+freqmat ./= sum(freqmat, dims=1) # renormalize rounded frequencies
+freq_fit = fit(Dirichlet, freqmat)
+@printf("  alpha ~ Gamma(shape=%.4f, scale=%.5f), mean %.4f\n",
+        alpha_fit.α, alpha_fit.θ, mean(alpha_fit))
+@printf("  kappa ~ LogNormal(mu=%.4f, sigma=%.4f), mean %.4f\n",
+        kappa_fit.μ, kappa_fit.σ, mean(kappa_fit))
+@printf("  base frequencies A,C,G,T ~ Dirichlet(%s), mean %s\n",
+        join(round.(freq_fit.alpha, digits=2), ", "),
+        join(round.(mean(freq_fit), digits=3), ", "))
+#= pinus (353 genes):
+   alpha ~ Gamma(shape=12.20, scale=0.0412), mean 0.503
+   kappa ~ LogNormal(mu=1.314, sigma=0.158), mean 3.77
+   base frequencies ~ Dirichlet(86.9, 61.7, 77.6, 84.9),
+   mean 0.279,0.198,0.249,0.273  (ginkgo set: nearly identical)
+   reptile UCEs: alpha ~ Gamma(3.267, 0.109), mean 0.356;
+   kappa ~ LogNormal(1.4216, 0.2798), mean 4.31;
+   frequencies ~ Dirichlet(66.6, 38.4, 38.6, 67.1), mean 0.316,0.182,0.183,0.319
 =#
 
 # save everything needed by simulation.jl for this taxon set
@@ -454,4 +508,10 @@ open(joinpath(datadir, "simphy_tree_basal_angio.txt"), "w") do io
             "(generations, 2Ne=$eff_pop):\n", speciestree_ngen)
     println(io, "# SimPhy species tree with lineage-specific multipliers:\n",
             simphytree)
+    @printf(io, "# Seq-Gen: alpha ~ Gamma(shape=%.4f, scale=%.5f)\n",
+            alpha_fit.α, alpha_fit.θ)
+    @printf(io, "# Seq-Gen: kappa ~ LogNormal(mu=%.4f, sigma=%.4f)\n",
+            kappa_fit.μ, kappa_fit.σ)
+    println(io, "# Seq-Gen: base frequencies A,C,G,T ~ Dirichlet(",
+            join(round.(freq_fit.alpha, digits=3), ","), ")")
 end
