@@ -76,10 +76,10 @@ seq-gen-outfiles
 raxml-outfiles
 astral-outfiles
 
-# Empirical 1KP data for the angiosperm species tree (large / regeneratable; see scripts/angiosperm/)
-data/onekp/alignments-FNA2AA.tar.bz
-data/onekp/FNA2AA/
-data/onekp/SupFigs1-3-FigTree.tre
-data/onekp/subset_*/iqtree/
-data/onekp/subset_*/subtree/pergene/
-data/onekp/subset_*/BSlistfiles
+# Empirical Angiosperms353 data for the basal-angiosperm species tree
+# (regeneratable with scripts/angiosperm/subset_a353_official.py, see
+# scripts/speciestree_basal_angio.jl). Only small derived files are kept.
+data/onekp/
+data/a353_recovery/
+data/a353/*/iqtree/
+data/a353/*/BSlistfiles*

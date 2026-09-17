@@ -9,7 +9,7 @@ This directory contains the pipeline for the reptile phylogenomics simulation.
 | Script | Language | Purpose |
 |---|---|---|
 | `speciestree.jl` | Julia | One-time: build species tree from empirical data |
-| `speciestree_basal_angio.jl` | Julia | One-time: second species tree from basal angiosperms (1KP data); helpers in `angiosperm/` |
+| `speciestree_basal_angio.jl` | Julia | One-time: second species tree from basal angiosperms (Angiosperms353 data from the Kew Tree of Life); helpers in `angiosperm/` |
 | `simulation.jl` | Julia | Major simulation pipeline from gene tree simulation to species tree estimation|
 | `simulation_postprocess.jl` | Julia | Postprocess and calculate RF distances for outputs from the `simulation.jl` |
 | `snaq.jl` / `snaq_1rep.jl` | Julia | SNaQ inference (parallel + per-replicate) |
