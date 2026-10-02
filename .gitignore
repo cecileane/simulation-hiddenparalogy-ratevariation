@@ -76,3 +76,11 @@ sim-phy-outfiles
 seq-gen-outfiles
 raxml-outfiles
 astral-outfiles
+
+# Empirical Angiosperms353 data for the basal-angiosperm species tree
+# (regeneratable with scripts/angiosperm/subset_a353_official.py, see
+# scripts/speciestree_basal_angio.jl). Only small derived files are kept.
+data/onekp/
+data/a353_recovery/
+data/a353/*/iqtree/
+data/a353/*/BSlistfiles*
