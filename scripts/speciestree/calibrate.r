@@ -87,7 +87,7 @@ round(su_branch / Ma_branch, 5)# substitutions per Mya
 
 # Some notes from the above substitutions per Mya: 
 # On the 9 long branches (NB stem, the tips, the Pinus path) the rate is
-# 0.0006-0.0014 substitutions per Mya: constant within a factor of 2, which
+# 0.0006-0.0014 substitutions per Mya: constant within a factor of 2.5, which
 # is the lineage rate variation (Ceratophyllum fast, Chloranthus and
 # Liriodendron slow). So substitutions are a usable clock for the branches
 # ASTRAL cannot see.
@@ -154,7 +154,7 @@ cat(tree_cu, "\n")
 #  (Ceratophyllum:4.97,(Chloranthus:4.53,Liriodendron:4.53):0.44):0.95):0.79)
 #  :0.16,Amborella:6.87):1.56);
 # This was tested by QuartetNetworkGoodnessFit.ultrametrize! 
-# see scripts/speciestree/angiosperm_ultrametrize_check.jl 
+# see step 5 of scripts/speciestree/speciestree_angiosperm.jl 
 
 writeLines(tree_cu, "data/kew_a353/calibration/speciestree_cu_from_subs.tre") 
 
@@ -166,6 +166,8 @@ Ne2
 round(c(backbone = sum(coal_obs[1:4]), stem = cu_stem, NB_stem = 3.77,
         NB_tip = cu_NBtip, Pinus = H_total) * Ne2)
 # backbone 936, stem 624, NB stem 1508, NB tip 1175, Pinus 3371 generations
+# (from unrounded CU; speciestree_angiosperm.jl rounds the tree first:
+#  1176, 3372)
 # (reptile tree: height 3440, stem 500, internal branches 170-2440)
 
 # substitutions on the stem and the Pinus branch: only their sum (0.454) is
