@@ -1022,6 +1022,16 @@ function sample_substitution_params(seed)
     return (kappa=kappa, basefreqs=basefreqs, alpha=alpha)
 end
 
+# same for the plant (angiosperm) tree: distributions fitted to the 27 loci
+# for which ModelFinder chose HKY (speciestree_angiosperm.jl, step 7)
+function sample_substitution_params_plant(seed)
+    rng = StableRNG(seed)
+    kappa = rand(rng, LogNormal(1.3330, 0.2079))
+    basefreqs = rand(rng, Dirichlet([109.99, 75.31, 88.96, 106.00]))
+    alpha = rand(rng, LogNormal(-0.4045, 0.6540))
+    return (kappa=kappa, basefreqs=basefreqs, alpha=alpha)
+end
+
 """
     get_dict_for_seed_setting(params_string::String) -> Dict{String, Any}
 

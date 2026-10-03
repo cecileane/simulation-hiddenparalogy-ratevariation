@@ -109,7 +109,7 @@ function parse_commandline()
       "--outgroup"
         help = "Outgroup population name used in findgraphs (default: A)"
         arg_type = String
-        default = "A" # Homo, see speciestree.jl 
+        default = "A" # Homo, see speciestree_reptile.jl 
       "--block"
         help = "Number of blocks (approximate) used in find_graphs" 
         arg_type = Int

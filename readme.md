@@ -33,7 +33,7 @@ julia --project=. -e 'using Pkg; Pkg.instantiate()'   # Julia packages (pinned i
 
 **1. Run simulation** (one parameter set, 100 replicates, multiple processors)
 
-The species tree branch lengths and substitution rates were derived from empirical reptile data in [scripts/speciestree.jl](scripts/speciestree.jl).
+The species tree branch lengths and substitution rates were derived from empirical reptile data in [scripts/speciestree_reptile.jl](scripts/speciestree_reptile.jl).
 
 ```bash
 julia -p 100 scripts/simulation.jl \
@@ -163,7 +163,7 @@ After running all simulations, the folder structure should be similar to this:
 │   ├── iqtree.pl                   Legacy IQ-TREE wrapper
 │   ├── seq-gen.sh                  Legacy Seq-Gen wrapper
 │   ├── visual_utilities.R          Shared R plotting helpers
-│   ├── speciestree.jl              One-time: true species tree construction
+│   ├── speciestree_reptile.jl      One-time: true species tree construction
 │   ├── clean.jl                    Remove intermediate output files
 │   └── readme.md                   Script-level documentation
 │
@@ -247,6 +247,8 @@ After running all simulations, the folder structure should be similar to this:
 │   ├── PhyNEST_summary.csv                       Cross-setting PhyNEST summary
 │   ├── PhyNEST_T_threshold.csv                   Calibrated PhyNEST thresholds T*
 │   ├── PhyNEST_T_summary_by_factor.csv           per-site T summary statistics by factor level
+│   ├── PhyNEST_gamma_summary_by_factor.csv       PhyNEST minor gamma by factor level
+│   ├── PhyNEST_model_choice_by_factor.csv        PhyNEST % h=1 (T > T*) by factor level
 │   ├── summary_concatenated.csv                  Cross-setting simulation summary
 │   ├── combined_graph_recovery_summary.csv
 │   ├── combined_hypothesis_acceptance_summary.csv

@@ -19,14 +19,28 @@
 #           parallel after Step 1 (simulation.jl).
 # ============================================================================
 
+# Self-activate the repo root environment on the master and every worker so
+# runs never depend on the caller's default Julia environment. The master
+# instantiates first (installs the versions pinned in Manifest.toml; fast
+# no-op afterwards), then workers only activate.
+using Distributed
+using Pkg
+repo_env = normpath(joinpath(@__DIR__, ".."))
+Pkg.activate(repo_env; io=devnull)
+Pkg.instantiate(; io=devnull)
+@everywhere begin
+    using Pkg
+    Pkg.activate($repo_env; io=devnull)
+end
+
 using ArgParse
-using TimerOutputs 
+using TimerOutputs
 using Dates
-using TimeZones 
+using TimeZones
 using CSV
 using DataFrames
-@everywhere using Printf 
-@everywhere using Distributed  
+@everywhere using Printf
+@everywhere using Distributed
 @everywhere include("utilities.jl")
 
 const to = TimerOutput()  

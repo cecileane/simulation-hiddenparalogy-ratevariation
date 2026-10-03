@@ -59,13 +59,16 @@ t_star
 #| fig-width: 14
 #| fig-height: 16
 source("../scripts/visual_utilities.R")
+# only h=0 and h=1 were fitted, so a selected reticulation is h >= 1
+h_labels_phynest <- c("h=0 (tree)", "h\u22651 (network)", "h>1 (network)")
 p_naive <- plot_hypothesis_acceptance_grid(df,
   h0_col = "pct_H0_naive",
   h1_col = "pct_H1_naive",
   h_greater_col = "pct_H_greater",
   output_dir = visual_output,
   plot_title = "PhyNEST model choice when T > 0",
-  output_filename = "PhyNEST_model_choice_naive.png") +
+  output_filename = "PhyNEST_model_choice_naive.png",
+  h_labels = h_labels_phynest, show_h_greater = FALSE) +
   theme(legend.position = "none", axis.title.x = element_blank())
 
 p_tstar <- plot_hypothesis_acceptance_grid(df,
@@ -73,7 +76,8 @@ p_tstar <- plot_hypothesis_acceptance_grid(df,
   h_greater_col = "pct_H_greater",
   output_dir = visual_output,
   plot_title = "PhyNEST model choice when T > T*",
-  output_filename = "PhyNEST_model_choice_Tstar.png")
+  output_filename = "PhyNEST_model_choice_Tstar.png",
+  h_labels = h_labels_phynest, show_h_greater = FALSE)
 
 combined <- plot_grid(p_naive, p_tstar, ncol = 1,
                       labels = c("A", "B"), label_size = 18)

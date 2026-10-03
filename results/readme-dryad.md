@@ -377,10 +377,57 @@ we may either move the folders to `results/` afterwards, or pass
 `--saved_path results/<mode>_summary` and `--input_dir results/<mode>_summary`
 to the summary scripts.
 
-### 2.7 `PhyNEST_summary.csv`, `PhyNEST_T_threshold.csv` and `PhyNEST_T_summary_by_factor.csv` — PhyNEST cross-setting tables
+### 2.6b Gene tree estimation error and discordance tables
+
+Three files summarizing the per-gene RF distances (Appendix B tables of
+the paper). They were computed from the per-gene
+`genetrees_stats_<setting>.csv` files written by
+`simulation_postprocess.jl` (not archived here because of their size).
+In all three, one misestimated or discordant internal branch adds 2 to
+the raw RF distance and 1/(m−3) to the normalized distance, where m is
+the number of tips of the two trees compared.
+
+`genetree_estimation_error_by_setting.csv` (36 rows, one per setting):
+`rate_variation`, `ILS`, `n_inds`, `dup_loss`; `n_genes` (gene trees
+pooled over 100 replicates); `mean_norm_RF` (raw RF ÷ 2(8n−3));
+`mean_raw_RF`; `mean_wrong_branches` (= mean_raw_RF ÷ 2); `pct_exact`,
+`pct_1_wrong`, `pct_2_wrong`, `pct_ge3_wrong`, `pct_all_wrong` (percentage
+of gene trees with exactly 0, 1, 2, ≥3, or all internal branches
+misestimated); `source` (server folder; `recomputed` = RF recomputed from
+the raw trees with the same function).
+
+`genetree_estimation_error_summary.csv` (6 rows: rate variation × n,
+Table B2): for `mean_norm_RF` and for five tiers of the number of
+misestimated internal branches, the `_mean`, `_min` and `_max` across
+the 6 settings sharing the two factor levels (3 duplication/loss rates ×
+2 ILS levels). The tiers differ by n because the trees have 5 (n = 1) or
+13 (n = 2) internal branches; the columns `tier0`…`tier_all` spell them
+out (n = 1: 0, 1, 2, ≥3, all 5; n = 2: 0, 1–2, 3–5, ≥6, all 13).
+
+`genetree_discordance_summary.csv` (8 rows: locus category × ILS level,
+Table B1): true gene tree vs species tree, always compared as 8-taxon
+trees. With one individual per taxon the gene tree is compared directly.
+With two individuals per taxon, `simulation_postprocess.jl` first merges
+the two individuals of a taxon when they are monophyletic, then splits
+the gene tree into 8-taxon subtrees by keeping either individual of each
+non-monophyletic taxon (up to 2^8 subtrees), compares each subtree to
+the species tree and averages the normalized RF over the subtrees; the
+branch-count percentages give each subtree of a gene tree an equal
+weight summing to 1. The
+per-gene mean is stored in `genetrees_stats_<setting>.csv`; the
+percentages for two individuals were recomputed from the raw gene trees
+with `scripts/genetree_discordance_2inds.jl`, which reproduces the
+stored means exactly.
+Columns: `n_settings_1ind`, `n_settings_2ind` and `n_genes` pooled over
+number of individuals, rate variation and duplication/loss rate; the
+mean, min and max across these settings of `mean_norm_RF` (raw RF ÷ 10)
+and of `pct_0_discordant` (identical to the species tree),
+`pct_1_discordant`, `pct_2_discordant`, `pct_ge3_discordant`.
+
+### 2.7 `PhyNEST_summary.csv`, `PhyNEST_T_threshold.csv` and the `PhyNEST_*_by_factor.csv` tables — PhyNEST cross-setting tables
 
 PhyNEST was run on the 18 settings with one individual per species
-(`N_ind1`). The three files are written by `scripts/summary_phynest.jl`.
+(`N_ind1`). All five files are written by `scripts/summary_phynest.jl`.
 Model choice between h = 0 and h = 1 is based on the score difference
 T = score(h=0) − score(h=1), where the scores are negative log composite
 likelihoods of the best network found under each model (100 search runs
@@ -431,6 +478,17 @@ factor, the analog of the worst-residual summary table of find_graphs.
 | 3 | `n` | int | Replicates pooled. |
 | 4–8 | `mean`, `median`, `sd`, `q95`, `q99` | float | Mean, median, standard deviation, 95th and 99th percentile of T. |
 
+#### `PhyNEST_gamma_summary_by_factor.csv` (9 rows) and `PhyNEST_model_choice_by_factor.csv` (9 rows)
+
+Same `factor` / `level` rows as above. The first file summarizes the minor
+inheritance probability gamma_2 of the h = 1 network pooled within each
+level (`n`, `mean`, `median`, `sd`, and `pct_below_0.05`, `pct_below_0.1`,
+`pct_below_0.25`: percentage of replicates below each threshold), the
+PhyNEST block of the supplementary gamma table. The second gives
+`n_settings` and `pct_h1`, the percentage of replicates selecting h = 1
+under the calibrated rule averaged over the settings of each level, the
+PhyNEST columns of the supplementary model-choice table.
+
 #### `PhyNEST_summary.csv` (18 rows)
 
 One row per parameter setting. Column names shared with `SNaQ_summary.csv`
@@ -441,7 +499,7 @@ have the same meaning.
 | 1 | `parameter_setting` | string | Parameter-setting identifier (`DUP*-LOS*-RV*-N_ind1-SF*-genelen1000`). |
 | 2 | `n_reps` | int | Replicates contributing to this row (100). |
 | 3 | `H=0Accepted` | int | Replicates selecting the tree model under the calibrated rule (T ≤ T*). |
-| 4 | `H=1Accepted` | int | Replicates selecting one reticulation under the calibrated rule (T > T*). Since the true phylogeny is a tree, `H=1Accepted / n_reps` is the type I error rate. |
+| 4 | `H=1Accepted` | int | Replicates selecting a reticulation under the calibrated rule (T > T*). Only h = 0 and h = 1 were fitted with PhyNEST, so this is "h ≥ 1" rather than exactly one reticulation. Since the true phylogeny is a tree, `H=1Accepted / n_reps` is the type I error rate. |
 | 5 | `H>1Accepted` | int | Always 0: only h = 0 and h = 1 were fitted. |
 | 6–7 | `H=1Accepted_CI_low`, `H=1Accepted_CI_high` | float (%) | Clopper-Pearson 95% confidence interval for the type I error rate under the calibrated rule. |
 | 8–9 | `H=0Accepted_naive`, `H=1Accepted_naive` | int | Same as columns 3–4 under the naive rule (T > 0). |

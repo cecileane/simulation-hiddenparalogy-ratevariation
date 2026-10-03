@@ -23,11 +23,14 @@
 # Inputs  : phynest_summary/PhyNEST-<paramname>-summary.csv  (one per setting)
 # Outputs : results/PhyNEST_summary.csv             (cross-setting table)
 #           results/PhyNEST_T_threshold.csv         (T* per ILS level)
-#           results/PhyNEST_T_summary_by_factor.csv (T by factor level)
-#           visualization_results/phynest/*         (diagnostic plots)
+#           results/PhyNEST_T_summary_by_factor.csv     (T by factor level)
+#           results/PhyNEST_gamma_summary_by_factor.csv (gamma_2 by level)
+#           results/PhyNEST_model_choice_by_factor.csv  (% h=1 by level)
+#           visualization_results/phynest/*             (diagnostic plots)
 # Usage   : julia --project=. scripts/summary_phynest.jl
 #           (optional overrides: --input_dir, --output_file, --threshold_file,
-#                                --factor_summary_file,
+#                                --factor_summary_file, --gamma_summary_file,
+#                                --model_choice_file,
 #                                --visualization_output_dir, --quantile)
 # Note    : Run after phynest_postprocess.jl has populated phynest_summary/.
 # ============================================================================
@@ -56,6 +59,12 @@ function parse_commandline()
         "--factor_summary_file"
             help = "Output CSV with summary statistics of T by factor level"
             default = "results/PhyNEST_T_summary_by_factor.csv"
+        "--gamma_summary_file"
+            help = "Output CSV with summary statistics of gamma_2 by level"
+            default = "results/PhyNEST_gamma_summary_by_factor.csv"
+        "--model_choice_file"
+            help = "Output CSV with the percentage of h=1 by factor level"
+            default = "results/PhyNEST_model_choice_by_factor.csv"
         "--visualization_output_dir"
             help = "Output directory for visualization files"
             default = "visualization_results/phynest"
@@ -135,13 +144,10 @@ function calibrate_thresholds(settings, q::Float64)
 end
 
 """
-Summary statistics of T pooled within each level of each simulation factor
-(rate variation, duplication/loss rate, ILS level), as reported for the worst
-residual of find_graphs in the paper's supplement.
+Levels of the simulation factors over which replicates are pooled in the
+supplementary tables: (factor name, level name, predicate on a setting).
 """
-function summarize_T_by_factor(settings)
-    stats(x) = (n = length(x), mean = mean(x), median = median(x), sd = std(x),
-                q95 = quantile(x, 0.95), q99 = quantile(x, 0.99))
+function factor_levels(settings)
     groups = [("overall", "all", s -> true),
               ("rate variation", "across genes", s -> s.params.ratevar == "G"),
               ("rate variation", "across lineages",
@@ -154,10 +160,54 @@ function summarize_T_by_factor(settings)
     for (level, SF) in (("low", 0.5), ("high", 1.0))
         push!(groups, ("ILS level", level, s -> s.params.SF == SF))
     end
+    return groups
+end
+
+# values of `column` pooled over the settings selected by `keep`
+pooled(settings, keep, column) =
+    vcat([s.df[!, column] for s in settings if keep(s)]...)
+
+"""
+Summary statistics of T pooled within each level of each simulation factor
+(rate variation, duplication/loss rate, ILS level), as reported for the worst
+residual of find_graphs in the paper's supplement.
+"""
+function summarize_T_by_factor(settings)
+    stats(x) = (n = length(x), mean = mean(x), median = median(x), sd = std(x),
+                q95 = quantile(x, 0.95), q99 = quantile(x, 0.99))
     rows = [merge((factor = f, level = l),
-                  stats(vcat([s.df.T_per_site
-                              for s in settings if keep(s)]...)))
-            for (f, l, keep) in groups]
+                  stats(pooled(settings, keep, :T_per_site)))
+            for (f, l, keep) in factor_levels(settings)]
+    return DataFrame(rows)
+end
+
+"""
+Summary statistics of the minor inheritance probability gamma_2 pooled
+within each factor level, with the percentage of replicates below each
+threshold, as in the supplementary table for find_graphs and SNaQ.
+"""
+function summarize_gamma_by_factor(settings; thresholds = [0.05, 0.1, 0.25])
+    below(x) = NamedTuple{Tuple(Symbol("pct_below_$t") for t in thresholds)}(
+        Tuple(100 * count(<(t), x) / length(x) for t in thresholds))
+    stats(x) = merge((n = length(x), mean = mean(x), median = median(x),
+                      sd = std(x)), below(x))
+    rows = [merge((factor = f, level = l),
+                  stats(pooled(settings, keep, :gamma_2)))
+            for (f, l, keep) in factor_levels(settings)]
+    return DataFrame(rows)
+end
+
+"""
+Percentage of replicates selecting h=1 under the calibrated rule, averaged
+over the settings of each factor level (`pct_h1` maps a parameter setting
+to its percentage), as in the supplementary table of model choice.
+"""
+function summarize_model_choice_by_factor(settings, pct_h1::Dict)
+    rows = [(factor = f, level = l,
+             n_settings = count(keep, settings),
+             pct_h1 = mean(pct_h1[s.params.parameter_setting]
+                           for s in settings if keep(s)))
+            for (f, l, keep) in factor_levels(settings)]
     return DataFrame(rows)
 end
 
@@ -237,6 +287,8 @@ function main()
     output_file = args["output_file"]
     threshold_file = args["threshold_file"]
     factor_file = args["factor_summary_file"]
+    gamma_file = args["gamma_summary_file"]
+    model_choice_file = args["model_choice_file"]
     visualization_dir = args["visualization_output_dir"]
     q = args["quantile"]
 
@@ -306,6 +358,18 @@ function main()
     CSV.write(factor_file, factor_df)
     println("T by factor level written to: $factor_file")
     println(factor_df)
+
+    gamma_df = summarize_gamma_by_factor(settings)
+    CSV.write(gamma_file, gamma_df)
+    println("gamma_2 by factor level written to: $gamma_file")
+    println(gamma_df)
+
+    pct_h1 = Dict(r.parameter_setting => 100 * r.H_eq_1 / r.n_reps
+                  for r in results)
+    choice_df = summarize_model_choice_by_factor(settings, pct_h1)
+    CSV.write(model_choice_file, choice_df)
+    println("% h=1 by factor level written to: $model_choice_file")
+    println(choice_df)
     println(summary_df[:, [:parameter_setting, Symbol("H=1Accepted"),
                           Symbol("H=1Accepted_naive"), :T_star,
                           :find_true_net0, :find_true_net1,

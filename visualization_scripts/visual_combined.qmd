@@ -508,6 +508,42 @@ p_h0_three <- plot_combined_hypothesis_acceptance_H0(
 print(p_h0_three)
 ```
 
+## Model choice: SNaQ (A) and PhyNEST with T > T* (B) in one figure
+
+Supplementary figure replacing the separate SNaQ and PhyNEST model-choice
+figures. The naive PhyNEST rule (T > 0) is not shown.
+
+```{r combined_model_choice_snaq_phynest, fig.width=14, fig.height=18, eval=!is.null(phynest_df)}
+snaq_mc <- snaq_df %>%
+  mutate(pct_H0 = `H=0Accepted`, pct_H1 = `H=1Accepted`,
+         pct_H_greater = `H>1Accepted`)
+phynest_mc <- phynest_df %>%
+  mutate(pct_H1 = `H=1Accepted` / n_reps * 100,
+         pct_H_greater = `H>1Accepted` / n_reps * 100)
+# each panel keeps its own legend: PhyNEST only fits h=0 and h=1, so a
+# selected reticulation is h >= 1 for PhyNEST
+p_mc_snaq <- plot_hypothesis_acceptance_grid(snaq_mc,
+  output_dir = visualization_output,
+  output_filename = "snaq_model_choice_part.png",
+  plot_title = "SNaQ") +
+  theme(axis.title.x = element_blank())
+p_mc_phynest <- plot_hypothesis_acceptance_grid(phynest_mc,
+  output_dir = visualization_output,
+  output_filename = "phynest_model_choice_part.png",
+  plot_title = "PhyNEST (T > T*)",
+  h_labels = c("h=0 (tree)", "h\u22651 (network)", "h>1 (network)"),
+  show_h_greater = FALSE)
+mc_stack <- plot_grid(p_mc_snaq, p_mc_phynest, ncol = 1,
+                      rel_heights = c(1.65, 1.15),
+                      labels = c("A", "B"), label_size = 18)
+png(filename = file.path(visualization_output,
+                         "combined_model_choice_snaq_phynest.png"),
+    width = 14, height = 18, units = "in", res = 300)
+print(mc_stack)
+dev.off()
+print(mc_stack)
+```
+
 ## Minor gamma by tree display: find_graphs / SNaQ / PhyNEST
 
 ```{r phynest_minor_gamma_by_tree_display, fig.width=16, fig.height=18, eval=!is.null(phynest_df)}

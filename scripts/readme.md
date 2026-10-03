@@ -10,6 +10,7 @@ This directory contains the pipeline for the reptile phylogenomics simulation.
 |---|---|---|
 | `speciestree.jl` | Julia | One-time: build species tree from empirical data |
 | `speciestree_basal_angio.jl` | Julia | One-time: second species tree from basal angiosperms (Angiosperms353 data from the Kew Tree of Life); helpers in `angiosperm/` |
+| `speciestree_reptile.jl` | Julia | One-time: build species tree from empirical data |
 | `simulation.jl` | Julia | Major simulation pipeline from gene tree simulation to species tree estimation|
 | `simulation_postprocess.jl` | Julia | Postprocess and calculate RF distances for outputs from the `simulation.jl` |
 | `snaq.jl` / `snaq_1rep.jl` | Julia | SNaQ inference (parallel + per-replicate) |
@@ -23,6 +24,7 @@ This directory contains the pipeline for the reptile phylogenomics simulation.
 | `summary_snaq.jl` | Julia | Summarize SNaQ results across parameter sets |
 | `summary_findgraph.jl` | Julia | Summarize find_graphs results + plots |
 | `summary_phynest.jl` | Julia | Summarize PhyNEST results, calibrate the T* threshold + plots |
+| `genetree_discordance_2inds.jl` | Julia | Per-combination discordance of two-individual gene trees on the 8-taxon scale (Table B1) |
 | `utilities.jl` | Julia | Shared helpers: seed generation, tip manipulation |
 | `seq-gen.sh` | Bash | Wrap Seq-Gen calls per gene, called in  `simulation.jl` |
 | `concatenate_seq.py` | Python | Concatenate per-gene NEXUS alignments into FASTA, called in `simulation.jl` |
@@ -38,7 +40,7 @@ After setting up following [main readme](../readme.md), let's check our major pi
 ## Pipeline
 
 ```
-[0] SPECIES TREE      speciestree.jl  (one-time setup)
+[0] SPECIES TREE      speciestree_reptile.jl  (one-time setup)
 
 [1] SIMULATION        simulation.jl
       └─ SimPhy → paralogy filter → Seq-Gen → IQ-TREE → ASTRAL-IV
@@ -208,7 +210,7 @@ julia --project=. scripts/summary_phynest.jl
 
 Each script reads the per-parameter CSVs from `<mode>_summary/`, computes aggregate statistics (e.g. type I error rates, topology recovery rates, gamma distributions), writes a combined CSV to `results/`, and generates diagnostic plots via R. `summary_findgraph.jl` also produces a taxon-level recovery table and worst-residual percentile summaries.
 
-`summary_phynest.jl` is also where the PhyNEST model-selection threshold is calibrated, following the recalibrated WR <= 3.7 threshold of find_graphs. The statistic is the per-site score difference T = (score(h=0) - score(h=1)) / M, where M is the number of sites in the replicate's concatenated alignment (10^6 in most replicates, fewer where fewer loci were retained; the raw difference scales linearly with M). T* is the 95th percentile of T pooled over the settings without lineage rate variation (no and gene-specific rates, all duplication/loss rates). Because T differs between ILS levels, one T* is computed per ILS level (SF) and number of individuals, and each setting is compared with the T* of its own ILS level. T* is specific to this design (8 taxa, hence 70 quartets, and 100 search runs per model). It writes `results/PhyNEST_T_threshold.csv` (T* per ILS level, with the per-setting quantile range, the quantile of the null setting alone and the quantile of the unscaled T for reference), `results/PhyNEST_summary.csv`, which reports model choice under both the naive rule (T > 0, columns with the `_naive` suffix) and the calibrated rule (T > T*), and `results/PhyNEST_T_summary_by_factor.csv` (summary statistics of T by factor level, the analog of the worst-residual summary table).
+`summary_phynest.jl` is also where the PhyNEST model-selection threshold is calibrated, following the recalibrated WR <= 3.7 threshold of find_graphs. The statistic is the per-site score difference T = (score(h=0) - score(h=1)) / M, where M is the number of sites in the replicate's concatenated alignment (10^6 in most replicates, fewer where fewer loci were retained; the raw difference scales linearly with M). T* is the 95th percentile of T pooled over the settings without lineage rate variation (no and gene-specific rates, all duplication/loss rates). Because T differs between ILS levels, one T* is computed per ILS level (SF) and number of individuals, and each setting is compared with the T* of its own ILS level. T* is specific to this design (8 taxa, hence 70 quartets, and 100 search runs per model). It writes `results/PhyNEST_T_threshold.csv` (T* per ILS level, with the per-setting quantile range, the quantile of the null setting alone and the quantile of the unscaled T for reference), `results/PhyNEST_summary.csv`, which reports model choice under both the naive rule (T > 0, columns with the `_naive` suffix) and the calibrated rule (T > T*), and three tables by factor level used in the supplement: `results/PhyNEST_T_summary_by_factor.csv` (T; the analog of the worst-residual summary table), `results/PhyNEST_gamma_summary_by_factor.csv` (minor gamma) and `results/PhyNEST_model_choice_by_factor.csv` (percentage of h=1 under T > T*).
 
 -- 
 

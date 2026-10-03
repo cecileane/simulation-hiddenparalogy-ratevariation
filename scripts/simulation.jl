@@ -89,8 +89,11 @@ REQUIRED ARGUMENTS
 
 OPTIONAL ARGUMENTS
 ------------------
+  --tree                STR    Species tree: reptile (default) | plant
+                               (angiosperm tree, scripts/speciestree/)
   --n_inds              INT    Individuals per taxon (default: 1)
-  --Ne                  INT    Effective population size (default: 1000)
+  --Ne                  INT    Effective population size
+                               (default: 1000 for reptile, 400 for plant)
   --SF                  FLOAT  Ne scaling factor; SF<1 → more ILS (default: 1.0)
   --gene_len            INT    Alignment length in bp (default: 1000)
   --seqgen_model        STR    all_genes_same_HKY | all_genes_diff_HKY (default)
@@ -151,10 +154,14 @@ function parse_commandline()
       help = "Number of individuals/accessions per species (Default = 1)"  
       arg_type = Int
       default = 1
+    "--tree"
+      help = "Species tree: 'reptile' or 'plant' (angiosperm tree)"
+      arg_type = String
+      required = true 
     "--Ne"
-      help = "Effective population size (Default = 1000)"
+      help = "Effective population size (Default = 1000 for reptile, 400 for plant)"
       arg_type = Int
-      default = 1000
+      default = nothing
     "--generation_time"
       help = "Time unit per generation (Default = 1)"
       arg_type = Int
@@ -218,8 +225,13 @@ ratevar = parsed_args["ratevar"]
 n_reps = parsed_args["n_reps"] # number of replicates 
 n_genes = parsed_args["n_genes"] # number of genes 
 n_inds = parsed_args["n_inds"] # Number of individuals per taxa -- default = 1
-Ne = parsed_args["Ne"] # Effective population size, default = 1000 
-generation_time = parsed_args["generation_time"] # Generation time, default = 1 
+tree = parsed_args["tree"] # "reptile" or "plant": which species tree
+tree in ["reptile", "plant"] || error("Invalid --tree: $tree. Valid: reptile, plant")
+Ne = parsed_args["Ne"] # Effective population size: 1000 reptile, 400 plant
+if Ne === nothing
+  Ne = (tree == "plant" ? 400 : 1000)
+end
+generation_time = parsed_args["generation_time"] # Generation time, default = 1
 # Maximum number of iteration of re-running simphy: 
 max_iteration_simphy = parsed_args["max_iteration_simphy"] 
 # min_gene_porportion * n_genes = n_genes_min
@@ -243,7 +255,9 @@ gene_len = parsed_args["gene_len"]  # length of simulated gene sequences
 rootfolder = pwd()
 paramname_root = set_up_paramname_root(
     dup_rate, loss_rate, ratevar, n_inds, SF, gene_len)
-outfolder = joinpath(rootfolder, "output", paramname_root) 
+# reptile runs go to output/, plant runs to output_plant/ (same paramname)
+outroot = (tree == "plant" ? "output_plant" : "output")
+outfolder = joinpath(rootfolder, outroot, paramname_root)
 
 # The below function checks if a path exists:
 # If yes, the function will ask user's input tp decide if to remove the path 
@@ -287,6 +301,32 @@ end
   Sub rate per generation = sub rate per site / CU / 2 * Ne (per branch).
 =#
 
+#--------------- parameters that depend on the species tree ---------------#
+# reptile: scripts/speciestree/speciestree_reptile.jl (2Ne = 1000)
+# plant: scripts/speciestree/speciestree_angiosperm.jl, values copied from
+#        data/kew_a353/simphy_tree_angiosperm.txt (2Ne = 400)
+if tree == "reptile"
+  # -hl: log-normal distribution of gene rates
+  hl_param = "ln:-0.19,0.6164414002968976"
+  # -su: genome-wide substitution rate per site per generation
+  su_param = "0.000019526049565237014"
+  # species tree in generations, with per-branch multiplier m_i = r_i / bar_r
+  species_tree_mult = "(A:3440*0.5169864809498557,((((B:880*0.2153870155124918,C:880*0.18834479130316475):1710*0.4020718751928419,(D:930*1.2082967305424273,E:930*1.0232137924942215):1660*0.409265030942541):170*0.35253579234236804,F:2760*0.344215098863717):180*0.5023485661313807,(G:500*4.086688964324318,H:500*9.202700211638554):2440*0.9755544779699168):500*3.557239714945028);"
+  # same tree without lineage-rate variation
+  species_tree_flat = "(A:3440,((((B:880,C:880):1710,(D:930,E:930):1660):170," *
+      "F:2760):180,(G:500,H:500):2440):500);"
+  # seq-gen HKY parameters: all genes the same (kappa, base freq, alpha)
+  seqgen_same_HKY = (4.143, [0.316,0.182,0.183,0.319], 0.356)
+else # plant
+  hl_param = "ln:-0.03634,0.269593"
+  su_param = "0.00010293039257500044"
+  species_tree_mult = "(A:3372*1.104565,(((C:1176*1.085755,D:1176*1.12242):1508*1.108897,(E:2368*0.685743,(H:1988*1.564038,(F:1812*0.789595,G:1812*0.721226):176*1.233907):380*0.842807):316*0.954714):64*0.993533,B:2748*0.896529):624*1.104565);"
+  species_tree_flat = "(A:3372,(((C:1176,D:1176):1508,(E:2368,(H:1988," *
+      "(F:1812,G:1812):176):380):316):64,B:2748):624);"
+  # medians over the 27 angiosperm loci for which ModelFinder chose HKY
+  seqgen_same_HKY = (3.720, [0.289,0.198,0.234,0.279], 0.559)
+end
+
 #-----------------------------------------------#       
 #         set up SimPhy parameters
 #-----------------------------------------------#
@@ -322,7 +362,7 @@ end
 
 # To simulate substitution rate variation
 if occursin("G", ratevar) # gene-family-specific rate heterogeneity
-  parameters *= "-hl ln:-0.19,0.6164414002968976" *
+  parameters *= "-hl $hl_param" *
       " //log-normal distribution of gene rates\n"
   # hl is Gene-family-specific rate heterogeneity modifiers 
 end
@@ -342,16 +382,15 @@ if occursin("L", ratevar) # add tree with variation across lineages
   # corrected species tree:  
   # This is illustrated on the end of the speciestree.jl 
   # multiplier m_i = r_i / bar_r (per-branch sub rate / tree-wide average)
-  species_tree = "(A:3440*0.5169864809498557,((((B:880*0.2153870155124918,C:880*0.18834479130316475):1710*0.4020718751928419,(D:930*1.2082967305424273,E:930*1.0232137924942215):1660*0.409265030942541):170*0.35253579234236804,F:2760*0.344215098863717):180*0.5023485661313807,(G:500*4.086688964324318,H:500*9.202700211638554):2440*0.9755544779699168):500*3.557239714945028);" 
-  
-  parameters *= "-s $species_tree\n" 
-  parameters *= "-su f:0.000019526049565237014 //substitution rate\n"
+  species_tree = species_tree_mult # reptile or plant, see above
+
+  parameters *= "-s $species_tree\n"
+  parameters *= "-su f:$su_param //substitution rate\n"
 else
   # no lineage-rate variation: use flat branch lengths
-  species_tree = "(A:3440,((((B:880,C:880):1710,(D:930,E:930):1660):170," *
-      "F:2760):180,(G:500,H:500):2440):500);"
+  species_tree = species_tree_flat
   parameters *= "-s $species_tree\n"
-  parameters *= "-su f:0.000019526049565237014 //substitution rate\n"
+  parameters *= "-su f:$su_param //substitution rate\n"
 end
 
 # To simulate multiple individuals per species 
@@ -385,6 +424,8 @@ print(simphy_conf_content) # print the content to check if everything is correct
 @everywhere global SF = $SF
 @everywhere global time = $time 
 @everywhere global species_tree = $species_tree
+@everywhere global tree = $tree
+@everywhere global seqgen_same_HKY = $seqgen_same_HKY
 @everywhere global log_output = $log_output
 @everywhere global outfolder = $outfolder
 @everywhere global max_taxa_missing = $max_taxa_missing
@@ -1108,15 +1149,20 @@ end
       * HKY: kappa = 4.143 (-t), base freq 0.316,0.182,0.183,0.319 (-f),
         Gamma shape alpha = 0.356 (-a)
       =# 
-      kappa, basefreq, alpha = 4.143, [0.316,0.182,0.183,0.319], 0.356 
+      kappa, basefreq, alpha = seqgen_same_HKY # reptile or plant values
 
     elseif seqgen_model == "all_genes_diff_HKY"
       #= to simulate each gene with its own substitution model, use HKY with:
       * kappa from LogNormal(μ=1.4215, σ=0.2798)
       * frequencies from Dirichlet(66.59, 38.41, 38.61, 67.12)
       * alpha from Gamma(α=3.267, θ=0.109).
-      =# 
-      kappa, basefreq, alpha = sample_substitution_params(current_seed)
+      For the plant tree, see sample_substitution_params_plant in utilities.jl
+      =#
+      if tree == "plant"
+        kappa, basefreq, alpha = sample_substitution_params_plant(current_seed)
+      else
+        kappa, basefreq, alpha = sample_substitution_params(current_seed)
+      end
 
     else
       error("Unsupported seqgen_model: $seqgen_model")
@@ -1529,6 +1575,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
   #--------------SimPhy, SeqGen, IQtree, Astral------------------#
   #==============================================================#
   ---Arguments used for simulating this output dataset---
+  species tree = $tree;
   duplication rate = $dup_rate;
   loss rate = $loss_rate; 
   rate variation = $ratevar; 

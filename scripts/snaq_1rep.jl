@@ -12,6 +12,15 @@
 # Usage   : Not run directly; called by snaq.jl across replicates.
 # ============================================================================
 
+# Self-activate the repo root environment so this worker never depends on
+# the caller's default Julia environment (SNaQ is not installed there for
+# most users). Pkg.instantiate() installs the exact versions pinned in
+# Manifest.toml on first use and is a fast no-op afterwards.
+using Pkg
+repo_env = normpath(joinpath(@__DIR__, ".."))
+Pkg.activate(repo_env; io=devnull)
+Pkg.instantiate(; io=devnull)
+
 using Distributed
 using ArgParse
 @everywhere using CSV

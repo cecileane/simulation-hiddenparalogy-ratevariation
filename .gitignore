@@ -84,3 +84,10 @@ data/onekp/
 data/a353_recovery/
 data/a353/*/iqtree/
 data/a353/*/BSlistfiles*
+
+# Angiosperms353 data (Kew Tree of Life release 4.0) for the angiosperm species tree:
+# IQ-TREE outputs are regeneratable by scripts/speciestree/speciestree_angiosperm.jl
+data/kew_a353/iqtree/
+data/kew_a353/BSlistfiles*
+data/kew_a353/aug15/iqtree/
+data/kew_a353/raw15/

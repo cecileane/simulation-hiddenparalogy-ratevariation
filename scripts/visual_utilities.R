@@ -223,8 +223,11 @@ plot_overlapping_ratevar_by_n_inds_sf <- function(input_dir,
   
   # Save the plot
   output_path <- file.path(output_dir, paste0(output_filename, "_combined.png"))
+  # 4 inches per row of panels: 16 in for the 12-panel (4 x 3) figure,
+  # 8 in when only one individual per taxon was analyzed (2 x 3)
+  n_rows <- length(unique(all_data$row_facet))
   ggsave(output_path, plot = p,
-    width = 14, height = 16, dpi = 300, units = "in")
+    width = 14, height = 4 * n_rows, dpi = 300, units = "in")
   
   cat("Saved combined 12-panel figure:", output_path, "\n")
   
@@ -260,7 +263,13 @@ plot_hypothesis_acceptance_grid <- function(df,
                                  output_dir,
                                  output_filename,
                                  plot_title = NULL,
-                                 y_label = "Percentage of replicates (%)") {
+                                 y_label = "Percentage of replicates (%)",
+                                 h_labels = c("h=0 (tree)", "h=1 (network)",
+                                              "h>1 (network)"),
+                                 show_h_greater = TRUE) {
+  # h_labels: legend labels of the three categories; show_h_greater = FALSE
+  # drops the h>1 category, for methods that only fit h=0 and h=1 (then the
+  # second label should read "h\u22651 (network)")
   
   # Create output directory if it doesn't exist
   dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
@@ -309,8 +318,7 @@ plot_hypothesis_acceptance_grid <- function(df,
     mutate(
       hypothesis = factor(hypothesis,
                          levels = c("H0", "H1", "H_greater"),
-                         labels = c("h=0 (tree)", "h=1 (network)",
-                                   "h>1 (network)")),
+                         labels = h_labels),
 
       RV = droplevels(RV),
       ILS = ifelse(SF == 1.0, "high", "low"),
@@ -343,9 +351,9 @@ plot_hypothesis_acceptance_grid <- function(df,
   p <- ggplot(plot_data, aes(x = RV, y = value, fill = hypothesis)) +
     geom_bar(stat = "identity", position = "stack", width = 0.7) +
     facet_grid(n_ind_label ~ facet_col) +
-    scale_fill_manual(values = c("h=0 (tree)" = "#2166ac",
-                                 "h=1 (network)" = "#fdae61",
-                                 "h>1 (network)" = "#d73027")) +
+    scale_fill_manual(values = setNames(c("#2166ac", "#fdae61", "#d73027"),
+                                        h_labels),
+                      breaks = if (show_h_greater) h_labels else h_labels[1:2]) +
     scale_x_discrete(labels = c("N" = "none", "G" = "gene",
                                 "L" = "lineage", "GL" = "gene+lineage")) +
     labs(x = "substitution rate variation",

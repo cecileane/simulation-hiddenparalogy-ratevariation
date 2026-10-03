@@ -106,7 +106,7 @@ function parse_commandline()
       "--outgroup"
         help = "Outgroup taxon name used in PhyNEST (default: A)"
         arg_type = String
-        default = "A" # Homo, see speciestree.jl
+        default = "A" # Homo, see speciestree_reptile.jl
     end
 
     parsed_args = parse_args(s)
