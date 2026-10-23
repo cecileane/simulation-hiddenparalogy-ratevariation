@@ -23,6 +23,7 @@ using ArgParse
 
 using Plots
 using PrettyTables
+include(joinpath(@__DIR__, "utilities.jl")) # summarize_gamma_by_threshold
 
 """
 Parse command line arguments
@@ -31,7 +32,7 @@ function parse_commandline()
     s = ArgParseSettings()
     @add_arg_table! s begin
         "--input_dir"
-            help = "Directory containing findgraph summary files"
+            help = "Directory containing SNaQ summary files"
             default = "snaq_summary" 
         "--output_file"
             help = "Output CSV file path"
@@ -39,6 +40,11 @@ function parse_commandline()
         "--visualization_output_dir"
             help = "Output directory for visualization files"
             default = "visualization_results/snaq"
+        "--tree"
+            help = "reptile (default), plant or plant_1000pop; with plant, the " *
+                   "defaults of the other options get a _plant suffix " *
+                   "(_plant_1000pop for plant_1000pop)"
+            default = "reptile"
         # LEGACY (disabled for Dryad/paper submission, 2026-05): taxon-recovery
         # analysis is not used in the published paper. The argument and the
         # functions below are kept for reference but never invoked.
@@ -134,7 +140,7 @@ function process_csv_file(filepath::String)
 
         # Check if net0's RF distance to alter1, alter2, alter3 together
         # for alters: only count rows where the true tree was NOT recovered
-        valid_rows_net0 = df.RF_net1_1_true .!= 0.0
+        valid_rows_net0 = df.RF_net0_true .!= 0.0
         valid_rows_net1 = (df.RF_net1_1_true .!= 0.0) .&&
             (df.RF_net1_2_true .!= 0.0)
         
@@ -396,10 +402,20 @@ function main()
 
     args = parse_commandline()
     
-    # Define input and output paths
+    # Define input and output paths; plant results are kept in folders and
+    # files with a _plant suffix
     snaq_summary_dir = args["input_dir"] 
     output_file = args["output_file"] 
     snaq_visualization_dir = args["visualization_output_dir"] 
+    if args["tree"] != "reptile"
+        sfx = "_" * args["tree"]
+        snaq_summary_dir == "snaq_summary" &&
+            (snaq_summary_dir = "snaq_summary$sfx")
+        output_file == "results/SNaQ_summary.csv" &&
+            (output_file = "results/SNaQ_summary$sfx.csv")
+        snaq_visualization_dir == "visualization_results/snaq" &&
+            (snaq_visualization_dir = "visualization_results/snaq$sfx")
+    end
     
     # Check if the snaq_summary directory exists
     if !isdir(snaq_summary_dir)

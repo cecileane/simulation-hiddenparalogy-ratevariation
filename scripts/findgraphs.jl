@@ -92,6 +92,10 @@ function parse_commandline()
         (Default = 1.0, no scaling)"
         arg_type = Float64
         default = 1.0
+      "--tree"
+        help = "Species tree used in the simulation: reptile, plant or plant_1000pop"
+        arg_type = String
+        default = "reptile"
       "--debug_mode" 
         help = "Debugging mode: Keep all temporary folders"
         default = false
@@ -172,6 +176,7 @@ outgroup = parsed_args["outgroup"]
 block = parsed_args["block"] 
 selection_method = parsed_args["selection_method"]  
 SF = parsed_args["SF"]
+tree = parsed_args["tree"]
 gene_len = parsed_args["gene_len"] 
 debug_mode = parsed_args["debug_mode"]
 log_output = parsed_args["log"]
@@ -198,8 +203,10 @@ output_graph_suffix = "_unique_graphs.rds"
 output_f2_suffix = "_f2.rds" 
 output_summary_table_suffix = "_summary_table.txt"
 
-# Define true species tree in Newick format
-true_tree_newick = "(A,((((B,C),(D,E)),F),(G,H)));" 
+# Define true species tree in Newick format (reptile or plant, as simulated)
+true_tree_newick = (startswith(tree, "plant") ?
+    "(A,(B,((C,D),(E,(H,(F,G))))));" :
+    "(A,((((B,C),(D,E)),F),(G,H)));")
 
 #--------------- Set up folders ----------------# 
 paramname_root = set_up_paramname_root(dup_rate, loss_rate, ratevar, 

@@ -8,15 +8,7 @@
 #           gene-tree file is empty (removed during paralogy filtering).
 # Inputs  : $2 = gene tree file (Newick)
 # Outputs : $3 = Seq-Gen sequence file (relaxed-PHYLIP, -on)
-# Usage   : Called from simulation.jl per gene per replicate. Positional args:
-#             $1  rep_number_string   (label)
-#             $2  input_file          (gene-tree)
-#             $3  output_file         (sequence)
-#             $4  seed
-#             $5  alpha               (Gamma shape, rates across sites)
-#             $6  kappa               (transition/transversion ratio)
-#             $7-$10  base freqs A, C, G, T
-#             $11 gene_len            (bp)
+# Usage   : Called from simulation.jl per gene per replicate. see simulation.jl
 # ============================================================================
 
 # simulation.jl cannot pre-specify $input_path/$output_path, so pass as args
@@ -27,7 +19,7 @@ seed="$4"
 
 # seqgen specific parameters
 alpha="$5"  # shape parameter for Gamma distribution of rates across sites
-kappa="$6"  # transition/transversion ratio
+tstv="$6"   # expected transition/transversion ratio (seq-gen -t)
 A="$7"      # base frequency of A
 C="$8"      # base frequency of C
 G="$9"      # base frequency of G
@@ -35,6 +27,7 @@ T="${10}"   # base frequency of T
 
 # The length of the gene sequence to be simulated  
 gene_len="${11}" 
+tree="${12}"
 
 # modify_newick removes invalid tree files; guard for missing input:
 if [ ! -s "$input_file" ]; then # Check if input file exists and is non-empty
@@ -42,35 +35,18 @@ if [ ! -s "$input_file" ]; then # Check if input file exists and is non-empty
     exit 0  # Exit without error
 fi
 
+case "$tree" in plant*) treelabel=plant;; *) treelabel=reptile;; esac
+# print if this is a reptile or plant tree
+echo "Simulating molecular sequences for a $treelabel tree" 
 echo "Running seq-gen for input file: $input_file" 
-echo "Sequence length: $gene_len, alpha: $alpha, kappa: $kappa"
+echo "Sequence length: $gene_len, alpha: $alpha, ts/tv: $tstv"
 
 # Run seq-gen with specified parameters 
 executables/seq-gen \
     -l"$gene_len" \
     -mHKY \
     -a"$alpha" \
-    -t"$kappa" \
+    -t"$tstv" \
     -f"$A","$C","$G","$T" \
     -z "$seed" \
     -on < "$input_file" > "$output_file"
-
-# Run seq-gen only if the input file is not empty
-# - to simulate all genes with the same substitution model, use:
-#   * HKY (-m option) with kappa = 4.143 (-t option)
-#   * base frequencies 0.316,0.182,0.183,0.319 (-f option)
-#   * Gamma shape alpha = 0.356 (-a option)
-# Under all same model, all genes will use the same parameters above. 
-# executables/seq-gen \
-#         -l"$seq_len" \
-#         -mHKY \
-#         -a0.356 \
-#         -t4.143 \
-#         -f0.316,0.182,0.183,0.319 \
-#         -z "$seed" \
-#         -on < "$input_file" > "$output_file" 
-# Per-gene model: parameters sampled from empirical distributions.
-# to simulate each gene with its own substitution model, use HKY with:
-#   * kappa from LogNormal(μ=1.4215, σ=0.2798)
-#   * frequencies from Dirichlet(66.59, 38.41, 38.61, 67.12)
-#   * alpha from Gamma(α=3.267, θ=0.109).

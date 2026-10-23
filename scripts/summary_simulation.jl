@@ -8,7 +8,9 @@
 # Inputs  : simulation_summary/summary_<paramname>.csv     (one per setting)
 # Outputs : results/summary_concatenated.csv               (cross-setting table)
 # Usage   : julia --project=. scripts/summary_simulation.jl
-#           (optional overrides: --input_dir, --output_file)
+#           (optional overrides: --tree, --input_dir, --output_file;
+#           --tree plant or plant_1000pop adds a _plant (_plant_1000pop) suffix
+#           to the defaults of the other two, as in summary_snaq.jl)
 # Note    : Run after simulation_postprocess.jl has produced per-setting CSVs
 #           and run_postprocessing.jl has staged them under simulation_summary/.
 # ============================================================================
@@ -29,6 +31,11 @@ function parse_arguments()
         "--output_file"
             help = "Output file path for concatenated results"
             default = "./results/summary_concatenated.csv"
+        "--tree"
+            help = "reptile (default), plant or plant_1000pop; with plant, the " *
+                   "defaults of the other options get a _plant suffix " *
+                   "(_plant_1000pop for plant_1000pop)"
+            default = "reptile"
     end
     return ArgParse.parse_args(s)
 end
@@ -63,6 +70,14 @@ function main()
     
     input_dir = get(args, "input_dir", ".") 
     output_path = get(args, "output_file", "./summary_concatenated.csv") 
+    # plant results are kept in folders and files with a _plant suffix
+    if args["tree"] != "reptile"
+        sfx = "_" * args["tree"]
+        input_dir == "./simulation_summary" &&
+            (input_dir = "./simulation_summary$sfx")
+        output_path == "./results/summary_concatenated.csv" &&
+            (output_path = "./results/summary_concatenated$sfx.csv")
+    end
     
     summary_files = find_summary_files(input_dir)
     

@@ -14,6 +14,14 @@ Options:
     --saved_path    Directory to copy summary CSVs into after each run
                     (default: <project_root>/<mode>_summary)
     --n_procs       Workers to pass to each sub-script (default: nworkers())
+    --tree          Species tree of the runs, reptile, plant or
+                    plant_1000pop (default: reptile); passed to every
+                    sub-script, which then uses the matching reference
+                    trees and reads output_plant/ (or output_plant_1000pop/).
+                    With --tree plant the defaults become
+                    --output_dir output_plant and
+                    --saved_path <project_root>/<mode>_summary_plant
+                    (_plant_1000pop for plant_1000pop).
 
 Example:
     julia -p 10 scripts/run_postprocessing.jl --mode snaq
@@ -66,6 +74,13 @@ function parse_commandline()
                       "Defaults to nworkers() (-p N given to this script)."
             arg_type = Int
             default = -1   # sentinel → auto-detect
+
+        "--tree"
+            help    = "Species tree of the runs: reptile, plant or plant_1000pop " *
+                      "(passed to every sub-script; plant results are kept " *
+                      "apart with _plant suffixes on the default folders)"
+            arg_type = String
+            default = "reptile"
     end
 
     return parse_args(s)
@@ -120,7 +135,7 @@ end
 Build the shell command that runs the appropriate sub-script.
 """
 function build_cmd(mode::String, script_dir::String, params,
-    n_reps::Int, n_procs::Int, output_dir::String)
+    n_reps::Int, n_procs::Int, output_dir::String, tree::String)
     script = joinpath(script_dir, "$(mode)_postprocess.jl")
 
     julia_flags = n_procs > 0 ? ["-p", string(n_procs)] : String[]
@@ -135,10 +150,14 @@ function build_cmd(mode::String, script_dir::String, params,
         "--gene_len",  string(params.gene_len),
     ]
     # only phynest_postprocess.jl takes the input directory as an argument;
-    # the other sub-scripts read from output/
+    # the other sub-scripts read from output/ (or output_plant*/)
     if mode == "phynest"
         append!(args, ["--output_dir", output_dir])
     end
+    # every sub-script needs the species tree: it selects the reference
+    # trees, and the output folder (output/ or output_plant*/) for the
+    # sub-scripts without --output_dir
+    append!(args, ["--tree", tree])
 
     return Cmd(vcat(["julia"], julia_flags, [script], args))
 end
@@ -155,6 +174,7 @@ function main()
     output_dir = parsed_args["output_dir"]
     saved_path = parsed_args["saved_path"]
     n_procs    = parsed_args["n_procs"]
+    tree       = parsed_args["tree"]
 
     # Validate mode
     valid_modes = ("simulation", "snaq", "findgraphs", "phynest")
@@ -176,6 +196,13 @@ function main()
     script_dir   = dirname(abspath(PROGRAM_FILE))
     project_root = normpath(joinpath(script_dir, ".."))
 
+    # plant runs live in output_plant/ and their summaries are kept apart
+    # from the reptile ones with a _plant suffix (unless overridden)
+    suffix = (tree == "reptile" ? "" : "_$tree")
+    if tree != "reptile" && output_dir == "output"
+        output_dir = "output$suffix"
+    end
+
     # Resolve output_dir relative to project root if not absolute
     if !isabspath(output_dir)
         output_dir = joinpath(project_root, output_dir)
@@ -183,7 +210,7 @@ function main()
 
     # Resolve saved_path
     if isempty(saved_path)
-        saved_path = joinpath(project_root, "$(base_mode)_summary")
+        saved_path = joinpath(project_root, "$(base_mode)_summary$suffix")
     elseif !isabspath(saved_path)
         saved_path = joinpath(project_root, saved_path)
     end
@@ -193,7 +220,7 @@ function main()
 
     # Consensus collection dir (snaq and findgraphs collect consensus results)
     consensus_collect_dir = (mode in ("snaq", "findgraphs")) ?
-        joinpath(project_root, "$(mode)_consensus_tree") : ""
+        joinpath(project_root, "$(mode)_consensus_tree$suffix") : ""
     if !isempty(consensus_collect_dir)
         mkpath(consensus_collect_dir)
     end
@@ -232,7 +259,7 @@ function main()
         println("Processing: $paramname")
 
         cmd = build_cmd(base_mode, script_dir, params, n_reps, n_procs,
-                        output_dir)
+                        output_dir, tree)
         println("Running: $cmd\n")
 
         # Run from the project root so relative paths inside the sub-script

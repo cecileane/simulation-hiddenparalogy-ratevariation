@@ -482,10 +482,62 @@ function modify_newick_for_n_genes(input::String,
         avg_num_leaf_left_in_trees,
         gene_trees_gene_loss_only,
         gene_trees_gene_duplication_and_loss
-end 
+end
 
-#-----------------------------------------------#       
-#               Part 2 
+"""
+    blank_unused_locus_trees(simphyfolder, singlecopyfolder)
+
+In each Int<i>/l_trees.trees (or Int<i>/1/l_trees.trees) of one replicate,
+keep only the locus trees of the kept gene trees and blank all other lines.
+A kept gene g_trees_noLocusID_Gene<g>_Int<i>.trees uses line <g>, which is
+what simulation_postprocess.jl reads, so line numbers must not change.
+The locus trees of discarded gene families are never used and take most of
+the disk space when dup/loss rates are high.
+"""
+function blank_unused_locus_trees(simphyfolder::String,
+                                  singlecopyfolder::String)
+    # kept gene ids for each iteration
+    kept = Dict{Int, Set{Int}}()
+    for file in readdir(singlecopyfolder)
+        m = match(r"^g_trees_noLocusID_Gene(\d+)_Int(\d+)\.trees$", file)
+        m === nothing && continue
+        push!(get!(kept, parse(Int, m.captures[2]), Set{Int}()),
+              parse(Int, m.captures[1]))
+    end
+
+    for int_folder in readdir(simphyfolder)
+        m = match(r"^Int(\d+)$", int_folder)
+        m === nothing && continue
+        # legacy structure has a "1" subfolder, as in simulation_postprocess.jl
+        temp_dir = joinpath(simphyfolder, int_folder, "1")
+        locus_tree_file = isdir(temp_dir) ?
+            joinpath(temp_dir, "l_trees.trees") :
+            joinpath(simphyfolder, int_folder, "l_trees.trees")
+        isfile(locus_tree_file) || continue
+
+        genes = get(kept, parse(Int, m.captures[1]), Set{Int}())
+        locus_trees = readlines(locus_tree_file)
+        for g in genes # every kept gene must have its locus tree
+            if g > length(locus_trees) || isempty(locus_trees[g])
+                error("No locus tree for gene $g in $locus_tree_file")
+            end
+        end
+        new_locus_trees = [i in genes ? t : ""
+                           for (i, t) in enumerate(locus_trees)]
+        new_locus_trees == locus_trees && continue # nothing to blank
+
+        temp_file = locus_tree_file * ".tmp"
+        open(temp_file, "w") do io
+            for t in new_locus_trees
+                println(io, t)
+            end
+        end
+        mv(temp_file, locus_tree_file; force=true)
+    end
+end
+
+#-----------------------------------------------#
+#               Part 2
 #    Re-run simphy until:
 # 1) n_genes hit the target; or 
 # 2) max_iteration reaches   
@@ -1022,13 +1074,20 @@ function sample_substitution_params(seed)
     return (kappa=kappa, basefreqs=basefreqs, alpha=alpha)
 end
 
-# same for the plant (angiosperm) tree: distributions fitted to the 27 loci
-# for which ModelFinder chose HKY (speciestree_angiosperm.jl, step 7)
+"""
+    sample_substitution_params_plant(seed)
+
+Same as `sample_substitution_params` for the plant (angiosperm) tree, with
+distributions fitted to the angiosperm loci (speciestree_angiosperm.jl, step 7):
+- kappa    ~ LogNormal(1.3330, 0.2079), from the loci for which ModelFinder chose HKY
+- basefreqs ~ Dirichlet(101.99, 69.27, 90.29, 100.32), from all loci with F
+- alpha    ~ LogNormal(-0.3262, 0.7122), from all loci with G
+"""
 function sample_substitution_params_plant(seed)
     rng = StableRNG(seed)
     kappa = rand(rng, LogNormal(1.3330, 0.2079))
-    basefreqs = rand(rng, Dirichlet([109.99, 75.31, 88.96, 106.00]))
-    alpha = rand(rng, LogNormal(-0.4045, 0.6540))
+    basefreqs = rand(rng, Dirichlet([101.99, 69.27, 90.29, 100.32]))
+    alpha = rand(rng, LogNormal(-0.3262, 0.7122))
     return (kappa=kappa, basefreqs=basefreqs, alpha=alpha)
 end
 
@@ -1292,6 +1351,35 @@ function set_up_paramname_root(dup_rate, loss_rate,
         "-N_ind$n_inds-SF$scaling_factor_branch_length-genelen$gene_len"
 end
 
+
+"""
+    create_mapping_file_based_on_gene_tree(mapping_file::String)
+        -> Dict{String, String}
+Read an astral mapping file (one "individual species" pair per line,
+whitespace separated) into a dictionary individual => species.
+"""
+function create_mapping_file_based_on_gene_tree(mapping_file::String)
+    individual_to_species = Dict{String, String}()
+    for line in readlines(mapping_file)
+        parts = split(strip(line))
+        if length(parts) == 2
+            individual_to_species[parts[1]] = parts[2]
+        end
+    end
+    return individual_to_species
+end
+
+"""
+    modify_locus_tree_labels!(locus_tree::HybridNetwork) -> HybridNetwork
+Rename the tips of a locus tree in place, keeping only the part before the
+first underscore (e.g. "A_0" -> "A"), so they match the species tree.
+"""
+function modify_locus_tree_labels!(locus_tree::HybridNetwork)
+    for tip in locus_tree.leaf
+        tip.name = String(split(tip.name, "_")[1])
+    end
+    return locus_tree
+end
 
 """
     map_gene_tree_based_on_mapping_file(

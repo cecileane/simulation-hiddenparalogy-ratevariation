@@ -90,12 +90,12 @@ We recommend to have number of processors `-p` match with the `--n_reps` to incr
 **Step 2 — simulation post-processing**
 
 ```bash
-julia -p 10 scripts/simulation_postprocess.jl \
+julia -p 10 scripts/simulation_postprocess.jl --tree reptile \
     --dup_rate 0.0003 --loss_rate 0.0003 \
     --ratevar G --n_reps 100 --n_inds 1
 ```
 
-Computes RF distances between the true species tree and ASTRAL estimates. Writes `summary_<paramname>.csv` to the parameter folder.
+Computes RF distances between the true species tree and ASTRAL estimates. Writes `summary_<paramname>.csv` to the parameter folder. `--tree` (required) is `reptile` or `plant` and selects the true species tree and the folder (`output/` or `output_plant/`); the "noF" columns drop F for the reptile tree and B for the plant tree.
 
 ---
 
@@ -193,7 +193,16 @@ julia scripts/run_postprocessing.jl --mode findgraphs
 julia scripts/run_postprocessing.jl --mode phynest
 ```
 
-This scans `output/` for folders matching the `DUP*-LOS*-RV*-N_ind*-SF*-genelen*` naming pattern, calls `<mode>_postprocess.jl` for each, copies the resulting summary CSV to `<mode>_summary/`, and (for snaq and findgraphs) collects consensus network PDFs into a central directory. Use `--n_reps`, `--output_dir`, or `--saved_path` to override defaults.
+This scans `output/` for folders matching the `DUP*-LOS*-RV*-N_ind*-SF*-genelen*` naming pattern, calls `<mode>_postprocess.jl` for each, copies the resulting summary CSV to `<mode>_summary/`, and (for snaq and findgraphs) collects consensus network PDFs into a central directory. Use `--n_reps`, `--output_dir`, or `--saved_path` to override defaults. For the plant tree, `--tree plant` is forwarded to the simulation, snaq and findgraphs sub-scripts (they then read `output_plant/`, use the plant true tree and its alternative topologies, and drop B, F, G instead of F, G, H in the "noF/noG/noH" columns, whose names are unchanged); the defaults become `--output_dir output_plant` and `--saved_path <mode>_summary_plant`:
+
+```bash
+julia scripts/run_postprocessing.jl --mode simulation --tree plant
+julia scripts/run_postprocessing.jl --mode snaq --tree plant
+julia scripts/run_postprocessing.jl --mode findgraphs --tree plant \
+    --saved_path findgraph_summary_plant
+```
+
+The snaq and findgraphs post-processing call R through RCall. If R was installed with conda and RCall fails with `CXXABI_1.3.15 not found`, preload conda's libstdc++ first, e.g. `export LD_PRELOAD=$CONDA_PREFIX/lib/libstdc++.so.6`.
 
 ---
 
@@ -207,6 +216,8 @@ julia scripts/summary_snaq.jl
 julia scripts/summary_findgraph.jl
 julia --project=. scripts/summary_phynest.jl
 ```
+
+For the plant tree, `summary_snaq.jl --tree plant` and `summary_findgraph.jl --tree plant` read `snaq_summary_plant/` and `findgraph_summary_plant/` and write `results/SNaQ_summary_plant.csv`, `results/findgraph_summary_plant.csv` and `visualization_results/{snaq,findgraph}_plant/`; `summary_simulation.jl` takes `--input_dir simulation_summary_plant --output_file results/summary_concatenated_plant.csv`.
 
 Each script reads the per-parameter CSVs from `<mode>_summary/`, computes aggregate statistics (e.g. type I error rates, topology recovery rates, gamma distributions), writes a combined CSV to `results/`, and generates diagnostic plots via R. `summary_findgraph.jl` also produces a taxon-level recovery table and worst-residual percentile summaries.
 

@@ -1,6 +1,9 @@
 # Post-processing script for findgraph results
 # This script adds RF distances to admix=1 summary tables by comparing
 # inferred graphs with the true species tree
+# --tree (reptile or plant) selects the true species tree, the taxa dropped
+# in the "noF/noG/noH" columns (F, G, H for reptiles; B, F, G for plants,
+# column names unchanged) and the folder (output/ or output_plant/).
 
 using ArgParse
 using PhyloNetworks
@@ -119,6 +122,10 @@ function parse_commandline()
             default = 784 
             # There are 784 residuals but they are not unqiue 
             # 406 of them are unique 
+        "--tree"
+            help = "Species tree used in the simulation: reptile, plant or plant_1000pop"
+            arg_type = String
+            required = true
     end
     
     parsed_args = parse_args(s)
@@ -129,11 +136,29 @@ function parse_commandline()
     return parsed_args
 end
 
-# True species tree and variants with F/G/H pruned
-true_species_tree = readnewick("(A,((((B,C),(D,E)),F),(G,H)));")
-species_tree_noF = readnewick("(A,((G,H),((B,C),(D,E))));")
-species_tree_noG = readnewick("(A,((((B,C),(D,E)),F),H));")
-species_tree_noH = readnewick("(A,((((B,C),(D,E)),F),G));")
+# True species tree and variants with one taxon pruned, chosen by --tree
+# in main(): F, G, H are dropped for the reptile tree (F sits on its
+# shortest branches), B, F, G for the plant tree (B on its 0.16 CU branch,
+# (F,G) vs H the next shortest). The taxon names are also kept in globals
+# for pruning the estimated graphs.
+function true_trees_for(tree::String)
+    if startswith(tree, "plant")
+        truetree = readnewick("(A,(B,((C,D),(E,(H,(F,G))))));")
+        taxa = ("B", "F", "G")
+    else
+        truetree = readnewick("(A,((((B,C),(D,E)),F),(G,H)));")
+        taxa = ("F", "G", "H")
+    end
+    pruned = map(taxa) do t
+        net = deepcopy(truetree)
+        deleteleaf!(net, t)
+        net
+    end
+    return truetree, pruned[1], pruned[2], pruned[3], taxa
+end
+true_species_tree = species_tree_noF = nothing
+species_tree_noG = species_tree_noH = nothing
+taxon_noF, taxon_noG, taxon_noH = "F", "G", "H"
 
 function process_single_replicate(rep_id::String,
                             findgraph_folder::String,
@@ -220,17 +245,17 @@ function process_single_replicate(rep_id::String,
                                                     hybrid_net0, preorder=true)
 
         hybrid_net0_noF = deepcopy(hybrid_net0) 
-        deleteleaf!(hybrid_net0_noF, "F") 
+        deleteleaf!(hybrid_net0_noF, taxon_noF) 
         RF_btw_net0_true_tree_noF = mudistance_semidirected(
             true_species_tree_noF, hybrid_net0_noF, preorder=true)
 
         hybrid_net0_noG = deepcopy(hybrid_net0)
-        deleteleaf!(hybrid_net0_noG, "G")
+        deleteleaf!(hybrid_net0_noG, taxon_noG)
         RF_btw_net0_true_tree_noG = mudistance_semidirected(
             true_species_tree_noG, hybrid_net0_noG, preorder=true)
 
         hybrid_net0_noH = deepcopy(hybrid_net0)
-        deleteleaf!(hybrid_net0_noH, "H")
+        deleteleaf!(hybrid_net0_noH, taxon_noH)
         RF_btw_net0_true_tree_noH = mudistance_semidirected(
             true_species_tree_noH, hybrid_net0_noH, preorder=true)
 
@@ -421,11 +446,11 @@ function process_single_replicate(rep_id::String,
                                                 NaN)    
 
         displayed_tree_1_noF = deepcopy(displayed_tree_1)
-        deleteleaf!(displayed_tree_1_noF, "F")
+        deleteleaf!(displayed_tree_1_noF, taxon_noF)
         
         if displayed_tree_2 !== nothing
             displayed_tree_2_noF = deepcopy(displayed_tree_2)
-            deleteleaf!(displayed_tree_2_noF, "F")
+            deleteleaf!(displayed_tree_2_noF, taxon_noF)
         else
             displayed_tree_2_noF = nothing
         end
@@ -442,11 +467,11 @@ function process_single_replicate(rep_id::String,
 
         # RF distances with G pruned:
         displayed_tree_1_noG = deepcopy(displayed_tree_1)
-        deleteleaf!(displayed_tree_1_noG, "G")
+        deleteleaf!(displayed_tree_1_noG, taxon_noG)
 
         if displayed_tree_2 !== nothing
             displayed_tree_2_noG = deepcopy(displayed_tree_2)
-            deleteleaf!(displayed_tree_2_noG, "G")
+            deleteleaf!(displayed_tree_2_noG, taxon_noG)
         else
             displayed_tree_2_noG = nothing
         end
@@ -462,11 +487,11 @@ function process_single_replicate(rep_id::String,
 
         # RF distances with H pruned:
         displayed_tree_1_noH = deepcopy(displayed_tree_1)
-        deleteleaf!(displayed_tree_1_noH, "H")
+        deleteleaf!(displayed_tree_1_noH, taxon_noH)
 
         if displayed_tree_2 !== nothing
             displayed_tree_2_noH = deepcopy(displayed_tree_2)
-            deleteleaf!(displayed_tree_2_noH, "H")
+            deleteleaf!(displayed_tree_2_noH, taxon_noH)
         else
             displayed_tree_2_noH = nothing
         end
@@ -1191,11 +1216,18 @@ function main()
     new_WR_threshold  = parsed_args["new_WR_threshold"]
     check_num_residuals = parsed_args["check_num_residuals"]
     expected_residual_counts = parsed_args["expected_residual_counts"] 
+    tree = parsed_args["tree"]
+    tree in ("reptile", "plant", "plant_1000pop") ||
+        error("--tree must be reptile, plant or plant_1000pop")
+    global true_species_tree, species_tree_noF, species_tree_noG,
+           species_tree_noH, pruned_taxa = true_trees_for(tree)
+    global taxon_noF, taxon_noG, taxon_noH = pruned_taxa
     
     # Set up folder structure
     paramname_root = set_up_paramname_root(dup_rate, loss_rate, ratevar, 
                                                 n_inds, SF, gene_len)  
-    outfolder = "output/$paramname_root"
+    outroot = (tree == "reptile" ? "output" : "output_$tree")
+    outfolder = "$outroot/$paramname_root"
     
     println("Starting post-processing for parameter set: $paramname_root")
     println("Processing replicates $rep_start to $rep_end")

@@ -323,7 +323,8 @@ plot_hypothesis_acceptance_grid <- function(df,
       RV = droplevels(RV),
       ILS = ifelse(SF == 1.0, "high", "low"),
       n_ind_label = paste0("individuals / taxon = ", n_ind),
-      dup_rate_label = paste0("dup/loss rate = ", dup_loss_rate),
+      dup_rate_label = paste0("dup/loss rate = ", ifelse(dup_loss_rate == 0,
+        "0", vapply(dup_loss_rate, format, "", scientific = TRUE))),
       facet_col = paste0("ILS = ", ILS, "\n", dup_rate_label)
     )
   
@@ -332,7 +333,9 @@ plot_hypothesis_acceptance_grid <- function(df,
     mutate(
       n_ind_label = factor(
         n_ind_label, levels = unique(n_ind_label[order(n_ind)])),
-      facet_col = factor(facet_col)
+      # ILS level, then increasing dup/loss rate (1.2e-4 sorts after 1e-4)
+      facet_col = factor(facet_col,
+        levels = unique(facet_col[order(ILS, dup_loss_rate)]))
     )
 
   # Create plot title if not provided
@@ -391,7 +394,10 @@ plot_hypothesis_acceptance_grid <- function(df,
   
   # Save the plot
   output_path <- file.path(output_dir, output_filename)
-  ggsave(output_path, plot = p, width = 14.2, height = 8, units = "in")
+  # 14.2 in for 6 columns (ILS x dup/loss rate); wider when there are more
+  ggsave(output_path, plot = p,
+         width = 14.2 * max(1, nlevels(plot_data$facet_col) / 6),
+         height = 8, units = "in")
   
   cat("Saved hypothesis acceptance grid plot:", output_path, "\n")
   
@@ -588,7 +594,10 @@ plot_true_graph_recovery_lines_aggregated <- function(df,
                     y_range = c(75, 105),
                     jitter_width = 0.2,
                     rv_colors = get("rv_colors", envir = globalenv()),
-                    return_parts = FALSE) {
+                    return_parts = FALSE,
+                    pruned_taxon = "F") {
+  # pruned_taxon: the taxon dropped in the "noF" columns, for the legend
+  # label (F for the reptile tree, B for the plant tree)
 
   dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
@@ -601,7 +610,7 @@ plot_true_graph_recovery_lines_aggregated <- function(df,
 
   fmt_rate <- function(x) {
     v <- as.numeric(x)
-    ifelse(v == 0, "0", sub("e-0", "e-", formatC(v, format = "e", digits = 0)))
+    ifelse(v == 0, "0", sub("e-0", "e-", vapply(v, format, "", scientific = TRUE)))
   }
 
   plot_data <- df %>%
@@ -621,7 +630,9 @@ plot_true_graph_recovery_lines_aggregated <- function(df,
     mutate(
       metric = factor(metric,
                       levels = c("H0", "H1", "H1_noF"),
-                      labels = c("h=0", "h=1", "h=1, taxon F pruned")),
+                      labels = c("h=0", "h=1",
+                                 paste0("h=1, taxon ", pruned_taxon,
+                                        " pruned"))),
       ratevar_name = recode(as.character(droplevels(RV)),
                             "N" = "none", "G" = "gene", "L" = "lineage"),
       ILS      = ifelse(SF == 1.0, "high", "low"),
@@ -839,7 +850,7 @@ plot_true_graph_recovery_H1_only <- function(df,
 
   fmt_rate <- function(x) {
     v <- as.numeric(x)
-    ifelse(v == 0, "0", sub("e-0", "e-", formatC(v, format = "e", digits = 0)))
+    ifelse(v == 0, "0", sub("e-0", "e-", vapply(v, format, "", scientific = TRUE)))
   }
 
   plot_data <- df %>%
@@ -881,7 +892,10 @@ plot_true_graph_recovery_H1_only <- function(df,
 
   fill_values <- c(rv_colors, "hollow" = "white")
   shape_values <- setNames(c(21, 21, 24, 24), combo_levels)
-  legend_fill_override <- c("grey55", "white", "grey55", "white")
+  # legend keys only for the ILS x n combinations present in the data
+  combos_present       <- combo_levels[combo_levels %in% plot_data$combo]
+  legend_fill_override <- ifelse(grepl("n_ind=1|n = 1", combos_present),
+                                 "grey55", "white")
 
   p <- ggplot(plot_data,
               aes(x = dup_loss_rate_cat, y = H1,
@@ -993,7 +1007,7 @@ plot_combined_true_graph_recovery_H1_only <- function(snaq_df,
 
   fmt_rate <- function(x) {
     v <- as.numeric(x)
-    ifelse(v == 0, "0", sub("e-0", "e-", formatC(v, format = "e", digits = 0)))
+    ifelse(v == 0, "0", sub("e-0", "e-", vapply(v, format, "", scientific = TRUE)))
   }
 
   prep <- function(df, h1_col, source_label) {
@@ -1045,7 +1059,10 @@ plot_combined_true_graph_recovery_H1_only <- function(snaq_df,
 
   fill_values <- c(rv_colors, "hollow" = "white")
   shape_values <- setNames(c(21, 21, 24, 24), combo_levels)
-  legend_fill_override <- c("grey55", "white", "grey55", "white")
+  # legend keys only for the ILS x n combinations present in the data
+  combos_present       <- combo_levels[combo_levels %in% combined$combo]
+  legend_fill_override <- ifelse(grepl("n_ind=1|n = 1", combos_present),
+                                 "grey55", "white")
 
   p <- ggplot(combined,
               aes(x = dup_loss_rate_cat, y = H1,
@@ -1902,7 +1919,7 @@ plot_WR_distributions_jitter <- function(input_dir,
 
   fmt_rate <- function(x) {
     v <- as.numeric(x)
-    ifelse(v == 0, "0", sub("e-0", "e-", formatC(v, format = "e", digits = 0)))
+    ifelse(v == 0, "0", sub("e-0", "e-", vapply(v, format, "", scientific = TRUE)))
   }
   plot_data <- all_data %>%
     filter(!is.na(value)) %>%
@@ -2523,7 +2540,10 @@ plot_hypothesis_acceptance_H0_by_rate_variation <- function(
     combo_levels
   )
 
-  legend_fill_override <- c("grey55", "white", "grey55", "white")
+  # legend keys only for the ILS x n combinations present in the data
+  combos_present       <- combo_levels[combo_levels %in% plot_data$combo]
+  legend_fill_override <- ifelse(grepl("n_ind=1|n = 1", combos_present),
+                                 "grey55", "white")
 
   # Build plot
   p <- ggplot(plot_data,
@@ -2646,7 +2666,7 @@ plot_combined_hypothesis_acceptance_H0 <- function(
 
   fmt_rate <- function(x) {
     v <- as.numeric(x)
-    ifelse(v == 0, "0", sub("e-0", "e-", formatC(v, format = "e", digits = 0)))
+    ifelse(v == 0, "0", sub("e-0", "e-", vapply(v, format, "", scientific = TRUE)))
   }
 
   # Standardise one data frame and resolve a H0 column name
@@ -2729,7 +2749,10 @@ plot_combined_hypothesis_acceptance_H0 <- function(
 
   fill_values          <- c(rv_colors, "hollow" = "white")
   shape_values         <- setNames(c(21, 21, 24, 24), combo_levels)
-  legend_fill_override <- c("grey55", "white", "grey55", "white")
+  # legend keys only for the ILS x n combinations present in the data
+  combos_present       <- combo_levels[combo_levels %in% combined$combo]
+  legend_fill_override <- ifelse(grepl("n_ind=1|n = 1", combos_present),
+                                 "grey55", "white")
 
   p <- ggplot(combined,
               aes(x     = dup_loss_rate_cat,
@@ -3312,7 +3335,7 @@ plot_WR_percentiles_jitter_combined <- function(input_dir,
   # Helper: format dup/loss rate as display label
   fmt_rate <- function(x) {
     v <- as.numeric(x)
-    ifelse(v == 0, "0", sub("e-0", "e-", formatC(v, format = "e", digits = 0)))
+    ifelse(v == 0, "0", sub("e-0", "e-", vapply(v, format, "", scientific = TRUE)))
   }
 
   plot_data <- all_percentiles %>%
@@ -3364,9 +3387,16 @@ plot_WR_percentiles_jitter_combined <- function(input_dir,
 
   # Fill overrides for the shape legend keys:
   # odd entries (filled) get a neutral grey; even entries (hollow) get white
-  legend_fill_override <- c("grey55", "white", "grey55", "white")
+  # legend keys only for the ILS x n combinations present in the data
+  combos_present       <- combo_levels[combo_levels %in% plot_data$combo]
+  legend_fill_override <- ifelse(grepl("n_ind=1|n = 1", combos_present),
+                                 "grey55", "white")
 
   # ── Build plot ─────────────────────────────────────────────────────────────
+  # ymax = NULL: fit the axis to the data (used for the plant tree, whose
+  # worst residuals can be far above the reptile range)
+  if (is.null(ymax)) ymax <- ceiling(1.05 * max(plot_data$value, 3.7))
+
   p <- ggplot(plot_data,
               aes(x     = dup_loss_rate_cat,
                   y     = value,
@@ -3554,7 +3584,7 @@ plot_T_percentiles_jitter <- function(input_dir,
                     "ILS = low, n = 1",  "ILS = low, n = 2")
   fmt_rate <- function(x) {
     v <- as.numeric(x)
-    ifelse(v == 0, "0", sub("e-0", "e-", formatC(v, format = "e", digits = 0)))
+    ifelse(v == 0, "0", sub("e-0", "e-", vapply(v, format, "", scientific = TRUE)))
   }
 
   plot_data <- all_percentiles %>%
@@ -3759,7 +3789,7 @@ plot_T_distributions <- function(input_dir,
 
   fmt_rate <- function(x) {
     v <- as.numeric(x)
-    ifelse(v == 0, "0", sub("e-0", "e-", formatC(v, format = "e", digits = 0)))
+    ifelse(v == 0, "0", sub("e-0", "e-", vapply(v, format, "", scientific = TRUE)))
   }
   placement_levels <- c("between (G,H) and the rest of the ingroup",
                         "elsewhere")

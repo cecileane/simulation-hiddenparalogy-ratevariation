@@ -6,8 +6,10 @@
 #           into a single per-setting table, and add what the inference step
 #           does not record: RF distances of the H=0 tree and of the two
 #           trees displayed in the H=1 network to the true species tree
-#           (full, and with F, G or H pruned) and to the three alternative
-#           placements of F; the hybrid clade and its donors in the H=1
+#           (full, and with one taxon pruned) and to the three alternative
+#           placements of the taxon on the shortest branches (F for the
+#           reptile tree, B for the plant tree, as in snaq_postprocess.jl);
+#           the hybrid clade and its donors in the H=1
 #           network; and, from the per-run search logs, where the true tree
 #           sits in each search: how many runs reached the best score, how
 #           many runs found (H=0) or displayed (H=1) the true tree, and the
@@ -22,10 +24,13 @@
 #           (copied into phynest_summary/ by run_postprocessing.jl)
 # Usage   : julia scripts/phynest_postprocess.jl --dup_rate 0.0 \
 #               --loss_rate 0.0 --ratevar N --n_inds 1 --SF 0.5 \
-#               --n_reps 100 [--output_dir output]
+#               --n_reps 100 [--tree reptile] [--output_dir output]
+#           --tree (reptile, plant or plant_1000pop) selects the true species
+#           tree and the alternative trees, and the default output folder
+#           (output/, output_plant/ or output_plant_1000pop/).
 #           or, for every parameter set at once:
 #           julia scripts/run_postprocessing.jl --mode phynest \
-#               [--output_dir DIR]
+#               [--tree TREE] [--output_dir DIR]
 # Note    : No threshold on T is applied here. Model selection (naive T > 0
 #           and the calibrated T*) is done later in summary_phynest.jl, so the
 #           threshold can change without re-running this script.
@@ -88,8 +93,15 @@ function parse_commandline()
             help = "Gene length used in simulation (default = 1000)"
             arg_type = Int
             default = 1000
+        "--tree"
+            help = "Species tree used in the simulation: reptile, plant or " *
+                   "plant_1000pop (selects the reference trees and the " *
+                   "default output folder)"
+            arg_type = String
+            default = "reptile"
         "--output_dir"
-            help = "Directory holding the parameter folders (default = output)"
+            help = "Directory holding the parameter folders (default = " *
+                   "output, or output_<tree> for the plant trees)"
             arg_type = String
             default = "output"
     end
@@ -114,7 +126,14 @@ rep_start = parsed_args["rep_start"]
 rep_end = parsed_args["rep_end"]
 SF = parsed_args["SF"]
 gene_len = parsed_args["gene_len"]
+tree = parsed_args["tree"]
+tree in ("reptile", "plant", "plant_1000pop") ||
+  error("--tree must be reptile, plant or plant_1000pop")
 output_dir = parsed_args["output_dir"]
+# plant runs live in output_plant/ or output_plant_1000pop/ unless told otherwise
+if tree != "reptile" && output_dir == "output"
+    output_dir = "output_$tree"
+end
 
 # Set up folders
 paramname_root = set_up_paramname_root(dup_rate, loss_rate,
@@ -127,6 +146,7 @@ if !isdir(outfolder)
 end
 
 println("PhyNEST Postprocessing Script")
+println("Species tree: $tree")
 println("Parameter set: $paramname_root")
 println("Processing replicates $rep_start to $rep_end")
 println("Output folder: $outfolder")
@@ -135,20 +155,35 @@ println("Output folder: $outfolder")
 #   Reference topologies
 #-----------------------------------------------#
 
-true_species_tree = readnewick("(A,((((B,C),(D,E)),F),(G,H)));")
-
-#= Same alternatives as in snaq_postprocess.jl: when an estimated tree is
-   not the species tree, check whether F was simply moved.
-   alter1: F with (B,C); alter2: F with (D,E); alter3: F outside all =#
-alter1 = readnewick("(A,((G,H),(((B,C),F),(D,E))));")
-alter2 = readnewick("(A,((G,H),((B,C),(F,(D,E)))));")
-alter3 = readnewick("(A,(((G,H),((D,E),(B,C))),F));")
+#= Same true tree, alternatives and pruned taxa as in snaq_postprocess.jl:
+   when an estimated tree is not the species tree, check whether the taxon
+   on the shortest branches was simply moved.
+   Reptile tree: F. alter1: F with (B,C); alter2: F with (D,E);
+   alter3: F outside (B,C),(D,E),(G,H). Pruned taxa: F, G, H.
+   Plant tree: B. alter1: B with (C,D); alter2: B with the E clade;
+   alter3: H moved next to G. Pruned taxa: B, F, G.
+   The column names keep the reptile suffixes (noF, noG, noH): for the
+   plant tree they hold the comparisons without B, F and G respectively. =#
+if startswith(tree, "plant")
+    true_species_tree = readnewick("(A,(B,((C,D),(E,(H,(F,G))))));")
+    alter1 = readnewick("(A,((B,(C,D)),(E,(H,(F,G)))));")
+    alter2 = readnewick("(A,((C,D),(B,(E,(H,(F,G))))));")
+    alter3 = readnewick("(A,(B,((C,D),(E,(F,(G,H))))));")
+    pruned_taxa = ["B", "F", "G"]
+else
+    true_species_tree = readnewick("(A,((((B,C),(D,E)),F),(G,H)));")
+    alter1 = readnewick("(A,((G,H),(((B,C),F),(D,E))));")
+    alter2 = readnewick("(A,((G,H),((B,C),(F,(D,E)))));")
+    alter3 = readnewick("(A,(((G,H),((D,E),(B,C))),F));")
+    pruned_taxa = ["F", "G", "H"]
+end
 
 # True species tree with one taxon pruned
-species_tree_pruned = Dict(
-    "F" => readnewick("(A,((G,H),((B,C),(D,E))));"),
-    "G" => readnewick("(A,((((B,C),(D,E)),F),H));"),
-    "H" => readnewick("(A,((((B,C),(D,E)),F),G));"))
+species_tree_pruned = Dict{String,HybridNetwork}()
+for taxon in pruned_taxa
+    species_tree_pruned[taxon] = deepcopy(true_species_tree)
+    deleteleaf!(species_tree_pruned[taxon], taxon)
+end
 
 # Column suffixes, in the order returned by compare_to_truth
 rf_names = ["true", "true_noF", "true_noG", "true_noH",
@@ -174,11 +209,13 @@ end
 
 """
 All topology comparisons for one tree: RF distance to the true tree,
-to the true tree without F/G/H, and to the 3 alternative placements of F.
+to the true tree without each of the 3 pruned taxa, and to the 3
+alternative trees.
 """
 function compare_to_truth(tree::HybridNetwork)
     return (rf(tree, true_species_tree),
-            rf_pruned(tree, "F"), rf_pruned(tree, "G"), rf_pruned(tree, "H"),
+            rf_pruned(tree, pruned_taxa[1]), rf_pruned(tree, pruned_taxa[2]),
+            rf_pruned(tree, pruned_taxa[3]),
             rf(tree, alter1), rf(tree, alter2), rf(tree, alter3))
 end
 

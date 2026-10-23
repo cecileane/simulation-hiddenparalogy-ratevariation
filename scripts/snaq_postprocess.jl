@@ -1,6 +1,9 @@
 # SNaQ postprocessing: re-analyzes failed reps after snaq.jl finishes.
-# Usage: julia snaq_postprocessing.jl --dup_rate X --loss_rate Y
+# Usage: julia snaq_postprocess.jl --tree reptile --dup_rate X --loss_rate Y
 #          --ratevar Z --n_reps N [--rep_start S --rep_end E]
+# --tree (reptile or plant) selects the true species tree, the alternative
+# topologies, the taxa dropped in the "noF/noG/noH" columns and the output
+# folder (output/ or output_plant/). Column names are the same for both trees.
 
 using ArgParse
 using Distributed
@@ -9,7 +12,8 @@ using Distributed
 @everywhere using PhyloSummaries
 @everywhere using CSV
 @everywhere using DataFrames
-@everywhere include("utilities.jl")
+const _UTILS_PATH = joinpath(@__DIR__, "utilities.jl")
+@everywhere include($(_UTILS_PATH))
 using PhyloPlots
 using RCall
 
@@ -54,6 +58,10 @@ function parse_commandline()
             help = "Gene length used in simulation (default = 1000)"
             arg_type = Int
             default = 1000 
+        "--tree"
+            help = "Species tree used in the simulation: reptile, plant or plant_1000pop"
+            arg_type = String
+            required = true
     end
     
     parsed_args = parse_args(s)
@@ -76,12 +84,16 @@ rep_start = parsed_args["rep_start"]
 rep_end = parsed_args["rep_end"]
 SF = parsed_args["SF"] 
 gene_len = parsed_args["gene_len"]  
+tree = parsed_args["tree"]
+tree in ("reptile", "plant", "plant_1000pop") ||
+  error("--tree must be reptile, plant or plant_1000pop")
 
 # Set up folders
 paramname_root = set_up_paramname_root(dup_rate, loss_rate, 
                                     ratevar, n_inds, SF,
                                     gene_len) 
-outfolder = "output/$paramname_root"
+outroot = (tree == "reptile" ? "output" : "output_$tree")
+outfolder = "$outroot/$paramname_root"
 
 # Check if the output folder exists
 if !isdir(outfolder)
@@ -119,27 +131,41 @@ end
 #   Calculate RF distances to true species tree
 #-----------------------------------------------#
 
-# True species tree used in calculations
-true_species_tree = readnewick("(A,((((B,C),(D,E)),F),(G,H)));")
-
 #=
  If the estimated tree under H=0 or displayed trees under H=1 are 
- not the true species tree (A,((G,H),(F,((B,C),(D,E))))); 
- 
- Then, we want to understand if it could be the following alternatives 
+ not the true species tree, we want to understand if it could be one of
+ three alternatives, so we also compute RF distances to them.
+ Reptile tree (A,((G,H),(F,((B,C),(D,E))))); F sits on the shortest branches:
  1. alter1 (A,((G,H),(((B,C),F),(D,E)))); F is clustered with (B,C) 
  2. alter2 (A,((G,H),((B,C),(F,(D,E))))); F is clustered with (D,E) 
  3. alter3 (A,(((G,H),((D,E),(B,C))),F)); F is outside of (B,C),(D,E),(G,H)
-Therefore, not only we calculate RF distance to true species tree,
-    but also to these three alternatives. This will help us understand 
-    why the estimated tree is different from the true species tree. 
+ Plant tree (A,(B,((C,D),(E,(H,(F,G)))))); B sits on the 0.16 CU branch
+ between the ingroup crown and (B,A), and (F,G) vs H is the next shortest:
+ 1. alter1 (A,((B,(C,D)),(E,(H,(F,G))))); B is clustered with (C,D)
+ 2. alter2 (A,((C,D),(B,(E,(H,(F,G)))))); B is clustered with the E clade
+ 3. alter3 (A,(B,((C,D),(E,(F,(G,H)))))); H moved next to G
+ The "noF/noG/noH" columns drop one taxon before the RF comparison:
+ F, G, H for reptiles; B, F, G for plants (names kept for the columns).
 =# 
-alter1 = readnewick("(A,((G,H),(((B,C),F),(D,E))));") # F with (B,C)
-alter2 = readnewick("(A,((G,H),((B,C),(F,(D,E)))));") # F with (D,E)
-alter3 = readnewick("(A,(((G,H),((D,E),(B,C))),F));") # F outside all
-species_tree_noF = readnewick("(A,((G,H),((B,C),(D,E))));") # no F
-species_tree_noG = readnewick("(A,((((B,C),(D,E)),F),H));") # no G
-species_tree_noH = readnewick("(A,((((B,C),(D,E)),F),G));") # no H
+if startswith(tree, "plant")
+  true_species_tree = readnewick("(A,(B,((C,D),(E,(H,(F,G))))));")
+  alter1 = readnewick("(A,((B,(C,D)),(E,(H,(F,G)))));")
+  alter2 = readnewick("(A,((C,D),(B,(E,(H,(F,G))))));")
+  alter3 = readnewick("(A,(B,((C,D),(E,(F,(G,H))))));")
+  taxon_noF, taxon_noG, taxon_noH = "B", "F", "G"
+else
+  true_species_tree = readnewick("(A,((((B,C),(D,E)),F),(G,H)));")
+  alter1 = readnewick("(A,((G,H),(((B,C),F),(D,E))));") # F with (B,C)
+  alter2 = readnewick("(A,((G,H),((B,C),(F,(D,E)))));") # F with (D,E)
+  alter3 = readnewick("(A,(((G,H),((D,E),(B,C))),F));") # F outside all
+  taxon_noF, taxon_noG, taxon_noH = "F", "G", "H"
+end
+species_tree_noF = deepcopy(true_species_tree)
+deleteleaf!(species_tree_noF, taxon_noF)
+species_tree_noG = deepcopy(true_species_tree)
+deleteleaf!(species_tree_noG, taxon_noG)
+species_tree_noH = deepcopy(true_species_tree)
+deleteleaf!(species_tree_noH, taxon_noH)
 
 """
 Calculate RF distances between estimated tree and alternative trees
@@ -172,7 +198,7 @@ for simulation_rep in rep_start:rep_end
         rf0_noF = NaN
         try
             net0_noF = deepcopy(net0)
-            deleteleaf!(net0_noF, "F") 
+            deleteleaf!(net0_noF, taxon_noF) 
             rf0_noF = mudistance_semidirected(
                 net0_noF, species_tree_noF, preorder=true)
         catch e
@@ -263,13 +289,13 @@ for simulation_rep in rep_start:rep_end
             displayed_tree1_noF = deepcopy(displayed_trees[1])
             displayed_tree1_noG = deepcopy(displayed_trees[1]) 
             displayed_tree1_noH = deepcopy(displayed_trees[1]) 
-            deleteleaf!(displayed_tree1_noF, "F") 
+            deleteleaf!(displayed_tree1_noF, taxon_noF) 
             rf1_noF = mudistance_semidirected(
                 displayed_tree1_noF, species_tree_noF, preorder=true)
-            deleteleaf!(displayed_tree1_noG, "G")
+            deleteleaf!(displayed_tree1_noG, taxon_noG)
             rf1_noG = mudistance_semidirected(
                 displayed_tree1_noG, species_tree_noG, preorder=true)
-            deleteleaf!(displayed_tree1_noH, "H")
+            deleteleaf!(displayed_tree1_noH, taxon_noH)
             rf1_noH = mudistance_semidirected(
                 displayed_tree1_noH, species_tree_noH, preorder=true)
         catch e
@@ -278,7 +304,7 @@ for simulation_rep in rep_start:rep_end
         end
         try
             displayed_tree2_noF = deepcopy(displayed_trees[2])
-            deleteleaf!(displayed_tree2_noF, "F")
+            deleteleaf!(displayed_tree2_noF, taxon_noF)
             rf2_noF = mudistance_semidirected(
                 displayed_tree2_noF, species_tree_noF, preorder=true)
         catch e
@@ -286,7 +312,7 @@ for simulation_rep in rep_start:rep_end
         end
         try
             displayed_tree2_noG = deepcopy(displayed_trees[2])
-            deleteleaf!(displayed_tree2_noG, "G")
+            deleteleaf!(displayed_tree2_noG, taxon_noG)
             rf2_noG = mudistance_semidirected(
                 displayed_tree2_noG, species_tree_noG, preorder=true)
         catch e
@@ -294,7 +320,7 @@ for simulation_rep in rep_start:rep_end
         end
         try
             displayed_tree2_noH = deepcopy(displayed_trees[2])
-            deleteleaf!(displayed_tree2_noH, "H")
+            deleteleaf!(displayed_tree2_noH, taxon_noH)
             rf2_noH = mudistance_semidirected(
                 displayed_tree2_noH, species_tree_noH, preorder=true)
         catch e

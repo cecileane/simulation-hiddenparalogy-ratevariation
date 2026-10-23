@@ -3,8 +3,13 @@ This script postprocesses simulation results by calculating RF distances
 between true and estimated trees.
 
 Usage:
-julia scripts/simulation_postprocess.jl \
+julia scripts/simulation_postprocess.jl --tree reptile \
   --dup_rate 0.0 --loss_rate 0.0 --ratevar N --n_reps 100
+
+--tree (reptile or plant) selects the true species tree and the output
+folder (output/ or output_plant/). The "noF" statistics drop the taxon on
+the shortest branches of the species tree: F for reptiles, B for plants.
+The column names keep the "noF" suffix for both trees.
 
 Output: Creates CSV files with RF distance comparisons in the output folder.
 =#
@@ -68,6 +73,11 @@ function parse_commandline()
       arg_type = Int 
       default = 1000
 
+    "--tree"
+      help = "Species tree used in the simulation: reptile, plant or plant_1000pop"
+      arg_type = String
+      required = true
+
   end 
   return parse_args(s) 
 end
@@ -82,6 +92,25 @@ n_inds = parsed_args["n_inds"]
 scaling_factor_branch_length = parsed_args["SF"]
 scaling_factor_branch_length = Float64(scaling_factor_branch_length)  
 gene_len = parsed_args["gene_len"] 
+tree = parsed_args["tree"]
+tree in ("reptile", "plant", "plant_1000pop") ||
+  error("--tree must be reptile, plant or plant_1000pop")
+
+# True species tree of the simulation: topology only, and in generations as
+# given to SimPhy (before the SF scaling). taxon_to_remove is dropped in the
+# "noF" analysis: F sits on the shortest branches of the reptile tree,
+# B on those of the plant tree (2Ne = 400, or 1000 for plant_1000pop).
+if startswith(tree, "plant")
+  true_species_newick = "(A,(B,((C,D),(E,(H,(F,G))))));"
+  true_species_newick_gen = (tree == "plant" ?
+    "(A:3372,(((C:1176,D:1176):1508,(E:2368,(H:1988,(F:1812,G:1812):176):380):316):64,B:2748):624);" :
+    "(A:8430,(((C:2940,D:2940):3770,(E:5920,(H:4970,(F:4530,G:4530):440):950):790):160,B:6870):1560);")
+  taxon_to_remove = "B"
+else
+  true_species_newick = "(A,((((B,C),(D,E)),F),(G,H)));"
+  true_species_newick_gen = "(A:3440,((((B:880,C:880):1710,(D:930,E:930):1660):170,F:2760):180,(G:500,H:500):2440):500);"
+  taxon_to_remove = "F"
+end
 
 #--------------- set up folders and paths ---------------# 
 # Use the repository (script) directory as the rootfolder so paths are stable
@@ -95,7 +124,8 @@ paramname_root = set_up_paramname_root(dup_rate,
                                       n_inds, 
                                       scaling_factor_branch_length,
                                       gene_len)
-outfolder = joinpath(rootfolder, "output", paramname_root) 
+outroot = (tree == "reptile" ? "output" : "output_$tree")
+outfolder = joinpath(rootfolder, outroot, paramname_root)
 
 if !isdir(outfolder)
     error("Output folder does not exist: $outfolder. " *
@@ -117,6 +147,10 @@ end
 @everywhere global n_reps = $n_reps
 @everywhere global rootfolder = $rootfolder
 @everywhere global folder_path_list = $folder_path_list
+@everywhere global tree = $tree
+@everywhere global true_species_newick = $true_species_newick
+@everywhere global true_species_newick_gen = $true_species_newick_gen
+@everywhere global taxon_to_remove = $taxon_to_remove
 
 
 #-----------------------------------------------#
@@ -1102,8 +1136,7 @@ This requires to examine the locus tree and species tree.
             return (line, "false", 0.0)
 
         else 
-            true_sp_nwk = "(A:3440,((((B:880,C:880):1710,(D:930,E:930):1660):170,F:2760):180,(G:500,H:500):2440):500);"
-            true_species_tree = readnewick(true_sp_nwk)
+            true_species_tree = readnewick(true_species_newick_gen)
             # prune tips on locus tree (those starting with "lost-")
             # This has been done above
             # trim anything after "_" in the tip names
@@ -1178,7 +1211,7 @@ function postexamine_HP_based_on_locus_tree(
     n_reps::Int,
     paramname_root::String,
     folder_path_list::Vector,
-    species_tree::String = "(A,((((B,C),(D,E)),F),(G,H)));"
+    species_tree::String = true_species_newick
 )
   fname = "Simphy_gene_duplication_and_loss_$paramname_root.csv"
   HP_file_path = joinpath(outfolder, fname)
@@ -1236,7 +1269,7 @@ end
     and the estimated species tree.
 
   Notes:
-    - The true species tree is hardcoded as "(A,((((B,C),(D,E)),F),(G,H)));".
+    - The true species tree is true_species_newick (set by --tree).
     - If n_inds = 1, the gene trees are treated as single-copy.
         - Both trees are rooted at node "A" before comparison.
     - If n_inds > 1, the gene trees are treated as multi-copy. 
@@ -1271,7 +1304,7 @@ end
     cleaned_tree_string = replace(cleaned_tree_string, r"\bnan:" => "0.0:")
     cleaned_tree_string = replace(cleaned_tree_string, r"\bnan\b" => "0.0")
     astraltre = readnewick(cleaned_tree_string)
-    true_species = readnewick("(A,((((B,C),(D,E)),F),(G,H));")
+    true_species = readnewick(true_species_newick)
 
     # The astral tree might not have matching tips with the true species tree
     # although this should be very rare because with n_genes = 1000, 
@@ -1313,7 +1346,7 @@ end
     
     # Use the new mapping-aware RF distance calculation
     rf_result = calculate_rf_distance_simphy_vs_species(
-        "(A,((((B,C),(D,E)),F),(G,H)));",  # true species tree
+        true_species_newick,
         simphyfolder,
         mappingfile,
         n_inds,
@@ -1504,7 +1537,7 @@ tree and the true species tree.
                                                 simphy_folder::String,
                                                 mapping_file::String, 
                                                 n_inds::Int,
-                                                remove_F_analysis::Bool = True)
+                                                remove_F_analysis::Bool = true)
         #= if remove_F_analysis = True (default), 
             Then, we want to remove "F" from the gene tree and the species tree 
             and then re-calculate RF distance. 
@@ -1516,7 +1549,7 @@ tree and the true species tree.
 
         if remove_F_analysis
             species_tree_noF = deepcopy(species_tree)
-            deleteleaf!(species_tree_noF, "F")
+            deleteleaf!(species_tree_noF, taxon_to_remove)
         end 
 
         individual_to_species =
@@ -1575,8 +1608,8 @@ tree and the true species tree.
                     if remove_F_analysis
                         mapped_subgene_tree_noF = deepcopy(mapped_subgene_tree)
                         # Check if F exists before trying to delete
-                        if "F" in tipLabels(mapped_subgene_tree_noF)
-                            deleteleaf!(mapped_subgene_tree_noF, "F")
+                        if taxon_to_remove in tipLabels(mapped_subgene_tree_noF)
+                            deleteleaf!(mapped_subgene_tree_noF, taxon_to_remove)
                         end
                     end
 
@@ -1650,8 +1683,8 @@ tree and the true species tree.
                 if remove_F_analysis # need to be run after mapping 
                     mapped_gene_tree_noF = deepcopy(mapped_gene_tree)
                     # Check if F exists before trying to delete
-                    if "F" in tipLabels(mapped_gene_tree_noF)
-                        deleteleaf!(mapped_gene_tree_noF, "F")
+                    if taxon_to_remove in tipLabels(mapped_gene_tree_noF)
+                        deleteleaf!(mapped_gene_tree_noF, taxon_to_remove)
                     end
                 end 
 

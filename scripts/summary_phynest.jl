@@ -28,10 +28,14 @@
 #           results/PhyNEST_model_choice_by_factor.csv  (% h=1 by level)
 #           visualization_results/phynest/*             (diagnostic plots)
 # Usage   : julia --project=. scripts/summary_phynest.jl
-#           (optional overrides: --input_dir, --output_file, --threshold_file,
-#                                --factor_summary_file, --gamma_summary_file,
-#                                --model_choice_file,
+#           (optional overrides: --tree, --input_dir, --output_file,
+#                                --threshold_file, --factor_summary_file,
+#                                --gamma_summary_file, --model_choice_file,
 #                                --visualization_output_dir, --quantile)
+#           --tree plant or plant_1000pop adds a _plant (_plant_1000pop)
+#           suffix to the defaults of the other paths, as in summary_snaq.jl,
+#           so that the thresholds of each species tree are calibrated from
+#           that tree's settings only.
 # Note    : Run after phynest_postprocess.jl has populated phynest_summary/.
 # ============================================================================
 
@@ -72,6 +76,11 @@ function parse_commandline()
             help = "Quantile of the pooled distribution of T used as T*"
             arg_type = Float64
             default = 0.95
+        "--tree"
+            help = "reptile (default), plant or plant_1000pop; with plant, the " *
+                   "defaults of the other options get a _plant suffix " *
+                   "(_plant_1000pop for plant_1000pop)"
+            default = "reptile"
     end
     return parse_args(s)
 end
@@ -291,6 +300,26 @@ function main()
     model_choice_file = args["model_choice_file"]
     visualization_dir = args["visualization_output_dir"]
     q = args["quantile"]
+    # plant results are kept in folders and files with a _plant suffix;
+    # only the defaults are changed, explicit paths are kept as given
+    if args["tree"] != "reptile"
+        sfx = "_" * args["tree"]
+        input_dir == "phynest_summary" &&
+            (input_dir = "phynest_summary$sfx")
+        output_file == "results/PhyNEST_summary.csv" &&
+            (output_file = "results/PhyNEST_summary$sfx.csv")
+        threshold_file == "results/PhyNEST_T_threshold.csv" &&
+            (threshold_file = "results/PhyNEST_T_threshold$sfx.csv")
+        factor_file == "results/PhyNEST_T_summary_by_factor.csv" &&
+            (factor_file = "results/PhyNEST_T_summary_by_factor$sfx.csv")
+        gamma_file == "results/PhyNEST_gamma_summary_by_factor.csv" &&
+            (gamma_file = "results/PhyNEST_gamma_summary_by_factor$sfx.csv")
+        model_choice_file == "results/PhyNEST_model_choice_by_factor.csv" &&
+            (model_choice_file =
+                "results/PhyNEST_model_choice_by_factor$sfx.csv")
+        visualization_dir == "visualization_results/phynest" &&
+            (visualization_dir = "visualization_results/phynest$sfx")
+    end
 
     if !isdir(input_dir)
         println("Error: Directory '$input_dir' not found!")

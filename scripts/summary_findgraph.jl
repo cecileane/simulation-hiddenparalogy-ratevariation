@@ -22,6 +22,7 @@ using Statistics
 using ArgParse
 
 using PrettyTables
+include(joinpath(@__DIR__, "utilities.jl")) # summarize_*_by_threshold
 
 """
 Parse command line arguments
@@ -38,6 +39,11 @@ function parse_commandline()
         "--visualization_output_dir"
             help = "Output directory for visualization files"
             default = "visualization_results/findgraph"
+        "--tree"
+            help = "reptile (default), plant or plant_1000pop; with plant, the " *
+                   "defaults of the other options get a _plant suffix " *
+                   "(_plant_1000pop for plant_1000pop)"
+            default = "reptile"
         # LEGACY (disabled for Dryad/paper submission, 2026-05): taxon-recovery
         # analysis is not used in the published paper. The argument and the
         # functions below are kept for reference but never invoked.
@@ -350,9 +356,19 @@ function main()
 
     args = parse_commandline()
     
+    # plant results are kept in folders and files with a _plant suffix
     input_dir = args["input_dir"]
     output_file = args["output_file"]
     visualization_output_dir = args["visualization_output_dir"] 
+    if args["tree"] != "reptile"
+        sfx = "_" * args["tree"]
+        input_dir == "findgraph_summary" &&
+            (input_dir = "findgraph_summary$sfx")
+        output_file == "./results/findgraph_summary.csv" &&
+            (output_file = "./results/findgraph_summary$sfx.csv")
+        visualization_output_dir == "visualization_results/findgraph" &&
+            (visualization_output_dir = "visualization_results/findgraph$sfx")
+    end
     
     # Check if input directory exists
     if !isdir(input_dir)

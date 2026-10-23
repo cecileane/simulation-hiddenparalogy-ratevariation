@@ -17,9 +17,6 @@ per-branch multipliers give the lineage-specific substitution rates.
 
 Run from the repo root (each step is skipped if its output exists):
   julia --project=. scripts/speciestree/speciestree_angiosperm.jl
-needs: executables/iqtree2 (v2.4.0), executables/Astral/astral.5.7.8.jar,
-Rscript with ape (for scripts/speciestree/calibrate.r)
-These set of softwares are compatible with the rest of the repo.
 
 taxa: 1 gymnosperm outgroup + 7 basal angiosperms (Zuntini et al. 2024 without
 monocots and eudicots). Kew "Sequence_ID" of each sample in parentheses.
@@ -446,34 +443,144 @@ The multipliers are all between 0.69 and 1.56: the stem and Pinus get the same
 one (1.10) because their substitutions were split in proportion to CU.
 =#
 
+# same tree with 2Ne = 1000 (--tree plant_1000pop in simulation.jl), as for
+# the reptile tree. 2Ne = 400 makes the dup/loss settings too slow to run.
+# With 2Ne = 1000 the tree is ~2.5 times longer in generations than the
+# reptile tree, so the dup/loss rates per generation are lowered instead.
+# Same CU and multipliers, only the generations and -su change.
+eff_pop_1000 = 1000
+su_1000 = bar_r / eff_pop_1000
+tree_ngen_1000 = deepcopy(tree)
+for e in tree_ngen_1000.edge; e.length = round(e.length * eff_pop_1000); end
+simphy_flat_1000 = replace(writenewick(tree_ngen_1000), ".0" => "")
+simphy_mult_1000 = simphynewick(tree_ngen_1000, tree_mult)
+println("2Ne = 1000: height ", round(Int, height_cu * eff_pop_1000),
+        " generations, sum of all branches ",
+        round(Int, cu_total * eff_pop_1000), " generations, -su f:", su_1000)
+println("SimPhy tree, no lineage variation (2Ne = 1000):\n", simphy_flat_1000)
+println("SimPhy tree with multipliers (2Ne = 1000):\n", simphy_mult_1000)
+open(joinpath(datadir, "simphy_tree_angiosperm_1000pop.txt"), "w") do io
+    println(io, "# taxa: ",
+            join(["$(r.letter)=$(r.code)" for r in eachrow(taxa)], ", "))
+    println(io, "# 2Ne = ", eff_pop_1000, " (--tree plant_1000pop in ",
+            "simulation.jl), height ", round(Int, height_cu * eff_pop_1000),
+            " generations (reptile: 3440)")
+    println(io, "# -su f:", su_1000)
+    println(io, "# -hl ", hl)
+    println(io, "# species tree, coalescent units:\n", writenewick(tree))
+    println(io, "# species tree, substitutions/site:\n", writenewick(sub_tree))
+    println(io, "# SimPhy species tree, no lineage rate variation ",
+            "(generations, 2Ne=$eff_pop_1000):\n", simphy_flat_1000)
+    println(io, "# SimPhy species tree with lineage-specific multipliers:\n",
+            simphy_mult_1000)
+end
+
 #--------------------------------------------------------------------#
-# 7. parameters for seq-gen: from the loci for which ModelFinder chose HKY
-#    (same as notes/choice-seqgen-parameters.md for the reptile loci)
+# 7. parameters for seq-gen, as in notes/choice-seqgen-parameters.md for the
+# reptile loci: kappa from the loci for which ModelFinder chose HKY,
+# gamma shape and base frequencies from all loci (any model with G / F)
+# the same procedue to mimic reptile 
 #--------------------------------------------------------------------#
 models = readlines(joinpath(iqdir, "loci.best_model.nex"))
-hky = filter(l -> occursin("HKY", l), models)
-kappa = [parse(Float64, m.captures[1]) for l in hky
+# same patterns as the grep commands in choice-seqgen-parameters.md:
+# "G[0-9]{...}", "HKY{...}" and "F{...}"
+alpha = [parse(Float64, m.captures[1]) for l in models
+         for m in eachmatch(r"G[0-9]\{([0-9.]+)\}", l)]
+kappa = [parse(Float64, m.captures[1]) for l in models
          for m in eachmatch(r"HKY\{([0-9.]+)\}", l)]
-alpha = [parse(Float64, m.captures[1]) for l in hky
-         for m in eachmatch(r"G4\{([0-9.]+)\}", l)]
-freqs = [parse.(Float64, split(m.captures[1], ",")) for l in hky
+freqs = [parse.(Float64, split(m.captures[1], ",")) for l in models
          for m in eachmatch(r"F\{([0-9.,]+)\}", l)]
-println("\nloci with HKY: ", length(kappa), " of ", length(genetrees))
-println("kappa: ", fit(LogNormal, kappa),
-        " (mean ", round(mean(kappa), digits=3), ")")
-println("gamma shape: ", fit(LogNormal, alpha),
-        " (mean ", round(mean(alpha), digits=3), ")")
+println("\nof ", length(genetrees), " loci: ", length(kappa),
+        " with HKY (kappa), ", length(alpha), " with G (alpha), ",
+        length(freqs), " with F (base freqs)")
+# as for the reptile loci: fit normal, log-normal and gamma, keep the best.
+# (reptile: gamma was best for alpha, log-normal for kappa; here log-normal
+# is best for both)
+for (name, x) in [("kappa", kappa), ("gamma shape alpha", alpha)]
+    println(name, " (mean ", round(mean(x), digits=3), "):")
+    for family in [Normal, LogNormal, Gamma]
+        d = fit(family, x)
+        println("  loglik=$(round(sum(logpdf.(d, x)), digits=1)), $d")
+    end
+end
 println("base frequencies: ", fit(Dirichlet, reduce(hcat, freqs)))
-#= we get, from 27 HKY loci (TPM2u+F+G4 chosen for 52 loci, TIM2+F+G4 for 26):
-kappa: LogNormal(1.3330, 0.2079), mean 3.876
-gamma shape: LogNormal(-0.4045, 0.6540), mean 0.833
-base frequencies: Dirichlet([109.99, 75.31, 88.96, 106.00])
+#= we get, of 260 loci: 27 with HKY (kappa), 230 with G (alpha),
+189 with F (base frequencies)
+27 loci seem to be very small but this mimics what we did for the
+    reptile loci. In reptile tree, the substitution models we chose is 
+    HKY models and here we keep this consistent by also 
+    using HKY for the angiosperm tree. 
+Note: 
+Fitting HKY+F+G4 to all 260 loci (iqtree2 -m HKY+F+G4) gives a very similar
+kappa, LogNormal(1.317, 0.151) with median 3.73 (3.72 from the 27 HKY loci),
+and similar base frequencies (means 0.280, 0.196, 0.251, 0.273). 
+This means that whether using loci with HKY only or all loci are similar 
+    and thus we can choose to mimic what we have for the reptile trees to 
+    follow the same procedure. 
+kappa (mean 3.876): loglik -34.4 normal, -31.4 log-normal, -32.2 gamma
+  -> LogNormal(1.3330, 0.2079)
+gamma shape alpha (mean 0.948): loglik -262.5 normal, -172.8 log-normal,
+  -191.6 gamma -> LogNormal(-0.3262, 0.7122)
+base frequencies: Dirichlet([101.99, 69.27, 90.29, 100.32])
+
+Comparison with the reptile loci (notes/choice-seqgen-parameters.md):
+kappa: log-normal is the best fit for both trees (reptile: loglik -864.9
+  normal, -812.8 log-normal, -823.0 gamma). Here log-normal beats gamma by
+  only 0.8 with 27 loci, but it is also the best fit on the HKY+F+G4 refit
+  of all 260 loci (-230.2 normal, -219.9 log-normal, -222.1 gamma), so the
+  choice is stable.
+alpha: gamma was the best fit for the reptile loci (110.9 normal, 177.2
+  log-normal, 191.6 gamma), but log-normal is clearly the best fit here, so
+  alpha is sampled from a log-normal for this tree (same rule as for the
+  reptiles: keep the best of the three).
+
+Why HKY for this tree (besides being the same model as for the reptiles).
+Best models chosen by ModelFinder (BIC, iqtree/loci.iqtree), by matrix:
+TPM2u 76, TIM2 47, TPM2 42, HKY 27, K2P 17, TPM3u 11, TIM3 10, TN 8,
+GTR 6, TPM3 6, TNe 5, TVM 2, TIM 1, K3Pu 1, K3P 1.
+Most common full model: TPM2u+F+G4 (52 loci), then TIM2+F+G4 (26),
+TPM2+FQ+G4 (24), TIM2+F+I+G4 (19), TPM2u+F+I+G4 (19), HKY+F+G4 (17).
+The 27 HKY loci (kappa) are HKY+F+G4 17, HKY+F+I+G4 6, HKY+F+I 1,
+HKY+F+R2 1, HKY+F+R3 1, HKY+F+I+R2 1.
+First, there is no model that obviously dominates across all loci;
+different loci favor different models.
+
+How they relate to HKY (one transition rate AG=CT, one transversion rate
+AC=AT=CG=GT, unequal base frequencies; FQ = equal frequencies):
+- HKY or K2P: 44 loci (17%).
+- HKY with transversions in 2 classes, AG=CT kept (TPM2/TPM2u, TPM3/TPM3u,
+  K3P/K3Pu, TVM): 139 loci (53%). Mostly TPM2: AC=AT about 2x CG=GT
+  (median ratio 2.0).
+- 2 transition rates, AG != CT (TN/TNe, TIM/TIM2/TIM3, GTR): 77 loci (30%),
+  CT about 1.6x AG (median AG/CT 0.6).
+So 183/260 loci (70%) keep HKY's single transition rate, and the main
+departure is one extra transversion parameter (TPM2 pattern in 165 loci).
+All 260 models separate transitions from transversions (none chose JC or
+F81), and the ts/tv bias is the same whatever the model: the mean
+transition rate / mean transversion rate has median 3.71 over all loci,
+3.72 for the 27 HKY loci (= kappa).
+From iqtree/loci.model.gz (log-likelihoods of all models tried per locus):
+- kappa alone gives a median 90% (IQR 86-93%) of the log-likelihood gain
+  from F81+F+G4 to GTR+F+G4 (239 loci with all three), so the 4 extra GTR
+  rates add about 10%.
+- BIC prefers HKY+F+G4 over GTR+F+G4 in 140/239 loci (median dBIC -3.3).
+- HKY is not the best model for most loci though: with the same rate
+  heterogeneity as the best model, HKY is within 10 BIC units of the best
+  in 119/260 loci (median dBIC 11.2).
+- base composition is homogeneous across taxa: 107/2080 sequences (5.1%)
+  fail the IQ-TREE composition chi2 test (5% expected by chance), so a
+  stationary model like HKY is fine.
+seq-gen could also simulate all of these matrices (as GTR with -r) and +I,
+but not the FreeRate +R models (19 loci).
+However, HKY keeps the main signal (kappa and base frequencies) 
+with 1 rate parameter, fitted from the loci. It keeps the most 
+important signals but it is also simpler. 
 =#
 
 #--------------------------------------------------------------------#
 # 8. plot: left: the tree in coalescent units, "CU (x multiplier)" on each
-#    edge; right: branch lengths in substitutions per site as simulated,
-#    i.e. generations x su x lineage multiplier (= d_i)
+# edge; right: branch lengths in substitutions per site as simulated,
+# i.e. generations x su x lineage multiplier (= d_i)
 #--------------------------------------------------------------------#
 tree_subs = deepcopy(tree) # as simulated
 for (e, eg, em) in zip(tree_subs.edge, tree_ngen.edge, tree_mult.edge)

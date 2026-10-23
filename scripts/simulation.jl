@@ -54,7 +54,8 @@ OUTPUT STRUCTURE
 output/
 └── <paramname_root>/    e.g. DUP0.0003-LOS0.0003-RVG-N_ind1-SF1.0-genelen1000
     ├── rep001/
-    │   ├── genetrees_simphy/     Raw SimPhy output (kept for inspection)
+    │   ├── genetrees_simphy/     Raw SimPhy output (kept for inspection;
+    │   │                         locus trees of discarded genes blanked)
     │   ├── genetrees_singlecopy/ Filtered & renamed gene trees (.trees)
     │   ├── seqgenfolder/         Simulated alignments (.fasta)
     │   ├── iqtreefolder/         IQ-Tree output (besttrees.tre, …)
@@ -89,11 +90,13 @@ REQUIRED ARGUMENTS
 
 OPTIONAL ARGUMENTS
 ------------------
-  --tree                STR    Species tree: reptile (default) | plant
-                               (angiosperm tree, scripts/speciestree/)
+  --tree                STR    Species tree: reptile (default) | plant |
+                               plant_1000pop (angiosperm tree,
+                               scripts/speciestree/, 2Ne = 400 or 1000)
   --n_inds              INT    Individuals per taxon (default: 1)
   --Ne                  INT    Effective population size
-                               (default: 1000 for reptile, 400 for plant)
+                               (default: 1000 for reptile and
+                               plant_1000pop, 400 for plant)
   --SF                  FLOAT  Ne scaling factor; SF<1 → more ILS (default: 1.0)
   --gene_len            INT    Alignment length in bp (default: 1000)
   --seqgen_model        STR    all_genes_same_HKY | all_genes_diff_HKY (default)
@@ -155,11 +158,12 @@ function parse_commandline()
       arg_type = Int
       default = 1
     "--tree"
-      help = "Species tree: 'reptile' or 'plant' (angiosperm tree)"
+      help = "Species tree: 'reptile', 'plant' or 'plant_1000pop' " *
+             "(angiosperm tree with 2Ne = 400 or 1000)"
       arg_type = String
       required = true 
     "--Ne"
-      help = "Effective population size (Default = 1000 for reptile, 400 for plant)"
+      help = "Effective population size (Default = 1000 for reptile and plant_1000pop, 400 for plant)"
       arg_type = Int
       default = nothing
     "--generation_time"
@@ -202,6 +206,11 @@ function parse_commandline()
       help = "Debugging mode: Keep all temporary folders"
       default = false
       arg_type = Bool
+    "--reuse_genetrees"
+      help = "Reuse the SimPhy gene trees already in the output folder " *
+             "for testing and debugging"
+      default = false
+      arg_type = Bool
     "--log"
       help = "Enable logging: Save all screen output to screen_<paramname>.log"
       default = true
@@ -225,8 +234,9 @@ ratevar = parsed_args["ratevar"]
 n_reps = parsed_args["n_reps"] # number of replicates 
 n_genes = parsed_args["n_genes"] # number of genes 
 n_inds = parsed_args["n_inds"] # Number of individuals per taxa -- default = 1
-tree = parsed_args["tree"] # "reptile" or "plant": which species tree
-tree in ["reptile", "plant"] || error("Invalid --tree: $tree. Valid: reptile, plant")
+tree = parsed_args["tree"] # "reptile", "plant" or "plant_1000pop"
+tree in ["reptile", "plant", "plant_1000pop"] ||
+  error("Invalid --tree: $tree. Valid: reptile, plant, plant_1000pop")
 Ne = parsed_args["Ne"] # Effective population size: 1000 reptile, 400 plant
 if Ne === nothing
   Ne = (tree == "plant" ? 400 : 1000)
@@ -243,6 +253,7 @@ SF = parsed_args["SF"] # SF stands for scaling factor
 SF = Float64(SF) 
 # debug_mode: keep all intermediate folders if true
 debug_mode = parsed_args["debug_mode"]
+reuse_genetrees = parsed_args["reuse_genetrees"]
 # log mode - if true, save all screen output to a log file
 log_output = parsed_args["log"] 
 max_taxa_missing = parsed_args["max_taxa_missing"] 
@@ -255,14 +266,19 @@ gene_len = parsed_args["gene_len"]  # length of simulated gene sequences
 rootfolder = pwd()
 paramname_root = set_up_paramname_root(
     dup_rate, loss_rate, ratevar, n_inds, SF, gene_len)
-# reptile runs go to output/, plant runs to output_plant/ (same paramname)
-outroot = (tree == "plant" ? "output_plant" : "output")
+# reptile runs go to output/, plant runs to output_plant/ and
+# plant_1000pop runs to output_plant_1000pop/ (same paramname)
+outroot = (tree == "reptile" ? "output" : "output_$tree")
 outfolder = joinpath(rootfolder, outroot, paramname_root)
 
 # The below function checks if a path exists:
-# If yes, the function will ask user's input tp decide if to remove the path 
-check_existing_dir([outfolder]) # see utilities.jl --> input needs to be a list
-mkpath(outfolder) # create a new one if there is no pre-existing outfolder
+# If yes, the function will ask to decide if to remove the path 
+if reuse_genetrees
+  isdir(outfolder) || error("--reuse_genetrees: $outfolder does not exist")
+else
+  check_existing_dir([outfolder]) # see utilities.jl --> input needs to be a list
+  mkpath(outfolder) # create a new one if there is no pre-existing outfolder
+end
 
 folder_path_list = [] # create folder path 
 for n in 1:n_reps # All outputs goes to each rep file 
@@ -305,6 +321,8 @@ end
 # reptile: scripts/speciestree/speciestree_reptile.jl (2Ne = 1000)
 # plant: scripts/speciestree/speciestree_angiosperm.jl, values copied from
 #        data/kew_a353/simphy_tree_angiosperm.txt (2Ne = 400)
+# plant_1000pop: same angiosperm tree with 2Ne = 1000, values copied from
+#        data/kew_a353/simphy_tree_angiosperm_1000pop.txt
 if tree == "reptile"
   # -hl: log-normal distribution of gene rates
   hl_param = "ln:-0.19,0.6164414002968976"
@@ -317,14 +335,22 @@ if tree == "reptile"
       "F:2760):180,(G:500,H:500):2440):500);"
   # seq-gen HKY parameters: all genes the same (kappa, base freq, alpha)
   seqgen_same_HKY = (4.143, [0.316,0.182,0.183,0.319], 0.356)
-else # plant
+elseif tree == "plant"
   hl_param = "ln:-0.03634,0.269593"
   su_param = "0.00010293039257500044"
   species_tree_mult = "(A:3372*1.104565,(((C:1176*1.085755,D:1176*1.12242):1508*1.108897,(E:2368*0.685743,(H:1988*1.564038,(F:1812*0.789595,G:1812*0.721226):176*1.233907):380*0.842807):316*0.954714):64*0.993533,B:2748*0.896529):624*1.104565);"
   species_tree_flat = "(A:3372,(((C:1176,D:1176):1508,(E:2368,(H:1988," *
       "(F:1812,G:1812):176):380):316):64,B:2748):624);"
-  # medians over the 27 angiosperm loci for which ModelFinder chose HKY
-  seqgen_same_HKY = (3.720, [0.289,0.198,0.234,0.279], 0.559)
+  # means over the 27 angiosperm loci for which ModelFinder chose HKY
+  # (as for the reptile values above: means over the HKY loci)
+  seqgen_same_HKY = (3.876, [0.290,0.197,0.233,0.279], 0.833)
+else # plant_1000pop
+  hl_param = "ln:-0.03634,0.269593"
+  su_param = "4.117215703000018e-5"
+  species_tree_mult = "(A:8430*1.104565,(((C:2940*1.085755,D:2940*1.12242):3770*1.108897,(E:5920*0.685743,(H:4970*1.564038,(F:4530*0.789595,G:4530*0.721226):440*1.233907):950*0.842807):790*0.954714):160*0.993533,B:6870*0.896529):1560*1.104565);"
+  species_tree_flat = "(A:8430,(((C:2940,D:2940):3770,(E:5920,(H:4970," *
+      "(F:4530,G:4530):440):950):790):160,B:6870):1560);"
+  seqgen_same_HKY = (3.876, [0.290,0.197,0.233,0.279], 0.833)
 end
 
 #-----------------------------------------------#       
@@ -391,6 +417,32 @@ else
   species_tree = species_tree_flat
   parameters *= "-s $species_tree\n"
   parameters *= "-su f:$su_param //substitution rate\n"
+end
+
+if reuse_genetrees # testing and debugging function 
+  # the existing folder must come from this species tree, hold enough gene
+  # trees in every replicate, and be where its gene-tree paths were recorded
+  old_log = joinpath(outfolder, "arguments-$paramname_root.log")
+  simphy_log = joinpath(outfolder, "arguments-$paramname_root-simphy.log")
+  isfile(simphy_log) || mv(old_log, simphy_log)
+  old_lines = readlines(simphy_log)
+  i = findfirst(l -> strip(l) == "species tree used:", old_lines)
+  (i !== nothing && strip(old_lines[i+1]) == species_tree * ";") ||
+    error("--reuse_genetrees: species tree in $simphy_log differs from $species_tree")
+  for rep_folder in folder_path_list
+    n = count(f -> occursin("g_trees_noLocusID", f),
+              readdir(joinpath(rep_folder, "genetrees_singlecopy")))
+    n >= n_genes_min || error("--reuse_genetrees: $rep_folder has $n gene trees < $n_genes_min")
+  end
+
+  for csv in ["Simphy_gene_duplication_and_loss_$paramname_root.csv",
+              "Simphy_gene_loss_only_$paramname_root.csv"]
+    lines = readlines(joinpath(outfolder, csv))
+    length(lines) < 2 && continue
+    stored = replace(split(lines[2], ",")[1], r"/rep\d+/.*$" => "")
+    stored == outfolder ||
+      error("--reuse_genetrees: gene-tree paths in $csv start with $stored, not $outfolder")
+  end
 end
 
 # To simulate multiple individuals per species 
@@ -899,6 +951,12 @@ Notes:
       worker_println("Removed $(length(files_to_remove)) excess trees")
     end
 
+    # The gene trees are final: blank the locus trees of discarded gene
+    # families in l_trees.trees to save space (see utilities.jl)
+    if debug_mode == false
+      blank_unused_locus_trees(simphyfolder, modified_genetree_folder)
+    end
+
     # Calculate average number of leaves left in trees
     # Note: NaN values are already filtered out when pushing to the array above
     # This ensures we only average over iterations that produced valid trees
@@ -1158,7 +1216,7 @@ end
       * alpha from Gamma(α=3.267, θ=0.109).
       For the plant tree, see sample_substitution_params_plant in utilities.jl
       =#
-      if tree == "plant"
+      if startswith(tree, "plant")
         kappa, basefreq, alpha = sample_substitution_params_plant(current_seed)
       else
         kappa, basefreq, alpha = sample_substitution_params(current_seed)
@@ -1173,13 +1231,21 @@ end
     G_freq = basefreq[3]
     T_freq = basefreq[4]
 
+    # seq-gen's -t is the expected transition/transversion ratio, not the HKY
+    # rate ratio kappa that IQ-TREE estimates: tstv = kappa (piA piG + piC piT)
+    # / ((piA + piG)(piC + piT)). See seq-gen source/nucmodels.c
+    # (https://github.com/rambaut/Seq-Gen/blob/master/source/nucmodels.c) and
+    # IQ-TREE's HKY definition (http://www.iqtree.org/doc/Substitution-Models).
+    tstv = @sprintf("%.10g",
+      kappa * (A_freq * G_freq + C_freq * T_freq) / ((A_freq + G_freq) * (C_freq + T_freq)))
+
     run(`bash scripts/seq-gen.sh \
       $rep_number_string \
       $input_file_path \
       $output_file_path \
       $current_seed \
-      $alpha $kappa $A_freq $C_freq $G_freq $T_freq \
-      $gene_length`) 
+      $alpha $tstv $A_freq $C_freq $G_freq $T_freq \
+      $gene_length $tree`) 
   end  
 
 end
@@ -1406,6 +1472,17 @@ function main()
     flush(logfile)
   end
 
+  if reuse_genetrees
+    simphy_warnings = ""
+    for (i, rep_folder) in enumerate(folder_path_list)
+      for sub in ["seqgenfolder", "iqtreefolder", "astralfolder"]
+        rm(joinpath(rep_folder, sub); force=true, recursive=true)
+      end
+      for tmp in tmp_iqtreeastral_folders(paramname_root, pad_number(i, n_reps))
+        rm(tmp; force=true, recursive=true)
+      end
+    end
+  else
   @timeit to "Running Simphy and modify newick strings" begin
     seed_array_simphy = seed_generator(
                         seed_simphy, 
@@ -1423,6 +1500,7 @@ function main()
               folder_path_list,
               paramname_root)
   end 
+  end
 
   @timeit to "Running Seq-Gen" begin 
     # for seed used in seq-gen, 
@@ -1597,6 +1675,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
   ---Rerunning SimPhy---
   max_iteration_simphy = $max_iteration_simphy;
   n_genes_min = $n_genes_min;
+  reuse_genetrees = $reuse_genetrees;
 
   ---Other information---
   Number of processors used = $n_processors;

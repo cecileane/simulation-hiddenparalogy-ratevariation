@@ -103,6 +103,10 @@ function parse_commandline()
         help = "Max steps per PhyNEST search (default = 250000)"
         arg_type = Int
         default = 250000
+      "--tree"
+        help = "Species tree used in the simulation: reptile, plant or plant_1000pop"
+        arg_type = String
+        default = "reptile"
       "--outgroup"
         help = "Outgroup taxon name used in PhyNEST (default: A)"
         arg_type = String
@@ -131,10 +135,13 @@ runs = parsed_args["runs"]
 max_steps = parsed_args["max_steps"]
 outgroup = parsed_args["outgroup"]
 SF = parsed_args["SF"]
+tree = parsed_args["tree"]
 gene_len = parsed_args["gene_len"]
 
-# Define true species tree in Newick format
-true_tree_newick = "(A,((((B,C),(D,E)),F),(G,H)));"
+# Define true species tree in Newick format (reptile or plant, as simulated)
+true_tree_newick = (startswith(tree, "plant") ?
+    "(A,(B,((C,D),(E,(H,(F,G))))));" :
+    "(A,((((B,C),(D,E)),F),(G,H)));")
 
 # set up folders:
 paramname_root = set_up_paramname_root(dup_rate, loss_rate, ratevar,
