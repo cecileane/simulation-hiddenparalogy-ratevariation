@@ -546,7 +546,7 @@ end
     seed_generator(master_seed, n, m, output_dir, output_file_name)
         -> Matrix{Int32}
 
-Generate an n×m seed matrix via StableRNG and write it as a tab-separated
+Generate an n x m seed matrix via StableRNG and write it as a tab-separated
 file (header: col1…colm, one rep per row). Returns the matrix.
 """
 function seed_generator(master_seed::Int, n::Int, m::Int, 
@@ -580,7 +580,7 @@ end
 
 Estimate how many gene trees to simulate next given `num` currently valid
 trees and a target of `n_genes`. Accounts for expected missing-tree rate.
-Capped at 3× n_genes to avoid excessive resource usage.
+Capped at 3x n_genes to avoid excessive resource usage.
 
 # Arguments
 - `num::Int`: Number of gene trees currently present.
@@ -628,7 +628,7 @@ end
     pad_number(num::Int, range::Int) -> String
 
 Zero-pad `num` to as many digits as `range` requires.
-Used for consistent SimPhy-style filenames (e.g. gene 1 of 200 → "001").
+Used for consistent SimPhy-style filenames (e.g. gene 1 of 200 -> "001").
 """
 function pad_number(num::Int, range::Int) 
   digits = ceil(Int, log10(range + 1))
@@ -944,7 +944,7 @@ end
     replace_pop_inInd_file(input_file::String, output_file::String)
 
 Replace the "POP" placeholder in column 3 of an eigenstrat `.ind` file
-with the species letter extracted from column 1 (e.g. "A_0" → "A").
+with the species letter extracted from column 1 (e.g. "A_0" -> "A").
 Input must be tab-separated with exactly three columns per line.
 """
 function replace_pop_inInd_file(input_file::String, output_file::String)
@@ -1284,7 +1284,7 @@ end
     simplify_tip_labels(tree::HybridNetwork) -> HybridNetwork
 
 Strip accession IDs from tip labels in-place, keeping only the prefix
-before the first underscore (e.g. "A_0" → "A"). Modifies the network.
+before the first underscore (e.g. "A_0" -> "A"). Modifies the network.
 """
 function simplify_tip_labels(tree::HybridNetwork)
     for tip in tree.leaf
@@ -1744,7 +1744,7 @@ function diagnose_simphy_locus_trees(simphy_output_dir::String,
                     (locus_id,
                     "Only $num_unique_species species remain: " *
                     "$(join(unique_species, ", ")) " *
-                    "(need ≥4 for phylogenetic inference)"))
+                    "(need >=4 for phylogenetic inference)"))
             end
 
         catch e
@@ -2098,7 +2098,7 @@ function summarize_WR_by_threshold(input_dir::String,
     ratevar_x_SF_per_file_pcts =
         Dict{String, Dict{Float64, Vector{Float64}}}()
 
-    # ratevar_group x ILS: (RVG+RVN vs RVL) × ILS level (from SF)
+    # ratevar_group x ILS: (RVG+RVN vs RVL) x ILS level (from SF)
     ils_map = Dict("1.0" => "high", "0.5" => "low")
     ratevar_group_x_ILS_stats = Dict{String, Vector{Float64}}()
     ratevar_group_x_ILS_per_file_pcts =
@@ -2344,7 +2344,7 @@ function summarize_WR_by_threshold(input_dir::String,
             println(io)
         end
 
-        # ratevar_group x ILS: (RVG+RVN vs RVL) × ILS level
+        # ratevar_group x ILS: (RVG+RVN vs RVL) x ILS level
         println(io, "Statistics by ratevar_group x ILS")
         println(io, "-"^70)
 

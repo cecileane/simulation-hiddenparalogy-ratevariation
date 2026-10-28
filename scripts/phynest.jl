@@ -1,15 +1,15 @@
 # ============================================================================
 # scripts/phynest.jl
 #
-# Purpose : Entry point for PhyNEST network inference across replicates of
-#           one parameter setting. For each replicate it launches
-#           phynest_1rep.jl, which runs PhyNEST at hmax=0 (tree) and hmax=1
-#           (one reticulation) on the concatenated alignment, starting from
-#           the ASTRAL species tree. Model selection between H=0 and H=1
-#           uses T = score(H0) - score(H1), where scores are negative log
-#           composite likelihoods: T is compared to a threshold calibrated
-#           on the null setting (no dup/loss, no rate variation), analogous
-#           to the recalibrated WR threshold used for find_graphs.
+# Entry point for PhyNEST network inference across replicates of
+# one parameter setting. For each replicate it launches
+# phynest_1rep.jl, which runs PhyNEST at hmax=0 (tree) and hmax=1
+# (one reticulation) on the concatenated alignment, starting from
+# the ASTRAL species tree. Model selection between H=0 and H=1
+# uses T = score(H0) - score(H1), where scores are negative log
+# composite likelihoods: T is compared to a threshold calibrated
+# on the null setting (no dup/loss, no rate variation), analogous
+# to the recalibrated WR threshold used for find_graphs.
 # Inputs  : output/<paramname>/rep<id>/seqgenfolder/concate_alignment_*.fasta
 #           output/<paramname>/rep<id>/astralfolder/astral.tre
 # Outputs : output/<paramname>/rep<id>/phynestfolder/H0_output/H0_hc.{log,out}

@@ -73,7 +73,7 @@ function parse_commandline()
             help    = "Workers to pass via -p to each sub-script. " *
                       "Defaults to nworkers() (-p N given to this script)."
             arg_type = Int
-            default = -1   # sentinel → auto-detect
+            default = -1   # sentinel -> auto-detect
 
         "--tree"
             help    = "Species tree of the runs: reptile, plant or plant_1000pop " *
@@ -286,7 +286,7 @@ function main()
         if isfile(src)
             dst = joinpath(saved_path, basename(src))
             cp(src, dst; force = true)
-            println("Copied summary → $dst")
+            println("Copied summary -> $dst")
             push!(successes, paramname)
         else
             @warn "Expected summary file not found after run: $src"
@@ -311,7 +311,7 @@ function main()
                         dst_pdf = joinpath(consensus_collect_dir, pdf_name)
                         cp(src_pdf, dst_pdf; force = true)
                         push!(consensus_plots_copied, dst_pdf)
-                        println("Copied $(h) plot → $dst_pdf")
+                        println("Copied $(h) plot -> $dst_pdf")
                     else
                         @warn "Consensus plot not found (skipping): $src_pdf"
                     end

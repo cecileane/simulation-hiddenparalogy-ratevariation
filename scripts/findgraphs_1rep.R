@@ -1,11 +1,11 @@
 # ============================================================================
 # scripts/findgraphs_1rep.R
 #
-# Purpose : Per-replicate find_graphs worker (admixtools). Computes f2-
-#           statistics from eigenstrat-format genotype data, runs
-#           `find_graphs()` for a specified number of admixture events
-#           (h = num_admix), filters returned graphs by likelihood, and
-#           tests recovery of the known true species tree.
+# Per-replicate find_graphs worker (admixtools). Computes f2-
+# statistics from eigenstrat-format genotype data, runs
+# `find_graphs()` for a specified number of admixture events
+# (h = num_admix), filters returned graphs by likelihood, and
+# tests recovery of the known true species tree.
 # Inputs  : Eigenstrat trio in --input_dir matching --prefix
 #               <prefix>.geno, <prefix>.snp, <prefix>.ind
 #           Seed file path via --seed_file_path.

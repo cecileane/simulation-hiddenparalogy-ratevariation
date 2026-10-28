@@ -2,22 +2,22 @@
 # ============================================================================
 # scripts/phynest_postprocess.jl
 #
-# Purpose : Aggregate per-replicate PhyNEST results for one parameter set
-#           into a single per-setting table, and add what the inference step
-#           does not record: RF distances of the H=0 tree and of the two
-#           trees displayed in the H=1 network to the true species tree
-#           (full, and with one taxon pruned) and to the three alternative
-#           placements of the taxon on the shortest branches (F for the
-#           reptile tree, B for the plant tree, as in snaq_postprocess.jl);
-#           the hybrid clade and its donors in the H=1
-#           network; and, from the per-run search logs, where the true tree
-#           sits in each search: how many runs reached the best score, how
-#           many runs found (H=0) or displayed (H=1) the true tree, and the
-#           score gap and rank of the best such run; and the number of
-#           sites M of the concatenated alignment, read from the PhyNEST
-#           log, and the per-site score difference T_per_site = T / M: the
-#           raw difference T grows linearly with M, and M is smaller in
-#           replicates where fewer loci were retained.
+# Aggregate per-replicate PhyNEST results for one parameter set
+# into a single per-setting table, and add what the inference step
+# does not record: RF distances of the H=0 tree and of the two
+# trees displayed in the H=1 network to the true species tree
+# (full, and with one taxon pruned) and to the three alternative
+# placements of the taxon on the shortest branches (F for the
+# reptile tree, B for the plant tree, as in snaq_postprocess.jl);
+# the hybrid clade and its donors in the H=1
+# network; and, from the per-run search logs, where the true tree
+# sits in each search: how many runs reached the best score, how
+# many runs found (H=0) or displayed (H=1) the true tree, and the
+# score gap and rank of the best such run; and the number of
+# sites M of the concatenated alignment, read from the PhyNEST
+# log, and the per-site score difference T_per_site = T / M: the
+# raw difference T grows linearly with M, and M is smaller in
+# replicates where fewer loci were retained.
 # Inputs  : <output_dir>/<paramname>/rep*/phynestfolder/phynest_results.csv
 #           <output_dir>/<paramname>/rep*/phynestfolder/H?_output/H?_hc.log
 # Outputs : <output_dir>/<paramname>/PhyNEST-<paramname>-summary.csv

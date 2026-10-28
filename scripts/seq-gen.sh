@@ -2,10 +2,10 @@
 # ============================================================================
 # scripts/seq-gen.sh
 #
-# Purpose : Per-gene Seq-Gen wrapper. Simulates DNA sequences along a single
-#           gene tree under HKY+Gamma with per-gene rate, kappa, and base
-#           frequencies passed in by the caller. Skips silently if the input
-#           gene-tree file is empty (removed during paralogy filtering).
+# Per-gene Seq-Gen wrapper. Simulates DNA sequences along a single
+# gene tree under HKY+Gamma with per-gene rate, kappa, and base
+# frequencies passed in by the caller. Skips silently if the input
+# gene-tree file is empty (removed during paralogy filtering).
 # Inputs  : $2 = gene tree file (Newick)
 # Outputs : $3 = Seq-Gen sequence file (relaxed-PHYLIP, -on)
 # Usage   : Called from simulation.jl per gene per replicate. see simulation.jl

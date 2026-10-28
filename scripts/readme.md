@@ -11,6 +11,7 @@ This directory contains the pipeline for the reptile phylogenomics simulation.
 | `speciestree.jl` | Julia | One-time: build species tree from empirical data |
 | `speciestree_basal_angio.jl` | Julia | One-time: second species tree from basal angiosperms (Angiosperms353 data from the Kew Tree of Life); helpers in `angiosperm/` |
 | `speciestree_reptile.jl` | Julia | One-time: build species tree from empirical data |
+| `speciestree/plot_angiosperm_tree_vector.py` | Python | Angiosperm species-tree figure (two trees + plant silhouettes) as fully vector PDF/SVG with embedded TrueType fonts; replaces the PDF from `visualization_scripts/visualize_angiosperm_tree.R`, whose silhouettes are rasters |
 | `simulation.jl` | Julia | Major simulation pipeline from gene tree simulation to species tree estimation|
 | `simulation_postprocess.jl` | Julia | Postprocess and calculate RF distances for outputs from the `simulation.jl` |
 | `snaq.jl` / `snaq_1rep.jl` | Julia | SNaQ inference (parallel + per-replicate) |
@@ -24,7 +25,6 @@ This directory contains the pipeline for the reptile phylogenomics simulation.
 | `summary_snaq.jl` | Julia | Summarize SNaQ results across parameter sets |
 | `summary_findgraph.jl` | Julia | Summarize find_graphs results + plots |
 | `summary_phynest.jl` | Julia | Summarize PhyNEST results, calibrate the T* threshold + plots |
-| `genetree_discordance_2inds.jl` | Julia | Per-combination discordance of two-individual gene trees on the 8-taxon scale (Table B1) |
 | `utilities.jl` | Julia | Shared helpers: seed generation, tip manipulation |
 | `seq-gen.sh` | Bash | Wrap Seq-Gen calls per gene, called in  `simulation.jl` |
 | `concatenate_seq.py` | Python | Concatenate per-gene NEXUS alignments into FASTA, called in `simulation.jl` |

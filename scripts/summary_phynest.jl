@@ -2,24 +2,24 @@
 # ============================================================================
 # scripts/summary_phynest.jl
 #
-# Purpose : Aggregate per-parameter PhyNEST CSVs into one cross-setting summary
-#           table (model choice, scores, gamma estimates, tree-recovery counts,
-#           search stability) and produce diagnostic plots via R.
-#           Model choice between h=0 and h=1 uses the per-site score
-#           difference T = (score_H0 - score_H1) / M, with M the number of
-#           sites of the replicate's alignment (the raw difference grows
-#           linearly with M, and M is smaller when fewer loci were
-#           retained; columns T_per_site and T of the input tables), in two
-#           ways: the naive rule T > 0, and the calibrated rule T > T*. As
-#           for the WR <= 3.7 threshold of find_graphs, T* is the 95th
-#           percentile of T pooled over the settings without lineage rate
-#           variation (no and gene-specific rates, all duplication/loss
-#           rates);
-#           because T differs between ILS levels, one T* is computed per
-#           ILS level (SF) and number of individuals. T* is computed here,
-#           after all PhyNEST runs, and saved to its own file. It is
-#           specific to this design: 8 taxa (70 quartets), 100 search runs
-#           per model.
+# Aggregate per-parameter PhyNEST CSVs into one cross-setting summary
+# table (model choice, scores, gamma estimates, tree-recovery counts,
+# search stability) and produce diagnostic plots via R.
+# Model choice between h=0 and h=1 uses the per-site score
+# difference T = (score_H0 - score_H1) / M, with M the number of
+# sites of the replicate's alignment (the raw difference grows
+# linearly with M, and M is smaller when fewer loci were
+# retained; columns T_per_site and T of the input tables), in two
+# ways: the naive rule T > 0, and the calibrated rule T > T*. As
+# for the WR <= 3.7 threshold of find_graphs, T* is the 95th
+# percentile of T pooled over the settings without lineage rate
+# variation (no and gene-specific rates, all duplication/loss
+# rates);
+# because T differs between ILS levels, one T* is computed per
+# ILS level (SF) and number of individuals. T* is computed here,
+# after all PhyNEST runs, and saved to its own file. It is
+# specific to this design: 8 taxa (70 quartets), 100 search runs
+# per model.
 # Inputs  : phynest_summary/PhyNEST-<paramname>-summary.csv  (one per setting)
 # Outputs : results/PhyNEST_summary.csv             (cross-setting table)
 #           results/PhyNEST_T_threshold.csv         (T* per ILS level)

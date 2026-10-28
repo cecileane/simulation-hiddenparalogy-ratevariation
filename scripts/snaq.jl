@@ -1,10 +1,10 @@
 # ============================================================================
 # scripts/snaq.jl
 #
-# Purpose : Entry point for SNaQ network inference across replicates of one
-#           parameter setting. For each replicate it launches snaq_1rep.jl,
-#           which runs SNaQ at h=0 (no reticulation) and h=1 (one reticulation)
-#           on the ASTRAL species tree + per-quartet concordance factors.
+# Entry point for SNaQ network inference across replicates of one
+# parameter setting. For each replicate it launches snaq_1rep.jl,
+# which runs SNaQ at h=0 (no reticulation) and h=1 (one reticulation)
+# on the ASTRAL species tree + per-quartet concordance factors.
 # Inputs  : output/<paramname>/rep<id>/astralfolder/astral.tre
 #           output/<paramname>/rep<id>/iqtreefolder/CF_results.csv
 # Outputs : output/<paramname>/rep<id>/snaqfolder/H0_output/H0.out

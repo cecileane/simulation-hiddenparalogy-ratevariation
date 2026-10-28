@@ -1,9 +1,9 @@
 # ============================================================================
 # scripts/snaq_1rep.jl
 #
-# Purpose : Per-replicate SNaQ worker. Runs SNaQ at h=0 and h=1 on the
-#           ASTRAL species tree and concordance factors for a single
-#           replicate, then computes goodness-of-fit (p-values).
+# Per-replicate SNaQ worker. Runs SNaQ at h=0 and h=1 on the
+# ASTRAL species tree and concordance factors for a single
+# replicate, then computes goodness-of-fit (p-values).
 # Inputs  : <outfolder>/rep<id>/astralfolder/astral.tre
 #           <outfolder>/rep<id>/iqtreefolder/CF_results.csv
 # Outputs : <outfolder>/rep<id>/snaqfolder/H0_output/H0.out
@@ -280,7 +280,7 @@ if length(gammas) >= 2
         gamma_1, gamma_2 = gamma_2, gamma_1
     end
 else
-    error("Expected ≥2 hybrid edges with hmax=1, found $(length(gammas))")
+    error("Expected >=2 hybrid edges with hmax=1, found $(length(gammas))")
 end 
 
 # Run boostrapping only if specified 

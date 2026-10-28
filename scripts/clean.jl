@@ -1,10 +1,10 @@
 # ============================================================================
 # scripts/clean.jl
 #
-# Purpose : Remove the per-replicate output/ directory (every parameter
-#           setting and replicate is wiped) plus any stray raxml-outfiles /
-#           astral-outfiles folders at the repo root. Use to reset a working
-#           tree before re-running the pipeline from scratch.
+# Remove the per-replicate output/ directory (every parameter
+# setting and replicate is wiped) plus any stray raxml-outfiles /
+# astral-outfiles folders at the repo root. Use to reset a working
+# tree before re-running the pipeline from scratch.
 # Inputs  : None.
 # Outputs : Removes output/ and matching folders if present.
 # Usage   : julia --project=. scripts/clean.jl

@@ -19,12 +19,12 @@ PIPELINE STAGES
 
 2. HIDDEN PARALOGY FILTERING (newick string modification)
    - After SimPhy, gene trees are post-processed to mimic hidden paralogy:
-       * Trees with >1 gene copy per individual (detectable paralogy) → drop
-       * Trees with ≤3 taxa after gene loss (uninformative) → discarded
-       * Trees with exactly 1 copy per individual and ≥4 taxa → retained;
+       * Trees with >1 gene copy per individual (detectable paralogy) -> drop
+       * Trees with <=3 taxa after gene loss (uninformative) -> discarded
+       * Trees with exactly 1 copy per individual and >=4 taxa -> retained;
          gene copy IDs are stripped from taxon names
    - If too few trees pass, SimPhy is re-run up to --max_iteration_simphy times
-     until the target or min threshold (--min_gene_proportion × n_genes) is met.
+     until the target or min threshold (--min_gene_proportion x n_genes) is met.
 
 3. SEQUENCE SIMULATION (Seq-Gen)
    - Simulates DNA alignments along each filtered gene tree using the HKY model.
@@ -46,27 +46,27 @@ PIPELINE STAGES
 REPRODUCIBILITY
 ---------------
 All random seeds are deterministically derived from a single master seed, which
-is itself generated from the parameter configuration name. This ensures that
+is itself generated from the parameter configuration name. This makes sure that
 results for any parameter setting are fully reproducible.
 
 OUTPUT STRUCTURE
 ----------------
 output/
-└── <paramname_root>/    e.g. DUP0.0003-LOS0.0003-RVG-N_ind1-SF1.0-genelen1000
-    ├── rep001/
-    │   ├── genetrees_simphy/     Raw SimPhy output (kept for inspection;
-    │   │                         locus trees of discarded genes blanked)
-    │   ├── genetrees_singlecopy/ Filtered & renamed gene trees (.trees)
-    │   ├── seqgenfolder/         Simulated alignments (.fasta)
-    │   ├── iqtreefolder/         IQ-Tree output (besttrees.tre, …)
-    │   └── astralfolder/         ASTRAL output (astral.tre, mapping file)
-    ├── rep002/ …
-    ├── simulation_<paramname>.csv     Per-replicate SimPhy run statistics
-    ├── Simphy_gene_duplication_and_loss_<paramname>.csv
-    ├── Simphy_gene_loss_only_<paramname>.csv
-    ├── random_seed_simphy/seqgen/iqtree.txt
-    ├── arguments-<paramname>.log      All arguments + runtime summary
-    └── screen_<paramname>.log         Full console output (if --log true)
+`-- <paramname_root>/    e.g. DUP0.0003-LOS0.0003-RVG-N_ind1-SF1.0-genelen1000
+    |-- rep001/
+    |   |-- genetrees_simphy/     Raw SimPhy output (kept for inspection;
+    |   |                         locus trees of discarded genes blanked)
+    |   |-- genetrees_singlecopy/ Filtered & renamed gene trees (.trees)
+    |   |-- seqgenfolder/         Simulated alignments (.fasta)
+    |   |-- iqtreefolder/         IQ-Tree output (besttrees.tre, ...)
+    |   `-- astralfolder/         ASTRAL output (astral.tre, mapping file)
+    |-- rep002/ ...
+    |-- simulation_<paramname>.csv     Per-replicate SimPhy run statistics
+    |-- Simphy_gene_duplication_and_loss_<paramname>.csv
+    |-- Simphy_gene_loss_only_<paramname>.csv
+    |-- random_seed_simphy/seqgen/iqtree.txt
+    |-- arguments-<paramname>.log      All arguments + runtime summary
+    `-- screen_<paramname>.log         Full console output (if --log true)
 
 USAGE
 -----
@@ -83,7 +83,7 @@ Run from the repository root, e.g.:
 REQUIRED ARGUMENTS
 ------------------
   --dup_rate   FLOAT   Gene duplication rate (0 = no duplication)
-  --loss_rate  FLOAT   Gene loss rate (0 = no loss); must be ≤ dup_rate
+  --loss_rate  FLOAT   Gene loss rate (0 = no loss); must be <= dup_rate
   --ratevar    STR     Rate variation: N | G | L | GL | G*L
   --n_reps     INT     Number of independent replicates
   --n_genes    INT     Target number of gene trees per replicate
@@ -97,7 +97,7 @@ OPTIONAL ARGUMENTS
   --Ne                  INT    Effective population size
                                (default: 1000 for reptile and
                                plant_1000pop, 400 for plant)
-  --SF                  FLOAT  Ne scaling factor; SF<1 → more ILS (default: 1.0)
+  --SF                  FLOAT  Ne scaling factor; SF<1 -> more ILS (default: 1.0)
   --gene_len            INT    Alignment length in bp (default: 1000)
   --seqgen_model        STR    all_genes_same_HKY | all_genes_diff_HKY (default)
   --max_iteration_simphy INT   Max SimPhy re-runs per replicate (default: 20000)
@@ -711,7 +711,7 @@ Notes:
       current_seed = seed_array[simulation_rep, iteration + 1]
       
       # count num of gene trees in the output dir 
-      # Add sync to ensure directory operations are complete
+      # Add sync to make sure directory operations are complete
       if isdir(modified_genetree_folder)
         files = readdir(modified_genetree_folder) 
         num = count(file -> occursin(r"g_trees_noLocusID_.*", file), files) 
@@ -728,7 +728,7 @@ Notes:
         mkpath(simphyfolder_int)
         batch = calculate_batch(num, n_genes) # see utilities.jl 
 
-        # Initialize variables before try-catch to ensure they're in scope
+        # Initialize variables before try-catch to make sure they're in scope
         local tree_repeated_taxa_1int, tree_insufficient_taxa_1int
         local num_trees_experiencing_gene_loss_only,
               num_trees_experiencing_gene_duplication_and_loss
@@ -877,7 +877,7 @@ Notes:
     gene_tree_files = filter(
         file -> occursin(r"g_trees_noLocusID_.*", file), files)
     if length(gene_tree_files) > n_genes
-      # Sort files to ensure consistent selection of first n_genes
+      # Sort files to make sure of a consistent selection of first n_genes
       sort!(gene_tree_files)
       # Keep only the first n_genes files
       files_to_keep = gene_tree_files[1:n_genes]
@@ -959,7 +959,7 @@ Notes:
 
     # Calculate average number of leaves left in trees
     # Note: NaN values are already filtered out when pushing to the array above
-    # This ensures we only average over iterations that produced valid trees
+    # This makes sure we only average over iterations that produced valid trees
     average_num_leaf_left_in_trees_for_1rep =
         isempty(avg_num_leaf_left_in_trees_one_rep) ?
         0.0 : mean(avg_num_leaf_left_in_trees_one_rep)
@@ -1141,7 +1141,7 @@ function run_simulation(
   # Append new csv_info (must be a single string)
   open(simulation_csv, "a") do f
       write(f, join(csv_info, "")) 
-      # above ensures to change csv_info from a Vector to String 
+      # above makes sure to change csv_info from a Vector to String 
   end
 
   # Return the simphy warnings for integration with concatenation warnings
@@ -1668,9 +1668,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
 
   ---Seed Information---
   master seed = $master_seed (seeds simphy, seqgen, iqtree);
-  seed_simphy = $seed_simphy (rep×iter seed array for SimPhy);
-  seed_seqgen = $seed_seqgen (rep×1 seed array for seqgen);
-  seed_iqtree = $seed_iqtree (rep×1 seed array for iqtree);
+  seed_simphy = $seed_simphy (rep x iter seed array for SimPhy);
+  seed_seqgen = $seed_seqgen (rep x 1 seed array for seqgen);
+  seed_iqtree = $seed_iqtree (rep x 1 seed array for iqtree);
 
   ---Rerunning SimPhy---
   max_iteration_simphy = $max_iteration_simphy;

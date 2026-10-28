@@ -1,12 +1,12 @@
 # ============================================================================
 # scripts/phynest_1rep.jl
 #
-# Purpose : Per-replicate PhyNEST worker. Runs PhyNEST at hmax=0 (tree) and
-#           hmax=1 (one reticulation) on the concatenated alignment of a
-#           single replicate, then records the negative log composite
-#           likelihood of both models, of the true species tree, and the
-#           statistic T = score(H0) - score(H1) used for model selection
-#           (analogous to SNaQ GoF p-values and find_graphs WR thresholds).
+# Per-replicate PhyNEST worker. Runs PhyNEST at hmax=0 (tree) and
+# hmax=1 (one reticulation) on the concatenated alignment of a
+# single replicate, then records the negative log composite
+# likelihood of both models, of the true species tree, and the
+# statistic T = score(H0) - score(H1) used for model selection
+# (analogous to SNaQ GoF p-values and find_graphs WR thresholds).
 # Inputs  : <seqgenfolder>/concate_alignment_rep<id>.fasta
 #           <astralfolder>/astral.tre  (starting topology, tips A..H)
 # Outputs : <phynestfolder>/rep<id>.phy            converted alignment

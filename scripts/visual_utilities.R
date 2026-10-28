@@ -2,11 +2,11 @@
 # ============================================================================
 # scripts/visual_utilities.R
 #
-# Purpose : Shared R plotting helpers used by the summary_*.jl scripts and by
-#           the Quarto notebooks in visualization_scripts/. Defines color
-#           palettes, parameter parsers (DUP*-LOS*-RV*-N_ind*-SF*-genelen*),
-#           and per-quantity plotting functions (RF distance distributions,
-#           worst-residual histograms, gamma scatter plots, etc.).
+# Shared R plotting helpers used by the summary_*.jl scripts and by
+# the Quarto notebooks in visualization_scripts/. Defines color
+# palettes, parameter parsers (DUP*-LOS*-RV*-N_ind*-SF*-genelen*),
+# and per-quantity plotting functions (RF distance distributions,
+# worst-residual histograms, gamma scatter plots, etc.).
 # Inputs  : Sourced (`source("scripts/visual_utilities.R")`) from other code;
 #           individual plot functions read CSV files from results/, snaq_summary/
 #           and findgraph_summary/.
@@ -565,11 +565,11 @@ plot_true_graph_recovery_lines <- function(df,
 #' Single-panel jitter plot (per metric facet) where:
 #' - Columns represent metric (H=0, H=1, H=1 no F)
 #' - Color encodes substitution rate variation (none/gene/lineage)
-#' - Shape + fill encode ILS × n_ind (4 combos):
-#'     n_ind=1, high ILS → filled circle   (shape 21)
-#'     n_ind=1, low  ILS → filled triangle (shape 24)
-#'     n_ind=2, high ILS → hollow circle   (shape 21)
-#'     n_ind=2, low  ILS → hollow triangle (shape 24)
+#' - Shape + fill encode ILS x n_ind (4 combos):
+#'     n_ind=1, high ILS -> filled circle   (shape 21)
+#'     n_ind=1, low  ILS -> filled triangle (shape 24)
+#'     n_ind=2, high ILS -> hollow circle   (shape 21)
+#'     n_ind=2, low  ILS -> hollow triangle (shape 24)
 #' - No connecting lines; points jittered horizontally
 #'
 #' @param df Data frame with columns: dup_loss_rate, RV, SF, n_ind or N_ind
@@ -811,11 +811,11 @@ plot_true_graph_recovery_lines_aggregated <- function(df,
 #'
 #' Single-panel jitter plot for H=1 recovery only:
 #' - Color encodes substitution rate variation (none/gene/lineage)
-#' - Shape + fill encode ILS × n_ind (4 combos):
-#'     n_ind=1, high ILS → filled circle   (shape 21)
-#'     n_ind=1, low  ILS → filled triangle (shape 24)
-#'     n_ind=2, high ILS → hollow circle   (shape 21)
-#'     n_ind=2, low  ILS → hollow triangle (shape 24)
+#' - Shape + fill encode ILS x n_ind (4 combos):
+#'     n_ind=1, high ILS -> filled circle   (shape 21)
+#'     n_ind=1, low  ILS -> filled triangle (shape 24)
+#'     n_ind=2, high ILS -> hollow circle   (shape 21)
+#'     n_ind=2, low  ILS -> hollow triangle (shape 24)
 #' - No connecting lines; points jittered horizontally
 #'
 #' @param df Data frame with columns: dup_loss_rate, RV, SF, n_ind or N_ind
@@ -960,11 +960,11 @@ plot_true_graph_recovery_H1_only <- function(df,
 #'
 #' Creates a two-panel jitter plot (SNaQ | findgraphs) for H=1 recovery rates:
 #' - Color encodes substitution rate variation (none/gene/lineage)
-#' - Shape + fill encode ILS × n_ind (4 combos):
-#'     n_ind=1, high ILS → filled circle   (shape 21)
-#'     n_ind=1, low  ILS → filled triangle (shape 24)
-#'     n_ind=2, high ILS → hollow circle   (shape 21)
-#'     n_ind=2, low  ILS → hollow triangle (shape 24)
+#' - Shape + fill encode ILS x n_ind (4 combos):
+#'     n_ind=1, high ILS -> filled circle   (shape 21)
+#'     n_ind=1, low  ILS -> filled triangle (shape 24)
+#'     n_ind=2, high ILS -> hollow circle   (shape 21)
+#'     n_ind=2, low  ILS -> hollow triangle (shape 24)
 #' - No connecting lines; points jittered horizontally
 #'
 #' @param snaq_df      Data frame for SNaQ (must contain dup_loss_rate, RV,
@@ -2438,10 +2438,10 @@ plot_hypothesis_acceptance_by_rate_variation <- function(df,
 #' error rate (percentage of replicates selecting H=1 or H>1).  All n_inds and
 #' ILS combinations are shown in a single panel using fillable point shapes:
 #' \itemize{
-#'   \item n_inds=1, high ILS → filled circle  (shape 21, interior = RV color)
-#'   \item n_inds=1, low  ILS → filled triangle (shape 24, interior = RV color)
-#'   \item n_inds=2, high ILS → hollow circle  (shape 21, interior = white)
-#'   \item n_inds=2, low  ILS → hollow triangle (shape 24, interior = white)
+#'   \item n_inds=1, high ILS -> filled circle  (shape 21, interior = RV color)
+#'   \item n_inds=1, low  ILS -> filled triangle (shape 24, interior = RV color)
+#'   \item n_inds=2, high ILS -> hollow circle  (shape 21, interior = white)
+#'   \item n_inds=2, low  ILS -> hollow triangle (shape 24, interior = white)
 #' }
 #' Point color (border) encodes substitution rate variation.  Points are
 #' jittered horizontally.  No connecting lines or reference lines are drawn.
@@ -2717,8 +2717,8 @@ plot_combined_hypothesis_acceptance_H0 <- function(
       )
   }
 
-  source_levels <- c("find_graphs (WR ≤ 3.0)",
-                     "find_graphs (WR ≤ 3.7)",
+  source_levels <- c("find_graphs (WR <= 3.0)",
+                     "find_graphs (WR <= 3.7)",
                      "SNaQ")
   # PhyNEST is optional: calibrated rule (T > T*, T per site), preceded by
   # the naive rule (T > 0) unless h0_col_phynest_naive is NULL
@@ -3323,8 +3323,8 @@ plot_WR_percentiles_jitter_combined <- function(input_dir,
 
   cat("Total records in percentile data:", nrow(all_percentiles), "\n")
 
-  # ── Prepare plot data ──────────────────────────────────────────────────────
-  # 4-level combo: ILS (circle/triangle) × n_inds (filled/hollow)
+  #--- Prepare plot data ---#
+  # 4-level combo: ILS (circle/triangle) x n_inds (filled/hollow)
   combo_levels <- c(
     "ILS = high, n = 1",
     "ILS = high, n = 2",
@@ -3375,11 +3375,11 @@ plot_WR_percentiles_jitter_combined <- function(input_dir,
     plot_data <- plot_data %>% mutate(panel_label = facet_label)
   }
 
-  # ── Scale definitions ──────────────────────────────────────────────────────
+  #--- Scale definitions ---#
   # Fill: RV colors for filled points (n_inds=1), white for hollow (n_inds=2)
   fill_values <- c(rv_colors, "hollow" = "white")
 
-  # Shape: 4-level combo → fillable circle (21) or triangle (24)
+  # Shape: 4-level combo -> fillable circle (21) or triangle (24)
   shape_values <- setNames(
     c(21, 21, 24, 24),
     combo_levels
@@ -3392,7 +3392,7 @@ plot_WR_percentiles_jitter_combined <- function(input_dir,
   legend_fill_override <- ifelse(grepl("n_ind=1|n = 1", combos_present),
                                  "grey55", "white")
 
-  # ── Build plot ─────────────────────────────────────────────────────────────
+  #--- Build plot ---#
   # ymax = NULL: fit the axis to the data (used for the plant tree, whose
   # worst residuals can be far above the reptile range)
   if (is.null(ymax)) ymax <- ceiling(1.05 * max(plot_data$value, 3.7))
@@ -3503,7 +3503,7 @@ plot_WR_percentiles_jitter_combined <- function(input_dir,
             strip.background = element_rect(fill = "grey90"))
   }
 
-  # ── Save ───────────────────────────────────────────────────────────────────
+  #--- Save ---#
   output_path <- file.path(output_dir, paste0(output_filename, ".pdf"))
   ggsave(output_path, plot = p, width = 8, height = 8, dpi = 300, units = "in")
 
@@ -3897,7 +3897,7 @@ plot_T_by_hybrid_placement <- function(input_dir,
                        shape_by_placement = TRUE, ratevar = ratevar)
 }
 
-# ─────────────────────────────────────────────────────────────────────────
+# -------------------------------------------------------------------------
 # LEGACY (disabled for Dryad / paper submission, 2026-05).
 # plot_taxon_recovery_heatmaps() consumes results/*_taxon_recovery.csv,
 # which are no longer produced by the pipeline (the upstream code in
@@ -3905,7 +3905,7 @@ plot_T_by_hybrid_placement <- function(input_dir,
 # out). This function is retained as inert reference and will stop() if
 # called. To re-enable: remove the stop() at the top of the function body,
 # then re-enable the upstream taxon-recovery code.
-# ─────────────────────────────────────────────────────────────────────────
+# -------------------------------------------------------------------------
 #' Plot taxon recovery heatmaps by role and parameter setting
 #'
 #' Generates two figures showing taxon recovery rates:
@@ -3927,9 +3927,9 @@ plot_T_by_hybrid_placement <- function(input_dir,
 #'
 #' @details
 #' Extracts rate variation condition from param_setting:
-#'   - contains "RVL" → "Lineage (RVL)"
-#'   - contains "RVG" → "Gene-specific (RVG)"
-#'   - otherwise     → "No variation (RVN)"
+#'   - contains "RVL" -> "Lineage (RVL)"
+#'   - contains "RVG" -> "Gene-specific (RVG)"
+#'   - otherwise     -> "No variation (RVN)"
 #'
 #' Normalized value = count_recovered / n_replicates (can exceed 1.0)
 #'
@@ -3976,9 +3976,9 @@ plot_taxon_recovery_heatmaps <- function(input_long,
       role = as.character(role)
     )
   
-  # ──────────────────────────────────────────────────────────────────────────
+  # --------------------------------------------------------------------------
   # Extract parameters and normalize
-  # ──────────────────────────────────────────────────────────────────────────
+  # --------------------------------------------------------------------------
   cat("Extracting parameters and normalizing recovery rates...\n")
   
   # Count n_replicates per param_setting
@@ -4019,9 +4019,9 @@ plot_taxon_recovery_heatmaps <- function(input_long,
   
   cat("Data prepared successfully.\n")
   
-  # ──────────────────────────────────────────────────────────────────────────
+  # --------------------------------------------------------------------------
   # FIGURE 1: Per-parameter-setting heatmaps using facet_grid
-  # ──────────────────────────────────────────────────────────────────────────
+  # --------------------------------------------------------------------------
   cat("Creating Figure 1: Per-parameter-setting heatmaps using facet_grid...\n")
   
   # Compute global min/max
@@ -4082,9 +4082,9 @@ plot_taxon_recovery_heatmaps <- function(input_long,
          plot = p1, width = 16, height = 10, dpi = 300, units = "in")
   cat("Saved Figure 1: heatmap_per_param.pdf\n")
   
-  # ──────────────────────────────────────────────────────────────────────────
+  # --------------------------------------------------------------------------
   # FIGURE 2: Aggregated by rate variation (3 panels side-by-side)
-  # ──────────────────────────────────────────────────────────────────────────
+  # --------------------------------------------------------------------------
   cat("Creating Figure 2: Aggregated heatmaps by rate variation...\n")
   
   # Define rate variation order with custom titles

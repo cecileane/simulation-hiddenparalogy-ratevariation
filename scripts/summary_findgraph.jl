@@ -2,10 +2,10 @@
 # ============================================================================
 # scripts/summary_findgraph.jl
 #
-# Purpose : Aggregate per-parameter find_graphs CSVs into one cross-setting
-#           summary table (hypothesis acceptance, gamma estimates, tree-recovery
-#           percentages, worst-residual percentiles) and produce R-based
-#           diagnostic plots.
+# Aggregate per-parameter find_graphs CSVs into one cross-setting
+# summary table (hypothesis acceptance, gamma estimates, tree-recovery
+# percentages, worst-residual percentiles) and produce R-based
+# diagnostic plots.
 # Inputs  : findgraph_summary/findgraph-<paramname>.csv    (one per setting)
 # Outputs : results/findgraph_summary.csv                  (cross-setting table)
 #           visualization_results/findgraph/*.{png,pdf}    (diagnostic plots)
@@ -57,7 +57,7 @@ end
 """
 Extract parameter name root from filename
 Example: "findgraph-DUP0.0004-LOS0.0004-RVN-N_ind1-SF0.5.csv"
-→ "DUP0.0004-LOS0.0004-RVN-N_ind1-SF0.5"
+-> "DUP0.0004-LOS0.0004-RVN-N_ind1-SF0.5"
 """
 function extract_paramname(filename::String)
     # Remove "findgraph-" prefix and ".csv" suffix
@@ -241,7 +241,7 @@ function validate_wr_thresholds(input_dir::String)
     return all_thresholds
 end
 
-# ─────────────────────────────────────────────────────────────────────────
+# -------------------------------------------------------------------------
 # LEGACY CODE — disabled for Dryad / paper submission (2026-05).
 # The two functions below (explode_role_column, compute_taxon_recovery_summary)
 # produce results/findgraph_taxon_recovery.csv, which is NOT used in the
@@ -249,7 +249,7 @@ end
 # block-comment markers (the line below opens a Julia block comment; the
 # matching closer appears after the last function below), uncomment the
 # --taxon_recovery_output argument above, and uncomment the call site in main().
-# ─────────────────────────────────────────────────────────────────────────
+# -------------------------------------------------------------------------
 #=
 """
 Explode a comma-separated role column into one row per taxon.
@@ -272,7 +272,7 @@ end
 
 """
 Long-format stratified taxon recovery summary from all CSV files in input_dir.
-Steps: read+tag → recovery flag → explode roles → group+summarize → print+save.
+Steps: read+tag -> recovery flag -> explode roles -> group+summarize -> print+save.
 """
 function compute_taxon_recovery_summary(input_dir::String, output_file::String)
     required_cols = [:repID, :best_graph_hybrid_taxon,
@@ -342,10 +342,10 @@ function compute_taxon_recovery_summary(input_dir::String, output_file::String)
         header=names(summary), tf=tf_unicode_rounded)
     mkpath(dirname(output_file) == "" ? "." : dirname(output_file))
     CSV.write(output_file, summary)
-    println("Taxon recovery ($(nrow(summary)) rows) → $output_file")
+    println("Taxon recovery ($(nrow(summary)) rows) -> $output_file")
 end
 =#
-# ─────────────── end LEGACY taxon-recovery block ───────────────
+#--- end LEGACY taxon-recovery block ---#
 
 """
 Main function

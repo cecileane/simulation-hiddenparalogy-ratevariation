@@ -97,7 +97,7 @@ GENE_LEN=""
 REP_START=""
 REP_END=""
 # Default DEST: the repository root, computed from this script's own location
-# (scripts/copy_consensus_inputs.sh → repo root is one level up). Users can
+# (scripts/copy_consensus_inputs.sh -> repo root is one level up). Users can
 # still override with --dest.
 DEST="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DRY_RUN=false

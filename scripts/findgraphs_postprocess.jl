@@ -318,7 +318,7 @@ function process_single_replicate(rep_id::String,
                    :major_donor => String, :minor_donor => String),
         validate=false)
     
-    # Add RF distance columns if they don't exist, ensure they are String type
+    # Add RF distance columns if they don't exist, make sure they are String type
     if !("RF_displayedtree1_with_true_sptree" in names(df))
         df[!, :RF_displayedtree1_with_true_sptree] = fill("NA", nrow(df))
     end
@@ -716,7 +716,7 @@ function generate_summary_csv(outfolder::String, paramname_root::String,
                 end
             end
             
-            # H0 check: any WR below threshold in non-true_tree rows → accept H0
+            # H0 check: any WR below threshold in non-true_tree rows -> accept H0
             if nrow(filtered_h0_df) > 0 &&
                 any(filtered_h0_df.worst_residual .< new_WR_threshold)
                 base_df[idx, best_k_new_WR_col] = "0"

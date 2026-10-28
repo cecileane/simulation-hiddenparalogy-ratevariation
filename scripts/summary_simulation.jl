@@ -2,9 +2,9 @@
 # ============================================================================
 # scripts/summary_simulation.jl
 #
-# Purpose : Concatenate per-parameter simulation summary CSVs into one
-#           cross-setting table covering gene-tree counts, hidden-paralogy
-#           categories, RF distances, and branch-length statistics.
+# Concatenate per-parameter simulation summary CSVs into one
+# cross-setting table covering gene-tree counts, hidden-paralogy
+# categories, RF distances, and branch-length statistics.
 # Inputs  : simulation_summary/summary_<paramname>.csv     (one per setting)
 # Outputs : results/summary_concatenated.csv               (cross-setting table)
 # Usage   : julia --project=. scripts/summary_simulation.jl
@@ -105,7 +105,7 @@ function main()
     
     if nrow(all_data) > 0
         CSV.write(output_path, all_data)
-        println("Concatenated $(length(summary_files)) files → $output_path")
+        println("Concatenated $(length(summary_files)) files -> $output_path")
         println("Total rows in output: $(nrow(all_data))")
     else
         println("No data to write to output file.")

@@ -2,10 +2,10 @@
 # ============================================================================
 # scripts/summary_snaq.jl
 #
-# Purpose : Aggregate per-parameter SNaQ CSVs into one cross-setting summary
-#           table (hypothesis acceptance H=0/H=1/H>1, mean scores, gamma
-#           estimates, tree-recovery percentages) and produce diagnostic plots
-#           via R.
+# Aggregate per-parameter SNaQ CSVs into one cross-setting summary
+# table (hypothesis acceptance H=0/H=1/H>1, mean scores, gamma
+# estimates, tree-recovery percentages) and produce diagnostic plots
+# via R.
 # Inputs  : snaq_summary/SNaQ-<paramname>-summary.csv      (one per setting)
 # Outputs : results/SNaQ_summary.csv                       (cross-setting table)
 #           visualization_results/snaq/*.{png,pdf,csv}     (diagnostic plots)
@@ -286,7 +286,7 @@ function filter_and_extract_minor_gamma(snaq_summary_dir::String,
     return result_df
 end
 
-# ─────────────────────────────────────────────────────────────────────────
+# -------------------------------------------------------------------------
 # LEGACY CODE — disabled for Dryad / paper submission (2026-05).
 # The two functions below (explode_role_column, compute_taxon_recovery_summary)
 # produce results/SNaQ_taxon_recovery.csv, which is NOT used in the published
@@ -294,7 +294,7 @@ end
 # markers (the line below opens a Julia block comment; the matching closer
 # appears after the last function below), uncomment the --taxon_recovery_output
 # argument above, and uncomment the call site in main().
-# ─────────────────────────────────────────────────────────────────────────
+# -------------------------------------------------------------------------
 #=
 """
 Explode a comma-separated role column into one row per taxon.
@@ -317,7 +317,7 @@ end
 
 """
 Long-format stratified taxon recovery summary from all CSV files in input_dir.
-Steps: read+tag → recovery flag → explode roles → group+summarize → print+save.
+Steps: read+tag -> recovery flag -> explode roles -> group+summarize -> print+save.
 """
 function compute_taxon_recovery_summary(input_dir::String, output_file::String)
     required_cols = [:repID, :hybrid_taxon, :major_donor, :minor_donor,
@@ -392,10 +392,10 @@ function compute_taxon_recovery_summary(input_dir::String, output_file::String)
         header=names(summary), tf=tf_unicode_rounded)
     mkpath(dirname(output_file) == "" ? "." : dirname(output_file))
     CSV.write(output_file, summary)
-    println("Taxon recovery ($(nrow(summary)) rows) → $output_file")
+    println("Taxon recovery ($(nrow(summary)) rows) -> $output_file")
 end
 =#
-# ─────────────── end LEGACY taxon-recovery block ───────────────
+#--- end LEGACY taxon-recovery block ---#
 
 function main()
     """Main function to process all CSV files and create summary."""

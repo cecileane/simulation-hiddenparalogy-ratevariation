@@ -1,11 +1,11 @@
 # ============================================================================
 # scripts/findgraphs.jl
 #
-# Purpose : Entry point for find_graphs (admixture-graph) inference across
-#           replicates of one parameter setting. For each replicate it
-#           launches findgraphs_1rep.R, which (1) extracts SNPs via snp-sites,
-#           (2) converts to eigenstrat, and (3) runs find_graphs() at h=0
-#           and h=1 from the admixtools R package.
+# Entry point for find_graphs (admixture-graph) inference across
+# replicates of one parameter setting. For each replicate it
+# launches findgraphs_1rep.R, which (1) extracts SNPs via snp-sites,
+# (2) converts to eigenstrat, and (3) runs find_graphs() at h=0
+# and h=1 from the admixtools R package.
 # Inputs  : output/<paramname>/rep<id>/iqtreefolder/concatenated.fasta
 #           (and per-rep ancillary files written by simulation.jl)
 # Outputs : output/<paramname>/rep<id>/findgraph/rep<id>_admix{0,1}_*.{rds,txt}
@@ -188,7 +188,7 @@ Under the same complexity (same num_admix),
 LRT = -2log(L0/L1) ~ χ² with df = difference in number of parameters 
 Because complexity difference = 0 when under the same num_admix 
 LRT = 2 * Δ LL which is the same as AIC or BIC difference 
-Because differences of Δ ≤ 2 in AIC/BIC are widely regarded as 
+Because differences of Δ <= 2 in AIC/BIC are widely regarded as 
 indicating that models have essentially the same level of empirical support, 
 we use default threshold = 2 here (although the threshold can be configured).
 =# 
@@ -349,8 +349,8 @@ check_existing_dir(findgraph_folderlist) # see utilies.jl.
     # estimate the blgsize based on alignment length 
     # blgsize should be the size of each individual gene locus 
     # block is the number of blocks (approximate) used in find_graphs 
-    # blgsize = alignment_length / block = average block size
-    blgsize = Int(floor(alignment_length / block)) 
+    # blgsize is fixed at the gene length (1000 bp): one block per gene locus
+    blgsize = 1000
 
     if debug_mode 
       println("="^60)
@@ -393,7 +393,7 @@ check_existing_dir(findgraph_folderlist) # see utilies.jl.
     # since we might have multiple individual from one pop (eg. A_0, A_1) 
     run(`sh -c "rm $eigenstrat_ind_file && \
         mv $modified_ind_file $eigenstrat_ind_file"`)
-    worker_println("Rep$rep_id: vcf → eigenstrat conversion done")
+    worker_println("Rep$rep_id: vcf -> eigenstrat conversion done")
 
     return blgsize # return the estimated blgsize 
 end 

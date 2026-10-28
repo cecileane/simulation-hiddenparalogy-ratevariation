@@ -1407,7 +1407,7 @@ end
     iqtreefolder = joinpath(output_folder, "iqtreefolder")
 
     # Check if IQ-TREE folder and mapping file exist
-    # Read mapping file: alignment files ↔ IQ-TREE trees
+    # Read mapping file: alignment files <-> IQ-TREE trees
     mapping_file = joinpath(iqtreefolder, "mapping.csv") 
     mapping_lines = readlines(mapping_file)[2:end] # skip header
     # Extract gene names and IQ-TREE newick strings from mapping file
@@ -1600,7 +1600,7 @@ tree and the true species tree.
                 for combo in all_comb
                     tips_to_keep = collect(combo)
                     subtree = subtree_for_combination(gene_tree, tips_to_keep)
-                    # modify tip labels: "A_0" → "A" etc.
+                    # modify tip labels: "A_0" -> "A" etc.
                     mapped_subgene_tree = map_gene_tree_based_on_mapping_file(
                         subtree, individual_to_species)
 
