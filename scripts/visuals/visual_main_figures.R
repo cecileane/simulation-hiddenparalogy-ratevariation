@@ -7,15 +7,14 @@
 #   Fig. 1  four panels, one point per setting, both trees and both
 #           numbers of individuals per taxon
 #   Fig. 2  mirrored histograms of the estimated minor gamma under h = 1
-# Inputs  : per-replicate summaries of the kappa-corrected rerun, read with
+# Inputs: per-replicate summaries of both trees, read with
 #           load_method() from visual_utilities.R
-# Outputs : visualization_results/main_figures/
-#             fig1_two_trees.pdf/.png
-#             fig2_gamma_mirrored_overlap.pdf/.png
-#             per_setting.csv  (the numbers behind Fig. 1)
-#             T_star.csv
-# Usage   : Rscript scripts/visuals/visual_main_figures.R   (repo root)
-#
+# Outputs: visualization_results/main_figures/
+#      fig1_two_trees.pdf/.png
+#     fig2_gamma_mirrored_overlap.pdf/.png
+#    per_setting.csv  (the numbers behind Fig. 1)
+#     T_star.csv
+# Usage: Rscript scripts/visuals/visual_main_figures.R from repo's root 
 # Fig. 1: x = hidden paralogy level (none / medium / high), each
 # level split into a reptile and a plant sub-column; the plant sub-column
 # sits on a very light grey band and solid lines separate the levels.
@@ -39,7 +38,7 @@ sq <- load_method("snaq")
 ph <- load_method("phynest")
 t_star <- t_star_from(ph)
 
-# --------------------------------------------------------------
+# -------------------------------------------------------------
 # Per-setting summaries
 # --------------------------------------------------------------
 pct <- function(x) 100 * mean(x, na.rm = TRUE)
@@ -104,12 +103,11 @@ x_of <- function(df) as.numeric(df$hp) +
 pts <- function(df, y) {
   df <- df %>% mutate(x = x_of(df), shp = shape_ils[as.character(ils)],
                       fillc = ifelse(n == 1, rv_colors[as.character(rv)],
-                                     "white"),
-                      alpha = ifelse(corrected, 1, 0.4))
+                                     "white"))
   list(geom_point(data = df, aes(x = x, y = .data[[y]], shape = shp,
-                                 color = rv, fill = fillc, alpha = alpha),
+                                 color = rv, fill = fillc),
                   size = PT, stroke = 1.2),
-       scale_shape_identity(), scale_fill_identity(), scale_alpha_identity(),
+       scale_shape_identity(), scale_fill_identity(),
        scale_color_manual(values = rv_colors, labels = rv_labels,
                           name = "rate variation"),
        scale_x_continuous(breaks = tree_x, labels = rep(tree_short, 3),
@@ -208,7 +206,7 @@ pC <- ggplot() + guides_x() + pts(rec, "rec_h1") +
   facet_wrap(~m, nrow = 1) +
   labs(y = "% of true tree displayed") + theme_f1()
 # D: type I error rate
-keep <- c("hp", "rv", "ils", "tree", "n", "corrected")
+keep <- c("hp", "rv", "ils", "tree", "n")
 m_t1 <- c("find_graphs (WR ≤ 3.0)", "find_graphs (WR ≤ 3.7)", "SNaQ",
           "PhyNEST (T > T*)")
 t1 <- bind_rows(
@@ -235,11 +233,11 @@ ggsave(file.path(out_dir, "fig1_two_trees.png"), fig1, width = 14,
 
 # -------------------------------------------------------------------
 # Fig. 2: minor gamma under h = 1, reptile up and plant down
-# -------------------------------------------------------------------
+# ------------------------------------------------------------------
 # one row per rep of the n = 1 settings: 
 # the minor gamma of the h = 1 network and whether it displays the true tree
 gamma_rows <- function(tbl, m, f) tbl %>% filter(n == 1) %>%
-  select(tree, rv, corrected, data) %>%
+  select(tree, rv, data) %>%
   mutate(data = lapply(data, f)) %>% unnest(data) %>% mutate(m = m)
 gam <- bind_rows(
   gamma_rows(fg, "find_graphs", function(d) tibble(

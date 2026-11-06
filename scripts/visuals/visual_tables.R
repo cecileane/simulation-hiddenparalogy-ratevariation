@@ -4,32 +4,16 @@
 #
 # Supplementary tables of the two-tree comparison, each with a reptile and a
 # plant sub-column under every statistic:
-#   wr_summary       worst residual (WR) of the true tree, find_graphs,
-#                    pooled over the replicates of each factor level
-#   T_summary        per-site score difference T of PhyNEST (one individual
-#                    per taxon), same layout
-#   model_choice     % of replicates selecting h = 1 and h > 1 (SNaQ,
-#                    find_graphs at WR <= 3.0 and 3.7) or h >= 1 (PhyNEST,
-#                    T > T*), per factor level; one CSV, two tabulars
-#                    (_findgraphs, _snaq_phynest)
-#   genetree_discordance      normalized RF between the true gene trees and
-#                    the species tree and % of gene trees by number of
-#                    discordant branches, per locus category and ILS level
-#   genetree_estimation_error same between the true and the estimated gene
-#                    trees, per rate variation, one table per number of
-#                    individuals (_n1, _n2)
-#   gamma_<method>   minor gamma of the h = 1 network (find_graphs: best
-#                    graph; SNaQ; PhyNEST, one individual per taxon), per
-#                    factor level: mean, median, SD, % below 0.05/0.10/0.25
-#                    These two give the mean over the settings sharing the
-#                    row's factor levels and the range across them.
-# Inputs  : per-replicate summaries of the kappa-corrected rerun, read with
+#  1. wr_summary 2. T for phynest 
+#   3. model_choice 4. genetree_discordance
+#   5. genetree_estimation_error 6. the minor gamma for each method 
+# Inputs: per-replicate summaries of both trees, read with
 #           load_method() from visual_utilities.R; per-setting branch counts
 #           of genetree_tiers.jl for the last two tables
-# Outputs : <results root>/tables/<name>.csv  (long format, one row per
-#           tree x factor level x statistic) and <name>.tex (the tabular
-#           only, to \input in the supplement)
-# Usage   : Rscript scripts/visuals/visual_tables.R   (repo root)
+# Outputs: <results root>/tables/<name>.csv  (long format, one row per
+#         tree x factor level x statistic) and <name>.tex (the tabular
+#         only, to \input in the supplement)
+# Usage: Rscript scripts/visuals/visual_tables.R from the repo root 
 # ============================================================================
 
 source("scripts/visuals/visual_utilities.R")
@@ -42,10 +26,10 @@ sq <- load_method("snaq")
 ph <- load_method("phynest")
 t_star <- t_star_from(ph)
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 # Factor levels: every replicate of a setting carries the setting's factors,
 # so pooling within a level is a filter on the long table
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 rv_level <- c(none = "none", gene = "across genes", lineage = "across lineages")
 factor_levels <- list(
   list(factor = "overall", level = "all",
@@ -89,11 +73,8 @@ pooled_table <- function(rep, value, stats, levels = factor_levels) {
 }
 
 # ---------------------------------------------------------------------------
-# LaTeX writer: factor / level rows, a reptile and a plant column under
-# every statistic (booktabs, multirow for the factor names). Rows keep the
-# order of first appearance in `long`. With columns lo and hi in `long`,
-# every cell is the value over its range, stacked with makecell.
-# ---------------------------------------------------------------------------
+# LaTeX writer 
+# -----------------------------------------------------------------------
 tex_table <- function(long, stat_names, digits, file,
                       stat_labels = stat_names,
                       head = c("factor", "level")) {
@@ -152,7 +133,7 @@ tex_table <- function(long, stat_names, digits, file,
 
 # ---------------------------------------------------------------------------
 # 1. worst residual of the true tree (find_graphs)
-# ---------------------------------------------------------------------------
+# ------------------------------------------------------------------------
 stats5 <- list(mean = mean, median = median, sd = sd,
                q95 = function(x) quantile(x, 0.95),
                q99 = function(x) quantile(x, 0.99))
@@ -165,7 +146,7 @@ tex_table(wr_tab, names(stats5), rep(2, 5),
           file.path(out_dir, "wr_summary.tex"), stat5_labels)
 
 # ---------------------------------------------------------------------------
-# 2. per-site score difference T (PhyNEST, one individual per taxon)
+# 2. per-site score difference T (PhyNEST)
 # ---------------------------------------------------------------------------
 T_rep <- replicates(ph %>% filter(n == 1), function(d) tibble(T = d$T_per_site))
 T_levels <- factor_levels[sapply(factor_levels,
@@ -176,9 +157,9 @@ tex_table(T_tab, names(stats5), rep(4, 5),
           file.path(out_dir, "T_summary.tex"), stat5_labels)
 write_csv(t_star, file.path(out_dir, "T_star.csv"))
 
-# ---------------------------------------------------------------------------
+# ------------------------------------------------------------------------
 # 3. model choice: % of replicates selecting h = 1 and h > 1
-# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # selected h per replicate: 0, 1 or 2 (for h > 1)
 k_of <- function(x) {
   x <- as.character(x); ifelse(x == "0", 0L, ifelse(x == "1", 1L, 2L))
@@ -214,13 +195,13 @@ tex_table(mc_tab, c("SNaQ_h1", "SNaQ_hgt1", "phynest_h1"), rep(1, 3),
           c("SNaQ $h=1$", "SNaQ $h>1$", "\\ph{} $h \\geq 1$"))
 
 # ---------------------------------------------------------------------------
-# 4. gene tree discordance and gene tree estimation error, in branches:
-#    one value per setting (genetree_tiers.jl), then the mean over the
-#    settings sharing the row's factor levels and the range across them
-# ---------------------------------------------------------------------------
+# 4. gene tree discordance and gene tree estimation error:
+# one value per setting (genetree_tiers.jl), then the mean over the
+# settings sharing the row's factor levels and the range across them
+# ------------------------------------------------------------------------
 gt <- load_method("genetrees") %>% select(tree, hp, rv, n, ils, data) %>%
   unnest(data)
-# `stats` are functions of the per-setting table giving one value per row
+# stats are functions of the per-setting table giving one value per row
 range_table <- function(tbl, rows, stats) {
   out <- list()
   for (tree in c("reptile", "plant")) for (r in rows) {
@@ -258,8 +239,8 @@ tex_table(disc_tab, names(disc_stats), c(3, 1, 1, 1, 1),
           c("mean normalized RF", "0 (identical)", "1", "2", "$\\geq 3$"),
           c("locus category", "ILS"))
 
-# estimation error: rate variation, all genes, one table per number of
-# individuals because the tiers differ (5 and 13 internal branches)
+# estimation error: rate variation, all genes, one table per number of individuals 
+# because the tiers differ (5 and 13 internal branches)
 err_rows <- lapply(names(rv_level), function(v) list(
   factor = "rate variation", level = rv_level[[v]],
   keep = function(d) d$category == "all" & d$rv == v))
@@ -287,12 +268,12 @@ for (k in c("1", "2"))
   tex_table(err_tab %>% filter(n_inds == as.integer(k)),
             names(err_stats[[k]]), c(3, 1, 1, 1, 1, 1),
             file.path(out_dir, paste0("genetree_estimation_error_n", k,
-                                      ".tex")), err_labels[[k]], c("", ""))
+        ".tex")), err_labels[[k]], c("", ""))
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 # 5. minor gamma of the h = 1 network: mean, median, SD and the % of
-#    replicates below 0.05, 0.10 and 0.25, one table per method
-# ---------------------------------------------------------------------------
+#    replicates below 0.05, 0.10 and 0.25 
+# --------------------------------------------------------------------------
 below <- function(c) function(x) 100 * mean(x < c)
 gamma_stats <- list(mean = mean, median = median, sd = sd,
                     lt05 = below(0.05), lt10 = below(0.10),

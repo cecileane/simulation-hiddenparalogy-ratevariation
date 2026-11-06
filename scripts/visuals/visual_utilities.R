@@ -11,14 +11,12 @@
 # source("scripts/visuals/visual_utilities.R"). 
 # load_method() reads the per-replicate summaries 
 #             in summary_reptile/<m>/ and summary_plant/<m>/ 
-# ==========================================================================
 
 library(dplyr)
 library(tidyr)
 library(readr)
 library(stringr)
 
-FILL_UNCORRECTED <- Sys.getenv("FILL_UNCORRECTED", "0") == "1"
 results_root <- "visualization_results"
 
 # Global color palette for substitution rate variation
@@ -65,11 +63,11 @@ parse_setting <- function(file) {
 
 # Read every summary file of one folder: one row per setting, the
 # per-replicate table in the list column "data"
-read_rep_files <- function(dir, pattern, tree, corrected) {
+read_rep_files <- function(dir, pattern, tree) {
   files <- list.files(dir, pattern = pattern, full.names = TRUE)
   if (!length(files)) return(NULL)
   parse_setting(files) %>%
-    mutate(tree = tree, corrected = corrected, hp = rate_to_hp(tree, rate),
+    mutate(tree = tree, hp = rate_to_hp(tree, rate),
            ils = ifelse(sf == 1, "high", "low")) %>%
     filter(!is.na(hp)) %>%
     mutate(data = lapply(file, function(f) suppressMessages(
@@ -78,38 +76,25 @@ read_rep_files <- function(dir, pattern, tree, corrected) {
 
 # file name pattern and folders per method
 method_spec <- list(
-  findgraphs = list(pat = "^findgraph-DUP.*\\.csv$", sub = "findgraphs",
-                    old = c(reptile = "findgraph_summary",
-                            plant = "findgraph_summary_plant_1000pop")),
-  snaq = list(pat = "^SNaQ-DUP.*-summary\\.csv$", sub = "snaq",
-              old = c(reptile = "snaq_summary",
-                      plant = "snaq_summary_plant_1000pop")),
-  phynest = list(pat = "^PhyNEST-DUP.*-summary\\.csv$", sub = "phynest",
-                 old = c(reptile = "phynest_summary", plant = NA)),
-  simulation = list(pat = "^summary_DUP.*\\.csv$", sub = "simulation",
-                    old = c(reptile = "simulation_summary",
-                            plant = "simulation_summary_plant_1000pop")),
+  findgraphs = list(pat = "^findgraph-DUP.*\\.csv$", sub = "findgraphs"),
+  snaq = list(pat = "^SNaQ-DUP.*-summary\\.csv$", sub = "snaq"),
+  phynest = list(pat = "^PhyNEST-DUP.*-summary\\.csv$", sub = "phynest"),
+  simulation = list(pat = "^summary_DUP.*\\.csv$", sub = "simulation"),
   # per setting and locus category (genetree_tiers.jl), not per replicate
-  genetrees = list(pat = "^genetree_tiers_DUP.*\\.csv$", sub = "genetrees",
-                   old = c(reptile = NA, plant = NA)))
+  genetrees = list(pat = "^genetree_tiers_DUP.*\\.csv$", sub = "genetrees"))
 
 #' Load the per-rep summaries of one method for both trees
 #' @param method "findgraphs", "snaq", "phynest", "simulation"
 #' @return tibble with one row per setting: tree, hp, rv, n, ILS level,
-#'   corrected, file, data (list of per-replicate tibbles), method.
+#'   file, data (list of per-replicate tibbles), method.
 load_method <- function(method) {
   spec <- method_spec[[method]]
   out <- list()
   for (tree in c("reptile", "plant")) {
-    new <- read_rep_files(file.path(paste0("summary_", tree), spec$sub),
-                          spec$pat, tree, TRUE)
-    old <- NULL
-    if (FILL_UNCORRECTED && !is.na(spec$old[[tree]]))
-      old <- read_rep_files(spec$old[[tree]], spec$pat, tree, FALSE)
-    both <- bind_rows(new, old)
-    if (is.null(both) || !nrow(both)) next
-    out[[tree]] <- both %>% group_by(tree, hp, rv, n, ils) %>%
-      arrange(desc(corrected), .by_group = TRUE) %>% slice(1) %>% ungroup()
+    tbl <- read_rep_files(file.path(paste0("summary_", tree), spec$sub),
+                          spec$pat, tree)
+    if (is.null(tbl) || !nrow(tbl)) next
+    out[[tree]] <- tbl
   }
   bind_rows(out) %>% mutate(method = method) %>%
     mutate(hp = factor(hp, hp_levels), rv = factor(rv, names(rv_colors)),
