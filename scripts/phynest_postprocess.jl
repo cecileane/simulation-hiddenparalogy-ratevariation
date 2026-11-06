@@ -162,6 +162,10 @@ println("Output folder: $outfolder")
    alter3: F outside (B,C),(D,E),(G,H). Pruned taxa: F, G, H.
    Plant tree: B. alter1: B with (C,D); alter2: B with the E clade;
    alter3: H moved next to G. Pruned taxa: B, F, G.
+   B is the hard taxon of the plant tree: under lineage rate variation the
+   wrong findgraphs trees are alter2 (B and (C,D) exchanged), and the wrong
+   PhyNEST H=0 trees are alter2 combined with an E/H swap, so pruning B
+   alone repairs the findgraphs trees but not the PhyNEST trees.
    The column names keep the reptile suffixes (noF, noG, noH): for the
    plant tree they hold the comparisons without B, F and G respectively. =#
 if startswith(tree, "plant")

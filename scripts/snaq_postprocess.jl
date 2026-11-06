@@ -146,6 +146,10 @@ end
  3. alter3 (A,(B,((C,D),(E,(F,(G,H)))))); H moved next to G
  The "noF/noG/noH" columns drop one taxon before the RF comparison:
  F, G, H for reptiles; B, F, G for plants (names kept for the columns).
+ B is the hard taxon of the plant tree: under lineage rate variation the
+ wrong trees estimated by findgraphs are the species tree with B and (C,D)
+ exchanged (alter2), and the wrong PhyNEST trees are alter2 combined with
+ the E/H swap; so "noF" means "without B" for the plant tree.
 =# 
 if startswith(tree, "plant")
   true_species_tree = readnewick("(A,(B,((C,D),(E,(H,(F,G))))));")

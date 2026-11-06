@@ -346,19 +346,14 @@ check_existing_dir(findgraph_folderlist) # see utilies.jl.
     alignment_length = get_alignment_length(fasta_file)
     worker_println("Rep$rep_id: Alignment length is $alignment_length bp")
     
-    # estimate the blgsize based on alignment length 
-    # blgsize should be the size of each individual gene locus 
-    # block is the number of blocks (approximate) used in find_graphs 
-    # blgsize is fixed at the gene length (1000 bp): one block per gene locus
+    # jackknife block size: one block per gene locus (gene length, 1000 bp)
     blgsize = 1000
 
     if debug_mode 
       println("="^60)
       println("DEBUG INFO for Rep$rep_id:")
       println("Alignment length: $alignment_length bp")
-      println("Block parameter: $block") 
-      println("$alignment_length / $block = $(alignment_length / block)")
-      println("Calculated blgsize: $blgsize")
+      println("Block size: $blgsize")
       println("="^60)
     end
 
@@ -395,7 +390,7 @@ check_existing_dir(findgraph_folderlist) # see utilies.jl.
         mv $modified_ind_file $eigenstrat_ind_file"`)
     worker_println("Rep$rep_id: vcf -> eigenstrat conversion done")
 
-    return blgsize # return the estimated blgsize 
+    return blgsize
 end 
 
 #-----------------------------------------------#       

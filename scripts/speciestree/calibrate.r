@@ -1,7 +1,7 @@
 # Calibrate the branches of the angiosperm species tree that ASTRAL
 # cannot estimate (the 8 external branches and the ingroup stem) in CU
 #
-# Idea: convert CU to substitutions per site, which we estimated ourselves
+# Idea is to convert CU to substitutions per site, which we estimated ourselves
 # on every branch from the 260 gene trees.
 # One ratio k = CU / substitutions, from the stem of the water lilies, gives
 # the water-lily tips
@@ -10,11 +10,10 @@
 
 library(ape)
 
-#------------------------------------------------------------------#
+#-------------------------------------------------------#
 # 1. observations: the 5 internal branches of the ASTRAL tree
-#------------------------------------------------------------------#
-# ASTRAL coalescent units (data/kew_a353/astral/species.tre, 
-# just use 2 digits)
+#----------------------------------------------------------#
+# ASTRAL coalescent units (data/kew_a353/astral/species.tre,just use 2 digits)
 # and substitutions per site on the same branches
 # Below coal_obs shows the internal branches estimated from astral 
 #            Chl|Lir  Cer|..  Sch|..  Amb|rest NB stem
@@ -46,9 +45,9 @@ coef(fit_log) # slope 0.98: slope 1 on log-log axes = proportional
 # 3.77 / 0.172 = 21.9 (SEE BELOW), so it is safe to use the water-lily stem 
 # alone to compute the ratio (see below). 
 
-#------------------------------------------------------------------#
+#--------------------------------------------------------------#
 # 2. check that substitutions are also proportional to time on every branch
-#------------------------------------------------------------------#
+#-------------------------------------------------------------#
 # node ages from Zuntini et al. 2024, old tree and Morris et al.
 # 2018 for the root (348 Ma), here Zuntini et al. does not have the root age:
 age_root  = 348  # crown seed plants: Pinus | angiosperms
@@ -67,7 +66,7 @@ Ma_branch = c("Cer|Chl+Lir" = age_Cer - age_ChlLir,   # 5.2
               "Amb|rest"   = age_crown - age_Nym,    # 1.3
               "NB stem"    = age_Nym - age_NB,     # 119.7
               Liriodendron = age_ChlLir,         # 238.3
-              Chloranthus  = age_ChlLir,        # 238.3
+              Chloranthus  = age_ChlLir,  # 238.3
               Ceratophyllum = age_Cer,      # 243.5
               Schisandra  = age_Sch,      # 244.5
               Brasenia  = age_NB,        # 126.0

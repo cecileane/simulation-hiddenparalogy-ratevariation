@@ -126,6 +126,10 @@ function parse_commandline()
             help = "Species tree used in the simulation: reptile, plant or plant_1000pop"
             arg_type = String
             required = true
+        "--output_dir"
+            help = "Folder holding the <paramname> setting folders (default: output, or output_<tree> for the plant trees)"
+            arg_type = String
+            default = "output"
     end
     
     parsed_args = parse_args(s)
@@ -138,9 +142,13 @@ end
 
 # True species tree and variants with one taxon pruned, chosen by --tree
 # in main(): F, G, H are dropped for the reptile tree (F sits on its
-# shortest branches), B, F, G for the plant tree (B on its 0.16 CU branch,
-# (F,G) vs H the next shortest). The taxon names are also kept in globals
-# for pruning the estimated graphs.
+# shortest branches), B, F, G for the plant tree. B is the hard taxon of
+# the plant tree: it sits on the 0.16 CU branch, and every wrong H=0 tree
+# and nearly every wrong H=1 major tree found under lineage rate variation
+# is the species tree with B and (C,D) exchanged, which pruning B repairs;
+# (F,G) vs H is the next shortest branch. The "noF" columns therefore hold
+# the comparison without B for the plant tree. The taxon names are also
+# kept in globals for pruning the estimated graphs.
 function true_trees_for(tree::String)
     if startswith(tree, "plant")
         truetree = readnewick("(A,(B,((C,D),(E,(H,(F,G))))));")
@@ -1226,8 +1234,11 @@ function main()
     # Set up folder structure
     paramname_root = set_up_paramname_root(dup_rate, loss_rate, ratevar, 
                                                 n_inds, SF, gene_len)  
-    outroot = (tree == "reptile" ? "output" : "output_$tree")
-    outfolder = "$outroot/$paramname_root"
+    output_dir = parsed_args["output_dir"]
+    if tree != "reptile" && output_dir == "output"
+        output_dir = "output_$tree"
+    end
+    outfolder = joinpath(output_dir, paramname_root)
     
     println("Starting post-processing for parameter set: $paramname_root")
     println("Processing replicates $rep_start to $rep_end")
