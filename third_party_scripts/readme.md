@@ -1,9 +1,13 @@
-# Third-Party Code
+# Third-party code
 
-This folder contains third-party or externally sourced code not originally authored in this repository.
+Code from other projects, not written for this repository.
 
-- `vcf2eigenstrat.py`: Adapted from [https://github.com/mathii/gdc](https://github.com/mathii/gdc) by Iain Mathieson.  
-  Originally written in Python 2 and released under the Apache License 2.0.  
-  Modified to work with Python 3 and slightly adjusted for specific use in this project.
-
-See `LICENSE-APACHE-2.0.txt` for the full license text.
+- `vcf2eigenstrat_biallelic.py` and `vcf2eigenstrat_multiallelic.py`:
+  adapted from [mathii/gdc](https://github.com/mathii/gdc) by Iain
+  Mathieson (Apache License 2.0, see LICENSE-APACHE-2.0.txt). Ported to
+  Python 3 and adjusted for this project. The pipeline uses the biallelic
+  version; the multiallelic one, which handles missing alleles, is kept
+  for reference.
+- `interop_admixtools.jl`: from [PhyloUtilities](https://github.com/JuliaPhylo/PhyloUtilities) of JuliaPhylo (MIT license,
+  see mit-license.txt). Converts admixtools graphs to PhyloNetworks
+  networks, used by findgraphs_postprocess.jl.

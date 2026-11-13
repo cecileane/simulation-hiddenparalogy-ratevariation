@@ -1,16 +1,15 @@
-# ============================================================================
-# scripts/snaq_1rep.jl
-#
-# Purpose : Per-replicate SNaQ worker. Runs SNaQ at h=0 and h=1 on the
-#           ASTRAL species tree and concordance factors for a single
-#           replicate, then computes goodness-of-fit (p-values).
-# Inputs  : <outfolder>/rep<id>/astralfolder/astral.tre
-#           <outfolder>/rep<id>/iqtreefolder/CF_results.csv
-# Outputs : <outfolder>/rep<id>/snaqfolder/H0_output/H0.out
-#           <outfolder>/rep<id>/snaqfolder/H1_output/H1.out
-#           <outfolder>/rep<id>/snaqfolder/snaq_gof_results_H0.csv
-# Usage   : Not run directly; called by snaq.jl across replicates.
-# ============================================================================
+# SNaQ for one replicate, called by snaq.jl (not run directly)
+# Runs snaq! with hmax=0 and hmax=1, starting from the ASTRAL tree and with
+# the quartet CFs of the IQ-TREE gene trees, then the goodness of fit test
+# of QuartetNetworkGoodnessFit (p-values) for both networks
+# Input: <astralfolder>/astral.tre, <iqtreefolder>/besttrees.tre
+# Output, in <snaqfolder>: CF_results.csv, H0_output/H0.out, H1_output/H1.out
+#   and H*_output/snaq_gof_results_H*.csv
+
+using Pkg
+repo_env = normpath(joinpath(@__DIR__, ".."))
+Pkg.activate(repo_env; io=devnull)
+Pkg.instantiate(; io=devnull)
 
 using Distributed
 using ArgParse
@@ -25,7 +24,7 @@ function parse_commandline()
     s = ArgParseSettings()
 
     @add_arg_table s begin
-        # Folders passed down from simulation.jl for meaningful snaq filenames
+        # folders, passed from snaq.jl
 
         "--outfolder" 
         help = "root folder to be specified"
@@ -220,9 +219,9 @@ Run SNaQ:
 Option 1: boostrapping of snaq
     -> run snaq with Hmax = 0 and Hmax = 1
     -> run bootsnaq with Hmax = 0 and Hmax = 1
-    The confidence of hybird edge might show useful information 
-    However, this cannot help us compare between networks with different Hmax
-    because boostrapping assumes that Hmax is fixed 
+The confidence of hybird edge might show useful information 
+However, this cannot help us compare between networks with different Hmax
+because boostrapping assumes that Hmax is fixed 
 
 Option 2: run snaq and then compare loglikelihoods  
     -> run snaq with Hmax = 0, Hmax = 1, Hmax = 2, etc.
@@ -237,7 +236,7 @@ Option 2: run snaq and then compare loglikelihoods
 # Using the default 10 runs is fine 
 println("SNaQ Hmax=0: runs=10, seed=$seed_net0. Running...")
 net0out = joinpath(H0folder, "H0")
-# Testing: runs_net0 = runs; production (runs > 50): runs_net0 = 10
+# 10 runs for H=0 (see above). With few runs (testing), use runs
 runs_net0 = runs > 50 ? 10 : runs
 net0 = snaq!(species_tree, iqtreeCF, hmax=0, filename=net0out,
     seed=seed_net0, runs=runs_net0)
@@ -267,11 +266,11 @@ println("Gamma values: ", gammas)
 if length(gammas) >= 2
     gamma_1 = gammas[1] 
     gamma_2 = gammas[2] 
-    if gamma_1 < gamma_2 # Ensure gamma_1 is always bigger than gamma_2 
+    if gamma_1 < gamma_2 # gamma_1 = the major one
         gamma_1, gamma_2 = gamma_2, gamma_1
     end
 else
-    error("Expected ≥2 hybrid edges with hmax=1, found $(length(gammas))")
+    error("Expected >=2 hybrid edges with hmax=1, found $(length(gammas))")
 end 
 
 # Run boostrapping only if specified 
@@ -324,20 +323,16 @@ end
 
 if method == "quartetnetworkgoodnessfit" || method == "both" 
 
-    # Compare the goodness of fit between net0 and net1 
-    # see tutorial: 
-    # see QuartetNetworkGoodnessFit.jl docs: /stable/man/gof/#goodness_of_fit_1
-    
-    # load CFs from the saved csv file 
+    # goodness of fit of net0 and net1, see the QuartetNetworkGoodnessFit.jl
+    # docs (man/gof)
     cffile = joinpath(outdir, "CF_results.csv") 
     qCF = CSV.read(cffile, DataFrame)
 
-    # Check for quartets with zero gene trees
-    # quarnetGoFtest! cannot handle missing data (ngenes = 0)
+    # quarnetGoFtest! cannot handle quartets with no gene tree (ngenes = 0),
+    # which happens with gene loss. Then skip the test, save the scores only
     zero_gene_quartets = filter(row -> row.ngenes == 0, qCF)
     
     if nrow(zero_gene_quartets) > 0
-        # Skip goodness-of-fit test if there are missing quartets
         println("\n" * "="^70)
         println("WARNING: $(nrow(zero_gene_quartets)) quartet(s) with ngenes=0")
         println("This occurs due to stochastic gene loss in the simulation.")
@@ -348,11 +343,8 @@ if method == "quartetnetworkgoodnessfit" || method == "both"
         end
         println("="^70 * "\n")
         
-        # Still save network information and gamma values without GoF test
         score_net0 = loglik(net0)
         score_net1 = loglik(net1)
-        
-        # Create minimal output files indicating the test was skipped
         gof0_path = joinpath(H0folder, "snaq_gof_results_H0.csv")
         gof1_path = joinpath(H1folder, "snaq_gof_results_H1.csv")
         
@@ -370,30 +362,25 @@ if method == "quartetnetworkgoodnessfit" || method == "both"
         println("  $gof1_path")
         
     else
-        # Proceed with normal goodness-of-fit test
         score_net0 = loglik(net0)
         score_net1 = loglik(net1)
 
-        # This pipeline is based on: 
-        # see QuartetNetworkGoodnessFit.jl docs: /stable/man/gof/
-        # Warm-up with few sims to find optimal branch lengths, then full run
+        # same two steps as in the QuartetNetworkGoodnessFit.jl tutorial:
+        # warm up with few simulations and true = optimize the branch lengths,
+        # take the optimized network (res[5]), then the real run with false
+        # (branch lengths fixed) and 1000 simulations
         res0 = quarnetGoFtest!(net0, qCF, true; seed=201, nsim=10); #warm-up 
         res1 = quarnetGoFtest!(net1, qCF, true; seed=202, nsim=10); #warm-up 
         net0 = res0[5] 
         net1 = res1[5] 
         res0 = quarnetGoFtest!(net0, qCF, false; seed=seed_qgof0, nsim=1000);
         res1 = quarnetGoFtest!(net1, qCF, false; seed=seed_qgof1, nsim=1000);
-        # res0 = quarnetGoFtest!(net0, qCF, true; seed=seed_qgof0, nsim=1000);
-        # res1 = quarnetGoFtest!(net1, qCF, true; seed=seed_qgof1, nsim=1000);
-        # Branch length difference between true/false is small but noted
 
-        # Save the results
         gof0_path = joinpath(H0folder, "snaq_gof_results_H0.csv")
         gof1_path = joinpath(H1folder, "snaq_gof_results_H1.csv")
 
-        # save the results for H = 0 
-        # Define meaningful names for each result element from quarnetGoFtest!
-        # Names based on QuartetNetworkGoodnessFit.jl docs and observed output
+        # H = 0. Names of the elements returned by quarnetGoFtest!,
+        # in the order of its docs
         result_names = ["p", "z_uncorrected", "sigma", "bootstrap_values", 
                         "network", "z_bootstrap"]
         
@@ -411,9 +398,7 @@ if method == "quartetnetworkgoodnessfit" || method == "both"
             end
         end
         
-        # build net0 summary dataframe 
         df_0 = DataFrame(serializable_res0)
-        # Add loglik as a separate row for H = 0
         loglik_row = DataFrame(type = ["score"], value = [score_net0])
         df_0 = vcat(df_0, loglik_row)
 
@@ -421,7 +406,7 @@ if method == "quartetnetworkgoodnessfit" || method == "both"
 
         CSV.write(gof0_path, df_0)
 
-        # save the results for H = 1 
+        # H = 1
         serializable_res1 = []
         for (i, x) in enumerate(res1)
             name = i <= length(result_names) ? result_names[i] : "unknown_$i"
@@ -436,13 +421,10 @@ if method == "quartetnetworkgoodnessfit" || method == "both"
             end
         end
 
-        # build net1 summary dataframe 
         df_1 = DataFrame(serializable_res1)
-        # Add loglik as a separate row for H = 1
         loglik_row = DataFrame(type = ["score"], value = [score_net1])
         df_1 = vcat(df_1, loglik_row)
 
-        # save gamma values to gof1 output
         gamma_rows = DataFrame(type = ["gamma_1", "gamma_2"], 
                             value = [gamma_1, gamma_2])
         df_1 = vcat(df_1, gamma_rows)

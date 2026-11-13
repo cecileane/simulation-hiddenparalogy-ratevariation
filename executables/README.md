@@ -1,72 +1,34 @@
 # Executables
 
-This directory holds to the third-party binaries required to run the simulation pipeline. The actual binaries are installed separately (see [`software_installation.sh`](software_installation.sh)) and linked here so that all pipeline scripts can reference them through a single, stable relative path (`executables/<name>`).
+The external programs of the pipeline, as symlinks to where they are
+installed (`~/private/software/` on our servers), so that the scripts can
+call them as `executables/<name>`. The symlinks are not tracked by git.
+The commands we used to install everything are in
+[software_installation.sh](software_installation.sh).
 
-> **Note:** `Project.toml` and `Manifest.toml` are at the **repository root**
+- `simphy`: [SimPhy](https://github.com/adamallo/SimPhy) 1.0.2, gene trees
+  under the coalescent with duplication and loss
+- `seq-gen`: [Seq-Gen](https://github.com/rambaut/Seq-Gen) 1.3.5, sequences
+  along the gene trees
+- `iqtree2`: [IQ-TREE 2](https://github.com/iqtree/iqtree2) 2.4.0, gene tree
+  estimation
+- `astral`: [ASTER](https://github.com/chaoszhang/ASTER) 1.24.4.8, species
+  tree estimation (ASTRAL-IV). astral-pro3 and wastral from the same
+  package were only used for testing
+- `snp-sites`: [snp-sites](https://github.com/sanger-pathogens/snp-sites)
+  2.5.1, SNPs from the concatenated alignment, for find_graphs
 
----
+To add one: install it somewhere, then from the repo root
+`ln -s <path to the binary> executables/<name>` and check with
+`executables/<name> -h`.
 
-## Required Executables
-
-| Symlink | Software | Version | Purpose |
-|---|---|---|---|
-| `simphy` | [SimPhy](https://github.com/adamallo/SimPhy) | v1.0.2 | Simulate gene trees along a species phylogeny (with ILS, duplication, loss) |
-| `seq-gen` | [Seq-Gen](https://github.com/rambaut/Seq-Gen) | v1.3.5 | Simulate DNA sequences along gene trees |
-| `iqtree2` | [IQ-TREE 2](https://github.com/iqtree/iqtree2) | v2.4.0 | Maximum-likelihood gene tree estimation from simulated sequences |
-| `astral-IV` | [ASTER](https://github.com/chaoszhang/ASTER) | v1.24.4.8 | Species tree estimation from gene trees (ASTRAL algorithm) |
-| `snp-sites` | [snp-sites](https://github.com/sanger-pathogens/snp-sites) | v2.5.1 | Extract SNPs from whole-genome alignments produced by Seq-Gen |
-
-*Note*: We used wastral and astral-pro for testing only. 
-
-All entries in this directory are **symbolic links** to binaries installed in a private software directory (e.g., `~/private/software/`). The binaries themselves are **not tracked by Git** (see [`.gitignore`](../.gitignore)).
-
----
-
-## Installation
-
-Detailed, step-by-step installation instructions for each binary are provided in [`software_installation.sh`](software_installation.sh). The general pattern for each tool is:
-
-1. Download and build/unpack the release archive into a private software directory.
-2. Create a symlink inside this `executables/` directory pointing to the installed binary.
-3. Verify the installation by running the binary with a help or version flag.
-
-```bash
-# General pattern (replace <tool> and <path> accordingly).
-# Set REPO_ROOT once to the absolute path of this repository on your machine.
-REPO_ROOT="/path/to/repository"
-
-cd ~/private/software/
-# ... download and build <tool> ...
-cd "${REPO_ROOT}"
-ln -s ~/private/software/<tool-install-path>/<binary> executables/<symlink-name>
-./executables/<symlink-name> --help    # verify the symlink works
-```
-
-For the full commands including exact download URLs, version pins, and build flags, see [`software_installation.sh`](software_installation.sh).
-
----
-
-## Platform
-
-All binaries were compiled and tested on **Linux x86-64** (UW–Madison statistics department servers, e.g., `franklin00`, `franklin01`, `franklin02`, `franklin03`).
-They are not expected to run on macOS or Windows without recompilation.
-
----
-
-## Additional Runtime Dependencies
-
-Beyond the binaries above, the pipeline also requires:
-
-| Dependency | Version | Install method |
-|---|---|---|
-| **Julia** | ≥ 1.11 | `curl -fsSL https://install.julialang.org \| sh` |
-| Julia packages | pinned in `../Project.toml` / `../Manifest.toml` | `julia --project=.. -e 'using Pkg; Pkg.instantiate()'` |
-| **Python** | 3.12 | Built from source (see `software_installation.sh`) |
-| `biopython` | latest | `pip install biopython` |
-| **R** | system R | — |
-| `admixtools` | 2.0.8 | `devtools::install_github("uqrmaie1/admixtools")` |
-| `dplyr` | 1.1.4 | `install.packages("dplyr")` |
-| `optparse` | 1.7.5 | `install.packages("optparse")` |
-| `Rcpp` | 1.0.14 | `install.packages("Rcpp")` |
-
-See [`software_installation.sh`](software_installation.sh) for exact installation commands.
+Also needed: Julia 1.11 (juliaup) with the packages of Project.toml
+(`julia --project=. -e 'using Pkg; Pkg.instantiate()'` from the repo root).
+PhyNEST needs an older PhyloNetworks than the rest, so it has its own
+environment in `envs/phynest/` (Project.toml and Manifest.toml); the
+PhyNEST scripts activate and instantiate it themselves, nothing to install
+by hand. Python 3 with biopython (concatenate_seq.py, fasta2phylip.py), and R with
+admixtools 2.0.8 (igraph 1.6, see scripts/findgraphs_1rep.R), optparse,
+Rcpp, ape and the packages of the figure scripts (ggplot2, cowplot,
+scales, dplyr, tidyr, readr, stringr, ggnewscale).
+All of this was run on Linux x86-64.

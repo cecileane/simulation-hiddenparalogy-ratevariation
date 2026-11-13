@@ -211,7 +211,7 @@ end
 """
     group_folders(param_folders, key)
 Group output folders by a parsed field: `key` ∈ {:dup, :rv, :n_ind, :sf}.
-Returns `Dict{String,Vector{String}}` mapping group value → folder list.
+Returns `Dict{String,Vector{String}}` mapping group value -> folder list.
 """
 function group_folders(param_folders::Vector{String}, key::Symbol)
     groups = Dict{String,Vector{String}}()
@@ -235,7 +235,7 @@ function build_consensus(outfolders::Vector{String}, load_h0, load_h1,
     pfx_h0 = joinpath(out_dir, "$(safe)_H0")
     pfx_h1 = joinpath(out_dir, "$(safe)_H1")
 
-    # ── H0 greedy consensus ──────────────────────────────────────────────────
+    #--- H0 greedy consensus ---#
     nets_h0 = vcat([load_h0(f) for f in outfolders]...)
     println("  H0: $(length(nets_h0)) trees  ($(length(outfolders)) settings)")
     if length(nets_h0) >= 2
@@ -248,12 +248,12 @@ function build_consensus(outfolders::Vector{String}, load_h0, load_h1,
         )
         CSV.write(pfx_h0 * "_edge_support.csv", esup)
         plot_h0_consensus(con_h0, esup, "H0: $label"; pdf_path=pfx_h0 * "_plot.pdf")
-        println("  H0 → $(pfx_h0)_plot.pdf")
+        println("  H0 -> $(pfx_h0)_plot.pdf")
     else
         @warn "H0 skipped (fewer than 2 trees): $label"
     end
 
-    # ── H1 consensus level-1 network ────────────────────────────────────────
+    #--- H1 consensus level-1 network ---#
     nets_h1 = vcat([load_h1(f) for f in outfolders]...)
     println("  H1: $(length(nets_h1)) networks  ($(length(outfolders)) settings)")
     if length(nets_h1) >= 2
@@ -261,7 +261,7 @@ function build_consensus(outfolders::Vector{String}, load_h0, load_h1,
         consensus_level1network_save(res_h1, pfx_h1)
         plot_h1_hybrid_support(res_h1[:net], nets_h1, "H1: $label";
                                pdf_path=pfx_h1 * "_plot.pdf")
-        println("  H1 → $(pfx_h1)_plot.pdf")
+        println("  H1 -> $(pfx_h1)_plot.pdf")
     else
         @warn "H1 skipped (fewer than 2 networks): $label"
     end
@@ -278,7 +278,7 @@ function build_consensus_grouped(param_folders::Vector{String}, key::Symbol,
     out_dir = joinpath(base_out_dir, "by_$(key)")
     for (val, folders) in sort(collect(groups))
         label = "$(key)_$(val)"
-        println("\n=== $label  ($(length(folders)) settings, ≤$(100*length(folders)) reps) ===")
+        println("\n=== $label  ($(length(folders)) settings, <=$(100*length(folders)) reps) ===")
         build_consensus(folders, load_h0, load_h1, out_dir, label)
     end
 end

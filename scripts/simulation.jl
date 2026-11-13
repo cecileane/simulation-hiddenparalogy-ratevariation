@@ -1,105 +1,52 @@
-#=
-================================================================================
-  simulation.jl — Full Phylogenomic Simulation Pipeline
-================================================================================
+#= simulation.jl: 
+simulate gene trees and sequences, then estimate gene trees
+and a species tree, for one parameter setting and n_reps replicates in parallel
+(one replicate per worker).
 
-OVERVIEW
---------
-This script runs an end-to-end phylogenomic simulation pipeline across multiple
-replicates in parallel. Starting from a fixed species tree, it produces
-gene trees and a coalescent-based species tree for each parameter configuration.
+Steps, for each replicate:
+1. SimPhy: gene trees under the coalescent, with gene duplication and loss
+    (--dup_rate, --loss_rate) and rate variation across genes (G),
+    lineages (L) or both (GL, G*L). 
+    --n_inds individuals per species.
+2. hidden paralogy: the gene trees are filtered to mimic hidden paralogy,
+   see the long comment before rerun_simphy_1rep_1int.
+   Trees with > 1 copy per individual (detectable paralogy) 
+   or <= 3 taxa are dropped. 
+   The others keep 1 copy per individual and the copy id is
+   removed from the tip names. SimPhy is re-run 
+   (up to --max_iteration_simphy times) until we have n_genes trees, 
+   or at least --min_gene_proportion x n_genes.
+3. Seq-Gen: one alignment per gene tree, HKY + gamma. 
+    Parameters fixed for all genes (all_genes_same_HKY) or 
+    drawn for each gene from the distributions fitted to 
+      the empirical data (all_genes_diff_HKY, default)
+4. concatenate_seq.py: nexus -> one fasta per replicate
+5. IQ-TREE: one gene tree per alignment, all in besttrees.tre
+6. ASTRAL: species tree, with a mapping file made from the gene trees
 
-PIPELINE STAGES
----------------
-1. GENE TREE SIMULATION (SimPhy)
-   - Simulates gene trees under the multispecies coalescent,
-     optionally with gene duplication and loss rates (--dup_rate, --loss_rate).
-   - Supports rate variation across genes (G), lineages (L), or both (GL/G*L).
-   - Multiple individuals per taxon are supported (--n_inds).
+Seeds: one master seed from the parameter name, then one seed per software
+and per rep / iteration / gene (see utilities.jl), 
+so everything can be re-run exactly.
 
-2. HIDDEN PARALOGY FILTERING (newick string modification)
-   - After SimPhy, gene trees are post-processed to mimic hidden paralogy:
-       * Trees with >1 gene copy per individual (detectable paralogy) → drop
-       * Trees with ≤3 taxa after gene loss (uninformative) → discarded
-       * Trees with exactly 1 copy per individual and ≥4 taxa → retained;
-         gene copy IDs are stripped from taxon names
-   - If too few trees pass, SimPhy is re-run up to --max_iteration_simphy times
-     until the target or min threshold (--min_gene_proportion × n_genes) is met.
+Output: output/<paramname>/ (output_plant/ for the plant tree), 
+with paramname like DUP0.0003-LOS0.0003-RVG-N_ind1-SF1.0-genelen1000
+  rep001/genetrees_simphy/ raw simphy output. 
+    Locus trees of the discarded genes are blanked
+  rep001/genetrees_singlecopy/  the filtered and renamed gene trees (.trees)
+  rep001/seqgenfolder/  alignments (.fasta)
+  rep001/iqtreefolder/  IQ-TREE output, besttrees.tre
+  rep001/astralfolder/  astral.tre and the mapping file
+  simulation_<paramname>.csv, Simphy_gene_duplication_and_loss_<paramname>.csv
+  and Simphy_gene_loss_only_<paramname>.csv
+  random_seed_simphy.txt, random_seed_seqgen.txt, random_seed_iqtree.txt
+  arguments-<paramname>.log (all arguments + running time)
+  screen_<paramname>.log (console output, if --log true)
 
-3. SEQUENCE SIMULATION (Seq-Gen)
-   - Simulates DNA alignments along each filtered gene tree using the HKY model.
-   - Substitution parameters (κ, base frequencies, Γ-shape α) are either fixed
-     across all genes (all_genes_same_HKY) or drawn independently per gene from
-     empirical distributions (all_genes_diff_HKY; default).
-
-4. ALIGNMENT CONCATENATION (Python)
-   - Individual per-gene NEXUS alignments are converted and concatenated into a
-     single FASTA file per replicate (via concatenate_seq.py).
-
-5. GENE TREE ESTIMATION (IQ-Tree)
-   - IQ-Tree infers a maximum-likelihood gene tree for each simulated alignment.
-   - Trees are collected into a single besttrees.tre file per replicate.
-
-6. SPECIES TREE INFERENCE (ASTRAL)
-   - A taxon mapping file is generated automatically from the gene trees.
-
-REPRODUCIBILITY
----------------
-All random seeds are deterministically derived from a single master seed, which
-is itself generated from the parameter configuration name. This ensures that
-results for any parameter setting are fully reproducible.
-
-OUTPUT STRUCTURE
-----------------
-output/
-└── <paramname_root>/    e.g. DUP0.0003-LOS0.0003-RVG-N_ind1-SF1.0-genelen1000
-    ├── rep001/
-    │   ├── genetrees_simphy/     Raw SimPhy output (kept for inspection)
-    │   ├── genetrees_singlecopy/ Filtered & renamed gene trees (.trees)
-    │   ├── seqgenfolder/         Simulated alignments (.fasta)
-    │   ├── iqtreefolder/         IQ-Tree output (besttrees.tre, …)
-    │   └── astralfolder/         ASTRAL output (astral.tre, mapping file)
-    ├── rep002/ …
-    ├── simulation_<paramname>.csv     Per-replicate SimPhy run statistics
-    ├── Simphy_gene_duplication_and_loss_<paramname>.csv
-    ├── Simphy_gene_loss_only_<paramname>.csv
-    ├── random_seed_simphy/seqgen/iqtree.txt
-    ├── arguments-<paramname>.log      All arguments + runtime summary
-    └── screen_<paramname>.log         Full console output (if --log true)
-
-USAGE
------
-Run from the repository root, e.g.:
-
-  julia -p <nprocs> scripts/simulation.jl \
-      --dup_rate 0.0003 --loss_rate 0.0003 \
+Usage, from the repo root (on the servers: in tmux, under /nobackup):
+  julia -p 10 scripts/simulation.jl --dup_rate 0.0003 --loss_rate 0.0003 \
       --ratevar G --n_reps 100 --n_genes 500 \
-      --n_inds 1 --SF 0.5 --gene_len 1000
-
-  On the darwin cluster:  use /nobackup  and run inside tmux
-  On the franklin cluster: use /nobackup2 and run inside tmux
-
-REQUIRED ARGUMENTS
-------------------
-  --dup_rate   FLOAT   Gene duplication rate (0 = no duplication)
-  --loss_rate  FLOAT   Gene loss rate (0 = no loss); must be ≤ dup_rate
-  --ratevar    STR     Rate variation: N | G | L | GL | G*L
-  --n_reps     INT     Number of independent replicates
-  --n_genes    INT     Target number of gene trees per replicate
-
-OPTIONAL ARGUMENTS
-------------------
-  --n_inds              INT    Individuals per taxon (default: 1)
-  --Ne                  INT    Effective population size (default: 1000)
-  --SF                  FLOAT  Ne scaling factor; SF<1 → more ILS (default: 1.0)
-  --gene_len            INT    Alignment length in bp (default: 1000)
-  --seqgen_model        STR    all_genes_same_HKY | all_genes_diff_HKY (default)
-  --max_iteration_simphy INT   Max SimPhy re-runs per replicate (default: 20000)
-  --min_gene_proportion FLOAT  Min fraction of target genes (default: 0.8)
-  --max_taxa_missing    INT    Max taxa missing after gene loss (default: 0)
-  --min_locus_tree_tips INT    Min tips required in a locus tree (default: 8)
-  --debug_mode          BOOL   Keep all intermediate folders (default: false)
-  --log                 BOOL   Save console output to log file (default: true)
+      --n_inds 1 --SF 0.5 --tree reptile
+see parse_commandline() below for all the arguments
 =#
 
 using Distributed  
@@ -151,10 +98,14 @@ function parse_commandline()
       help = "Number of individuals/accessions per species (Default = 1)"  
       arg_type = Int
       default = 1
+    "--tree"
+      help = "Species tree: 'reptile' or 'plant' (angiosperm tree)"
+      arg_type = String
+      required = true 
     "--Ne"
       help = "Effective population size (Default = 1000)"
       arg_type = Int
-      default = 1000
+      default = nothing
     "--generation_time"
       help = "Time unit per generation (Default = 1)"
       arg_type = Int
@@ -179,7 +130,7 @@ function parse_commandline()
     "--min_locus_tree_tips"
       help = "Minimum number of tips required in locus tree after gene dup/loss"
       arg_type = Int
-      default = 8
+      default = 8 # since we have 8-taxon trees 
     "--seqgen_model"
       help = "Substitution model for seq-gen (Default = all_genes_diff_HKY)" * 
               "Options: all_genes_same_HKY, all_genes_diff_HKY" 
@@ -195,6 +146,11 @@ function parse_commandline()
       help = "Debugging mode: Keep all temporary folders"
       default = false
       arg_type = Bool
+    "--reuse_genetrees"
+      help = "Reuse the SimPhy gene trees already in the output folder " *
+             "for testing and debugging"
+      default = false
+      arg_type = Bool
     "--log"
       help = "Enable logging: Save all screen output to screen_<paramname>.log"
       default = true
@@ -207,6 +163,7 @@ end
 #-----------------------------------------------#       
 #         Initialization
 #-----------------------------------------------#
+
 #--------------- Parse arguments ---------------# 
 parsed_args = parse_commandline()
 # A number indicates rate of gene duplication rates (0 = no dup):
@@ -218,8 +175,15 @@ ratevar = parsed_args["ratevar"]
 n_reps = parsed_args["n_reps"] # number of replicates 
 n_genes = parsed_args["n_genes"] # number of genes 
 n_inds = parsed_args["n_inds"] # Number of individuals per taxa -- default = 1
-Ne = parsed_args["Ne"] # Effective population size, default = 1000 
-generation_time = parsed_args["generation_time"] # Generation time, default = 1 
+tree = parsed_args["tree"] # "reptile" or "plant"
+tree in ["reptile", "plant"] ||
+  error("Invalid --tree: $tree. Valid: reptile, plant")
+Ne = parsed_args["Ne"] # Effective population size, 1000 for both trees
+if Ne === nothing
+  Ne = 1000
+end
+
+generation_time = parsed_args["generation_time"] # Generation time, default = 1
 # Maximum number of iteration of re-running simphy: 
 max_iteration_simphy = parsed_args["max_iteration_simphy"] 
 # min_gene_porportion * n_genes = n_genes_min
@@ -231,6 +195,7 @@ SF = parsed_args["SF"] # SF stands for scaling factor
 SF = Float64(SF) 
 # debug_mode: keep all intermediate folders if true
 debug_mode = parsed_args["debug_mode"]
+reuse_genetrees = parsed_args["reuse_genetrees"]
 # log mode - if true, save all screen output to a log file
 log_output = parsed_args["log"] 
 max_taxa_missing = parsed_args["max_taxa_missing"] 
@@ -243,12 +208,18 @@ gene_len = parsed_args["gene_len"]  # length of simulated gene sequences
 rootfolder = pwd()
 paramname_root = set_up_paramname_root(
     dup_rate, loss_rate, ratevar, n_inds, SF, gene_len)
-outfolder = joinpath(rootfolder, "output", paramname_root) 
+# reptile runs go to output/, plant runs to output_plant/ (same paramname)
+outroot = (tree == "reptile" ? "output" : "output_$tree")
+outfolder = joinpath(rootfolder, outroot, paramname_root)
 
 # The below function checks if a path exists:
-# If yes, the function will ask user's input tp decide if to remove the path 
-check_existing_dir([outfolder]) # see utilities.jl --> input needs to be a list
-mkpath(outfolder) # create a new one if there is no pre-existing outfolder
+# If yes, the function will ask to decide if to remove the path 
+if reuse_genetrees
+  isdir(outfolder) || error("--reuse_genetrees: $outfolder does not exist")
+else
+  check_existing_dir([outfolder]) # see utilities.jl --> input needs to be a list
+  mkpath(outfolder) # create a new one if there is no pre-existing outfolder
+end
 
 folder_path_list = [] # create folder path 
 for n in 1:n_reps # All outputs goes to each rep file 
@@ -286,6 +257,32 @@ end
   tree_sub has lengths in substitution rate per site.
   Sub rate per generation = sub rate per site / CU / 2 * Ne (per branch).
 =#
+#--------------- parameters that depend on the species tree ---------------#
+# reptile: scripts/speciestree/speciestree_reptile.jl (2Ne = 1000)
+# plant: scripts/speciestree/speciestree_angiosperm.jl, values copied from
+#        data/kew_a353/simphy_tree_angiosperm.txt (2Ne = 1000)
+if tree == "reptile"
+  # -hl: log-normal distribution of gene rates
+  hl_param = "ln:-0.19,0.6164414002968976"
+  # -su: genome-wide substitution rate per site per generation
+  su_param = "0.000019526049565237014"
+  # species tree in generations, with per-branch multiplier m_i = r_i / bar_r
+  species_tree_mult = "(A:3440*0.5169864809498557,((((B:880*0.2153870155124918,C:880*0.18834479130316475):1710*0.4020718751928419,(D:930*1.2082967305424273,E:930*1.0232137924942215):1660*0.409265030942541):170*0.35253579234236804,F:2760*0.344215098863717):180*0.5023485661313807,(G:500*4.086688964324318,H:500*9.202700211638554):2440*0.9755544779699168):500*3.557239714945028);"
+  # same tree without lineage-rate variation
+  species_tree_flat = "(A:3440,((((B:880,C:880):1710,(D:930,E:930):1660):170," *
+      "F:2760):180,(G:500,H:500):2440):500);"
+  # seq-gen HKY parameters: all genes the same (kappa, base freq, alpha)
+  seqgen_same_HKY = (4.143, [0.316,0.182,0.183,0.319], 0.356)
+else # plant
+  hl_param = "ln:-0.03634,0.269593"
+  su_param = "4.117215703000018e-5"
+  species_tree_mult = "(A:8430*1.104565,(((C:2940*1.085755,D:2940*1.12242):3770*1.108897,(E:5920*0.685743,(H:4970*1.564038,(F:4530*0.789595,G:4530*0.721226):440*1.233907):950*0.842807):790*0.954714):160*0.993533,B:6870*0.896529):1560*1.104565);"
+  species_tree_flat = "(A:8430,(((C:2940,D:2940):3770,(E:5920,(H:4970," *
+      "(F:4530,G:4530):440):950):790):160,B:6870):1560);"
+  # means over the 27 angiosperm loci for which ModelFinder chose HKY
+  # (as for the reptile values above: means over the HKY loci)
+  seqgen_same_HKY = (3.876, [0.290,0.197,0.233,0.279], 0.833)
+end
 
 #-----------------------------------------------#       
 #         set up SimPhy parameters
@@ -322,7 +319,7 @@ end
 
 # To simulate substitution rate variation
 if occursin("G", ratevar) # gene-family-specific rate heterogeneity
-  parameters *= "-hl ln:-0.19,0.6164414002968976" *
+  parameters *= "-hl $hl_param" *
       " //log-normal distribution of gene rates\n"
   # hl is Gene-family-specific rate heterogeneity modifiers 
 end
@@ -342,16 +339,41 @@ if occursin("L", ratevar) # add tree with variation across lineages
   # corrected species tree:  
   # This is illustrated on the end of the speciestree.jl 
   # multiplier m_i = r_i / bar_r (per-branch sub rate / tree-wide average)
-  species_tree = "(A:3440*0.5169864809498557,((((B:880*0.2153870155124918,C:880*0.18834479130316475):1710*0.4020718751928419,(D:930*1.2082967305424273,E:930*1.0232137924942215):1660*0.409265030942541):170*0.35253579234236804,F:2760*0.344215098863717):180*0.5023485661313807,(G:500*4.086688964324318,H:500*9.202700211638554):2440*0.9755544779699168):500*3.557239714945028);" 
-  
-  parameters *= "-s $species_tree\n" 
-  parameters *= "-su f:0.000019526049565237014 //substitution rate\n"
+  species_tree = species_tree_mult # reptile or plant, see above
+
+  parameters *= "-s $species_tree\n"
+  parameters *= "-su f:$su_param //substitution rate\n"
 else
   # no lineage-rate variation: use flat branch lengths
-  species_tree = "(A:3440,((((B:880,C:880):1710,(D:930,E:930):1660):170," *
-      "F:2760):180,(G:500,H:500):2440):500);"
+  species_tree = species_tree_flat
   parameters *= "-s $species_tree\n"
-  parameters *= "-su f:0.000019526049565237014 //substitution rate\n"
+  parameters *= "-su f:$su_param //substitution rate\n"
+end
+
+if reuse_genetrees # testing and debugging function 
+  # the existing folder must come from this species tree, hold enough gene
+  # trees in every replicate, and be where its gene-tree paths were recorded
+  old_log = joinpath(outfolder, "arguments-$paramname_root.log")
+  simphy_log = joinpath(outfolder, "arguments-$paramname_root-simphy.log")
+  isfile(simphy_log) || mv(old_log, simphy_log)
+  old_lines = readlines(simphy_log)
+  i = findfirst(l -> strip(l) == "species tree used:", old_lines)
+  (i !== nothing && strip(old_lines[i+1]) == species_tree * ";") ||
+    error("--reuse_genetrees: species tree in $simphy_log differs from $species_tree")
+  for rep_folder in folder_path_list
+    n = count(f -> occursin("g_trees_noLocusID", f),
+              readdir(joinpath(rep_folder, "genetrees_singlecopy")))
+    n >= n_genes_min || error("--reuse_genetrees: $rep_folder has $n gene trees < $n_genes_min")
+  end
+
+  for csv in ["Simphy_gene_duplication_and_loss_$paramname_root.csv",
+              "Simphy_gene_loss_only_$paramname_root.csv"]
+    lines = readlines(joinpath(outfolder, csv))
+    length(lines) < 2 && continue
+    stored = replace(split(lines[2], ",")[1], r"/rep\d+/.*$" => "")
+    stored == outfolder ||
+      error("--reuse_genetrees: gene-tree paths in $csv start with $stored, not $outfolder")
+  end
 end
 
 # To simulate multiple individuals per species 
@@ -385,13 +407,14 @@ print(simphy_conf_content) # print the content to check if everything is correct
 @everywhere global SF = $SF
 @everywhere global time = $time 
 @everywhere global species_tree = $species_tree
+@everywhere global tree = $tree
+@everywhere global seqgen_same_HKY = $seqgen_same_HKY
 @everywhere global log_output = $log_output
 @everywhere global outfolder = $outfolder
 @everywhere global max_taxa_missing = $max_taxa_missing
 @everywhere global seqgen_model = $seqgen_model 
 @everywhere global gene_len = $gene_len 
-
-# Initialize worker-specific logging variable
+# Initialize worker-specific logging variable: 
 @everywhere global worker_logfile = nothing
 
 #-----------------------------------------------#       
@@ -465,14 +488,13 @@ print(simphy_conf_content) # print the content to check if everything is correct
         "simphysim-conf-Int$iteration-Rep$simulation_rep")
     write(new_conf_file, updated_content)
     
-    # Run SimPhy with error handling - throw exception if it fails
+    # run simphy. If it fails, look at the locus trees to say why
+    # (see utilities.jl)
     try
       run(`$rootfolder/executables/simphy -i $new_conf_file -o $output_dir`)
     catch e
-      # Diagnose the failure by examining locus trees
       diagnostic_msg = diagnose_simphy_locus_trees(
           output_dir, simulation_rep, iteration)
-      # Re-throw with detailed diagnostic information
       error("SimPhy failed Rep$simulation_rep Int$iteration: $e\n" *
             "Diagnostic:\n$diagnostic_msg")
     end
@@ -549,10 +571,9 @@ Outputs:
       List of gene trees experiencing gene loss only.
 
 Notes:
-    - The function dynamically removes intermediate SimPhy output folders 
-      to save space unless debug_mode is enabled.
-    - If no valid trees are generated in an iteration, 
-      NaN values are handled gracefully to avoid pipeline errors.
+    - intermediate simphy folders are removed unless debug_mode
+    - an iteration with no valid tree gives NaN for the average number of
+      leaves, which is skipped
   """
   function run_simulation_1rep(
                       max_iteration_simphy::Int, 
@@ -592,10 +613,10 @@ Notes:
 
     #= collate per-iteration event counts (loss only / dup+loss / none)
     Those information will be used to calculate: 
-    1. the percentage of gene loss in each rep
-    2. the percentage of gene duplication and loss in each rep
-    3. the percentage of nothing happened in each rep
-    4. the average number of leaves left in each gene tree
+            1. the percentage of gene loss in each rep
+            2. the percentage of gene duplication and loss in each rep
+            3. the percentage of nothing happened in each rep
+            4. the average number of leaves left in each gene tree
     =#
     tol_num_trees_experiencing_gene_loss_only = 0
     tol_num_trees_experiencing_gene_duplication_and_loss = 0
@@ -617,8 +638,7 @@ Notes:
       # Below: Interation + 1 because it starts from 0 
       current_seed = seed_array[simulation_rep, iteration + 1]
       
-      # count num of gene trees in the output dir 
-      # Add sync to ensure directory operations are complete
+      # count the gene trees in the output dir 
       if isdir(modified_genetree_folder)
         files = readdir(modified_genetree_folder) 
         num = count(file -> occursin(r"g_trees_noLocusID_.*", file), files) 
@@ -635,15 +655,15 @@ Notes:
         mkpath(simphyfolder_int)
         batch = calculate_batch(num, n_genes) # see utilities.jl 
 
-        # Initialize variables before try-catch to ensure they're in scope
+        # declared before the try so they are visible after it
         local tree_repeated_taxa_1int, tree_insufficient_taxa_1int
         local num_trees_experiencing_gene_loss_only,
               num_trees_experiencing_gene_duplication_and_loss
         local num_trees_experiencing_nothing, avg_num_leaf_left_in_trees
         local gene_trees_gene_loss_only, gene_trees_gene_duplication_and_loss
         
-        # Both output below are stats about one iteration
-        # Wrap in try-catch to handle SimPhy failures gracefully
+        # stats about this iteration.
+        # simphy can crash, then we skip the iteration
         try
           tree_repeated_taxa_1int, 
           tree_insufficient_taxa_1int, 
@@ -653,27 +673,26 @@ Notes:
           avg_num_leaf_left_in_trees,
           gene_trees_gene_loss_only,
           gene_trees_gene_duplication_and_loss = rerun_simphy_1rep_1int(
-                                                        batch, 
-                                                        simulation_rep, 
-                                                        current_seed, 
-                                                        iteration, 
-                                                        simphyfolder_int, 
-                                                        simphy_conf_content,
-                                                    modified_genetree_folder,
-                                                        rootfolder,
-                                                        max_taxa_missing
-                                                        )
+                                                    batch, 
+                                                    simulation_rep, 
+                                                    current_seed, 
+                                                    iteration, 
+                                                    simphyfolder_int, 
+                                                    simphy_conf_content,
+                                                modified_genetree_folder,
+                                                    rootfolder,
+                                                    max_taxa_missing
+                                                    )
         catch e
-          # SimPhy failed — log and skip this iteration
+          # simphy failed: log it and skip this iteration
           error_msg = sprint(showerror, e)
           worker_println("=" ^ 80)
           worker_println(
               "WARNING: Rep$simulation_rep Iter$iteration: SimPhy failed")
           worker_println("=" ^ 80)
           
-          # Parse the error message to extract diagnostic information
+          # the diagnostic part of the message, if there is one
           if occursin("Diagnostic analysis:", error_msg)
-            # Extract and display the diagnostic section
             parts = split(error_msg, "Diagnostic analysis:")
             if length(parts) >= 2
               worker_println("Error: $(strip(parts[1]))")
@@ -695,7 +714,7 @@ Notes:
           log_info *= "Rep$simulation_rep Iter$iteration:" *
               " SimPhy crashed - skipped (see worker log)\n"
           
-          # Set default values for this failed iteration
+          # zeros for this failed iteration
           tree_repeated_taxa_1int = 0
           tree_insufficient_taxa_1int = 0
           num_trees_experiencing_gene_loss_only = 0
@@ -704,11 +723,7 @@ Notes:
           avg_num_leaf_left_in_trees = 0.0
           gene_trees_gene_loss_only = String[]
           gene_trees_gene_duplication_and_loss = String[]
-          
-          # Don't push NaN/0.0 to the average list for failed iterations
-          # This prevents affecting the overall average
-          
-          # Increment iteration and continue to next iteration
+          # nothing pushed to the average list for a failed iteration
           iteration += 1
           continue
     
@@ -742,7 +757,6 @@ Notes:
             num_trees_experiencing_gene_duplication_and_loss
         tol_num_trees_experiencing_nothing += num_trees_experiencing_nothing
         
-        # Handle NaN in avg_num_leaf_left_in_trees for this iteration
         avg_display = isnan(avg_num_leaf_left_in_trees) ?
             "N/A" : @sprintf("%.2f", avg_num_leaf_left_in_trees)
         
@@ -755,8 +769,7 @@ Notes:
                 " nothing=$num_trees_experiencing_nothing" *
                 " total=$total_trees/$n_genes avg_leaves=$avg_display")
         
-        # Only push valid (non-NaN) values to maintain accurate overall average
-        if !isnan(avg_num_leaf_left_in_trees)
+        if !isnan(avg_num_leaf_left_in_trees) # NaN = no tree in this iteration
           push!(avg_num_leaf_left_in_trees_one_rep, avg_num_leaf_left_in_trees)
         end 
 
@@ -767,7 +780,7 @@ Notes:
       end
     end
     
-    # Final check after loop exits - catch silent failures
+    # 0 trees after some iterations: simphy failed silently
     files = readdir(modified_genetree_folder)
     final_count = count(file -> occursin(r"g_trees_noLocusID_.*", file), files)
     if final_count == 0 && iteration > 0
@@ -775,28 +788,23 @@ Notes:
           "ERROR: Rep$simulation_rep: $iteration iters, 0 trees")
       worker_println("  Possible silent SimPhy failure or file I/O issue.")
     end
-    total_trees = final_count  # Update with actual final count
+    total_trees = final_count
 
-    # Limit gene trees to exactly n_genes if more were generated
-    # If the final number of simulated gene trees > n_genes, 
-    # Then, we only keep the first n_genes trees after sorting the files 
+    # if more than n_genes trees, keep the first n_genes after sorting
+    # the file names
     files = readdir(modified_genetree_folder) 
     gene_tree_files = filter(
         file -> occursin(r"g_trees_noLocusID_.*", file), files)
     if length(gene_tree_files) > n_genes
-      # Sort files to ensure consistent selection of first n_genes
       sort!(gene_tree_files)
-      # Keep only the first n_genes files
       files_to_keep = gene_tree_files[1:n_genes]
       files_to_remove = gene_tree_files[(n_genes+1):end]
-      
-      # Remove excess gene tree files
       for file_to_remove in files_to_remove
 
         file_path = joinpath(modified_genetree_folder, file_to_remove)
         rm(file_path; force=true)
 
-        # Remove excess gene trees from genetrees_simphy folder as well... 
+        # and the same gene in the genetrees_simphy folder
         int_id = match(r"Int(\d+)", file_to_remove).captures[1]
         gene_id = match(
             r"g_trees_noLocusID_Gene(\d+)", file_to_remove).captures[1]
@@ -825,10 +833,8 @@ Notes:
             rm(maplg_file_to_remove; force=true)
         end
 
-        # remove from event-category tracking lists
+        # and from the lists by category
         full_path_to_remove = joinpath(modified_genetree_folder, file_to_remove)
-        
-        # Check if the file exists in gene_loss_only list and remove it
         if full_path_to_remove in gene_trees_gene_loss_only_1rep
           filter!(x -> x != full_path_to_remove, gene_trees_gene_loss_only_1rep)
           tol_num_trees_experiencing_gene_loss_only -= 1
@@ -836,16 +842,14 @@ Notes:
           filter!(x -> x != full_path_to_remove,
               gene_trees_gene_duplication_and_loss_1rep)
           tol_num_trees_experiencing_gene_duplication_and_loss -= 1
-        # If not in either list, it must be a "nothing" tree
-        else
+        else # in neither list: a tree with nothing
           tol_num_trees_experiencing_nothing -= 1
         end 
 
       end
 
-      # Update total_trees count to reflect the actual number kept
       total_trees = n_genes
-      # Have a check function here to make sure the counts are correct 
+      # check that the counts by category add up
       total_num_check = tol_num_trees_experiencing_gene_loss_only + 
                         tol_num_trees_experiencing_gene_duplication_and_loss + 
                         tol_num_trees_experiencing_nothing 
@@ -858,14 +862,17 @@ Notes:
       worker_println("Removed $(length(files_to_remove)) excess trees")
     end
 
-    # Calculate average number of leaves left in trees
-    # Note: NaN values are already filtered out when pushing to the array above
-    # This ensures we only average over iterations that produced valid trees
+    # The gene trees are final: blank the locus trees of discarded gene
+    # families in l_trees.trees to save space (see utilities.jl)
+    if debug_mode == false
+      blank_unused_locus_trees(simphyfolder, modified_genetree_folder)
+    end
+
+    # average over the iterations that produced trees (NaN skipped above)
     average_num_leaf_left_in_trees_for_1rep =
         isempty(avg_num_leaf_left_in_trees_one_rep) ?
         0.0 : mean(avg_num_leaf_left_in_trees_one_rep)
     
-    # Print summary for this replicate
     avg_str = average_num_leaf_left_in_trees_for_1rep == 0.0 ?
         "N/A" : @sprintf("%.2f", average_num_leaf_left_in_trees_for_1rep)
     worker_println("Rep$simulation_rep done: avg leaves/tree = $avg_str")
@@ -932,14 +939,14 @@ run_simulation:
 Goal: -> 1) run simulation with n_rep and < max_iteration_simphy, 
       -> 2) Individual simulation_rep is procssed by different processor
 Input: 
-  max_iteration_simphy: Maximum iteration for simphy (default = 100)
-  n_reps: Total number of replicates
-  n_genes: Total number of genes to be simulated (target)
-  seed_simphy: The master seed to generate seed_array (see utility.jl)
-  simphy_conf_cont: simphy configuration content (=global simphy_conf_cont)
-  rootfolder: rootfolder (the github repo)
-  n_genes_min: min trees to keep (loop raises error if not met)
-  folder_path_list: A list to store path to each rep  
+    max_iteration_simphy: Maximum iteration for simphy (default = 100)
+    n_reps: Total number of replicates
+    n_genes: Total number of genes to be simulated (target)
+    seed_simphy: The master seed to generate seed_array (see utility.jl)
+    simphy_conf_cont: simphy configuration content (=global simphy_conf_cont)
+    rootfolder: rootfolder (the github repo)
+    n_genes_min: min trees to keep (loop raises error if not met)
+    folder_path_list: A list to store path to each rep  
 """
 
 function run_simulation(
@@ -954,7 +961,6 @@ function run_simulation(
           paramname_root::String
           )
 
-  # Initialize worker logs if logging is enabled
   if log_output
     @everywhere open_worker_log()
   end
@@ -981,7 +987,6 @@ function run_simulation(
   gene_trees_gene_duplication_and_loss_lst = getindex.(results, 3)
   # gene trees experiencing gene loss only
   gene_trees_gene_loss_only_lst = getindex.(results, 4)
-  # Close worker logs if logging is enabled
   if log_output
     @everywhere close_worker_log()
   end
@@ -1018,16 +1023,16 @@ function run_simulation(
   combined_log_info = join(log_info, "")
 
   #= CSV recording per-rep simphy info:
-    a. RepID;
-    b. Number of total gene trees generated per rep; 
-    c. Number of iteration run per rep; 
-    d. How many gene trees got removed because of duplicated taxa 
-    e. How many gene trees got removed because of insufficient taxa (<= 3)  
-    tracks how dup_rate and loss_rate affect simulation
+  a. RepID;
+  b. Number of total gene trees generated per rep; 
+  c. Number of iteration run per rep; 
+  d. How many gene trees got removed because of duplicated taxa 
+  e. How many gene trees got removed because of insufficient taxa (<= 3)  
+  tracks how dup_rate and loss_rate affect simulation
   =# 
   simulation_csv = joinpath(outfolder, "simulation_$paramname_root.csv")
 
-  # If file doesn't exist, create it and write the header
+  # header, the first time only
   if !isfile(simulation_csv)
       open(simulation_csv, "w") do f
           write(f, "RepID,n_genes,n_iterations,n_repeated_taxa_removed,"*
@@ -1039,14 +1044,12 @@ function run_simulation(
       end
   end
 
-  # Append new csv_info (must be a single string)
   open(simulation_csv, "a") do f
-      write(f, join(csv_info, "")) 
-      # above ensures to change csv_info from a Vector to String 
+      write(f, join(csv_info, "")) # Vector to one String
   end
 
-  # Return the simphy warnings for integration with concatenation warnings
-  return combined_log_info   
+  # simphy warnings, written to the log with the concatenation warnings
+  return combined_log_info
 
 end 
 
@@ -1081,8 +1084,7 @@ end
 
   mkpath(output_dir)
 
-  # Check if the genetrees_singlecopy directory exists
-  # If not, it means the SimPhy stage failed or produced no valid trees
+  # no genetrees_singlecopy: simphy failed or gave no valid tree
   if !isdir(input_dir)
     worker_println(
         "WARNING: Rep$simulation_rep: genetrees_singlecopy not found")
@@ -1108,15 +1110,20 @@ end
       * HKY: kappa = 4.143 (-t), base freq 0.316,0.182,0.183,0.319 (-f),
         Gamma shape alpha = 0.356 (-a)
       =# 
-      kappa, basefreq, alpha = 4.143, [0.316,0.182,0.183,0.319], 0.356 
+      kappa, basefreq, alpha = seqgen_same_HKY # reptile or plant values
 
     elseif seqgen_model == "all_genes_diff_HKY"
       #= to simulate each gene with its own substitution model, use HKY with:
-      * kappa from LogNormal(μ=1.4215, σ=0.2798)
+      * kappa from LogNormal(mu=1.4215, sigma=0.2798)
       * frequencies from Dirichlet(66.59, 38.41, 38.61, 67.12)
-      * alpha from Gamma(α=3.267, θ=0.109).
-      =# 
-      kappa, basefreq, alpha = sample_substitution_params(current_seed)
+      * alpha from Gamma(shape=3.267, scale=0.109).
+      For the plant tree, see sample_substitution_params_plant in utilities.jl
+      =#
+      if startswith(tree, "plant")
+        kappa, basefreq, alpha = sample_substitution_params_plant(current_seed)
+      else
+        kappa, basefreq, alpha = sample_substitution_params(current_seed)
+      end
 
     else
       error("Unsupported seqgen_model: $seqgen_model")
@@ -1127,13 +1134,21 @@ end
     G_freq = basefreq[3]
     T_freq = basefreq[4]
 
+    # seq-gen's -t is the expected transition/transversion ratio, not the HKY
+    # rate ratio kappa that IQ-TREE estimates: tstv = kappa (piA piG + piC piT)
+    # / ((piA + piG)(piC + piT)). See seq-gen source/nucmodels.c
+    # (https://github.com/rambaut/Seq-Gen/blob/master/source/nucmodels.c) and
+    # IQ-TREE's HKY definition (http://www.iqtree.org/doc/Substitution-Models).
+    tstv = @sprintf("%.10g",
+      kappa * (A_freq * G_freq + C_freq * T_freq) / ((A_freq + G_freq) * (C_freq + T_freq)))
+
     run(`bash scripts/seq-gen.sh \
       $rep_number_string \
       $input_file_path \
       $output_file_path \
       $current_seed \
-      $alpha $kappa $A_freq $C_freq $G_freq $T_freq \
-      $gene_length`) 
+      $alpha $tstv $A_freq $C_freq $G_freq $T_freq \
+      $gene_length $tree`) 
   end  
 
 end
@@ -1162,7 +1177,6 @@ end
 
   input_nexus_folder = joinpath(seqgenfolder, "nexus_folder")
 
-  # Check if the nexus_folder exists and contains files
   if !isdir(input_nexus_folder) || isempty(readdir(input_nexus_folder))
     worker_println(
         "WARNING: Rep$simulation_rep: nexus_folder not found or empty")
@@ -1170,13 +1184,11 @@ end
     return ""
   end
 
-  # Run the Python script and capture output
+  # the python script prints a message, returned here for the log
   result = read(`python3 scripts/concatenate_seq.py \
       $input_nexus_folder \
       $seqgenfolder \
       $rep_number_string`, String)
-  
-  # Return the message from the Python script
   return result
 end
 
@@ -1213,7 +1225,6 @@ end
                 simulation_rep, 
                 joinpath("seqgenfolder", "nexus_folder"))
   
-  # Check if seqgen output exists
   if !isdir(seqgenfolder) || isempty(readdir(seqgenfolder))
     worker_println(
         "WARNING: Rep$simulation_rep: seqgen nexus_folder not found or empty")
@@ -1247,7 +1258,6 @@ end
                                 paramname_root, 
                                 rep_number_string)
   
-  # Check if temp iqtree directory exists
   if !isdir(tmpiqtreedir)
     worker_println("WARNING: Rep$simulation_rep: temp iqtree folder not found")
     worker_println("Skipping IQ-tree folder move for this replicate")
@@ -1278,7 +1288,6 @@ end
   iqtreefile = joinpath(iqtreefolder, "besttrees.tre")
   astralfile = joinpath(astralfolder, "astral.tre")
 
-  # Check if iqtree output exists
   if !isfile(iqtreefile)
     worker_println("WARNING: Rep$simulation_rep: IQ-tree output file not found")
     worker_println("Skipping ASTRAL species tree inference for this replicate")
@@ -1330,7 +1339,6 @@ and iqtree gene.treefile to save space
   # The gene.treefile is important for checking the iqtree output 
   # temp_iqtree_file = joinpath(output_folder, "iqtreefolder", "gene.treefile")
   
-  # Only remove if they exist
   if isdir(temp_seqgen_nexus_folder)
     rm(temp_seqgen_nexus_folder; force=true, recursive=true)
   end
@@ -1344,9 +1352,7 @@ end
 #  Run the pipeline and time the process
 #-----------------------------------------------# 
 function main() 
-  # Run major parts and time the outputs 
-  
-  # Set up logging if enabled
+  # run all the steps and time them
   logfile = nothing
   original_stdout = stdout
   
@@ -1360,6 +1366,17 @@ function main()
     flush(logfile)
   end
 
+  if reuse_genetrees
+    simphy_warnings = ""
+    for (i, rep_folder) in enumerate(folder_path_list)
+      for sub in ["seqgenfolder", "iqtreefolder", "astralfolder"]
+        rm(joinpath(rep_folder, sub); force=true, recursive=true)
+      end
+      for tmp in tmp_iqtreeastral_folders(paramname_root, pad_number(i, n_reps))
+        rm(tmp; force=true, recursive=true)
+      end
+    end
+  else
   @timeit to "Running Simphy and modify newick strings" begin
     seed_array_simphy = seed_generator(
                         seed_simphy, 
@@ -1377,6 +1394,7 @@ function main()
               folder_path_list,
               paramname_root)
   end 
+  end
 
   @timeit to "Running Seq-Gen" begin 
     # for seed used in seq-gen, 
@@ -1455,7 +1473,6 @@ function main()
   println(msg)
   if logfile !== nothing; println(logfile, msg); flush(logfile); end
   
-  # Close log file if logging was enabled
   if log_output && logfile !== nothing
     println(logfile, "")
     println(logfile, "=== Simulation Log Ended ===")
@@ -1463,8 +1480,7 @@ function main()
     println("Log file closed: screen_$paramname_root.log")
   end
   
-  # Return both simphy warnings and concatenate messages for logging
-  return simphy_warnings, concatenate_messages
+  return simphy_warnings, concatenate_messages # for the arguments log
 
 end 
 
@@ -1481,13 +1497,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
   # e.g. julia -p 4 shows 5 (workers + coordinator)
   host_name = gethostname() # host name for server 
 
-  # Process concatenation and simphy warnings by rep
+  # simphy and concatenation warnings, grouped by rep
   rep_warnings = ""
 
   for rep_id in 1:n_reps
     rep_warnings_list = String[]
     
-    # Add simphy warnings for this rep
     if !isempty(simphy_warnings)
       rep_simphy_warnings = filter(
           line -> contains(line, "Rep$rep_id:"), split(simphy_warnings, '\n'))
@@ -1496,7 +1511,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
       end
     end
     
-    # Add concatenation warnings for this rep
     if rep_id <= length(concatenate_messages)
       concat_msg = strip(concatenate_messages[rep_id])
       if !isempty(concat_msg)
@@ -1504,8 +1518,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
       end
     end
     
-    # Only add rep section if there are warnings
-    if !isempty(rep_warnings_list)
+    if !isempty(rep_warnings_list) # only reps with warnings
       global rep_warnings 
       rep_warnings *= "Rep $rep_id: \n"
       for warning in rep_warnings_list
@@ -1515,8 +1528,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
   end
 
-  # Write the general log file with appropriate content
-  # pointer
   if !isempty(simphy_warnings) 
     simphy_log_warnings = "simphy_warnings\n"
   else
@@ -1529,6 +1540,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
   #--------------SimPhy, SeqGen, IQtree, Astral------------------#
   #==============================================================#
   ---Arguments used for simulating this output dataset---
+  species tree = $tree;
   duplication rate = $dup_rate;
   loss rate = $loss_rate; 
   rate variation = $ratevar; 
@@ -1543,13 +1555,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
 
   ---Seed Information---
   master seed = $master_seed (seeds simphy, seqgen, iqtree);
-  seed_simphy = $seed_simphy (rep×iter seed array for SimPhy);
-  seed_seqgen = $seed_seqgen (rep×1 seed array for seqgen);
-  seed_iqtree = $seed_iqtree (rep×1 seed array for iqtree);
+  seed_simphy = $seed_simphy (rep x iter seed array for SimPhy);
+  seed_seqgen = $seed_seqgen (rep x 1 seed array for seqgen);
+  seed_iqtree = $seed_iqtree (rep x 1 seed array for iqtree);
 
   ---Rerunning SimPhy---
   max_iteration_simphy = $max_iteration_simphy;
   n_genes_min = $n_genes_min;
+  reuse_genetrees = $reuse_genetrees;
 
   ---Other information---
   Number of processors used = $n_processors;

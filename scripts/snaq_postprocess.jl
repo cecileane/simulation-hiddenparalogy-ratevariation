@@ -1,6 +1,10 @@
 # SNaQ postprocessing: re-analyzes failed reps after snaq.jl finishes.
-# Usage: julia snaq_postprocessing.jl --dup_rate X --loss_rate Y
-#          --ratevar Z --n_reps N [--rep_start S --rep_end E]
+# Usage: julia snaq_postprocess.jl --tree reptile --dup_rate X
+#          --loss_rate Y --ratevar Z 
+#          --n_reps N [--rep_start S --rep_end E]
+# --tree (reptile or plant) selects the true species tree, the alternative
+# topologies, the taxa dropped in the "noF/noG/noH" columns and the output
+# folder (output/ or output_plant/). 
 
 using ArgParse
 using Distributed
@@ -9,14 +13,15 @@ using Distributed
 @everywhere using PhyloSummaries
 @everywhere using CSV
 @everywhere using DataFrames
-@everywhere include("utilities.jl")
+const _UTILS_PATH = joinpath(@__DIR__, "utilities.jl")
+@everywhere include($(_UTILS_PATH))
 using PhyloPlots
 using RCall
 
 function parse_commandline()
     s = ArgParseSettings()
     @add_arg_table s begin
-        # Parameter settings to identify the correct output folder
+        # parameter settings, to find the right output folder
         "--dup_rate"
             help = "Parameter setting (duplication rate) used in snaq"
             arg_type = Float64
@@ -54,6 +59,10 @@ function parse_commandline()
             help = "Gene length used in simulation (default = 1000)"
             arg_type = Int
             default = 1000 
+        "--tree"
+            help = "Species tree used in the simulation: reptile or plant"
+            arg_type = String
+            required = true
     end
     
     parsed_args = parse_args(s)
@@ -66,7 +75,6 @@ end
 
 parsed_args = parse_commandline()
 
-# Parse arguments
 dup_rate = parsed_args["dup_rate"]
 loss_rate = parsed_args["loss_rate"]
 ratevar = parsed_args["ratevar"]
@@ -76,14 +84,16 @@ rep_start = parsed_args["rep_start"]
 rep_end = parsed_args["rep_end"]
 SF = parsed_args["SF"] 
 gene_len = parsed_args["gene_len"]  
+tree = parsed_args["tree"]
+tree in ("reptile", "plant") ||
+  error("--tree must be reptile or plant")
 
-# Set up folders
 paramname_root = set_up_paramname_root(dup_rate, loss_rate, 
                                     ratevar, n_inds, SF,
                                     gene_len) 
-outfolder = "output/$paramname_root"
+outroot = (tree == "reptile" ? "output" : "output_$tree")
+outfolder = "$outroot/$paramname_root"
 
-# Check if the output folder exists
 if !isdir(outfolder)
     error("Output folder does not exist: $outfolder")
 end
@@ -97,21 +107,15 @@ println("Output folder: $outfolder")
 #     Check if summary file exists, create if missing
 #-----------------------------------------------#
 
-# Define the goodness-of-fit summary file path
 gof_summary_file = joinpath(outfolder, "SNaQ-$paramname_root-summary.csv")
 
-# Check if the summary file already exists
 if !isfile(gof_summary_file)
     println("Goodness-of-fit summary file not found: $gof_summary_file")
     println("Creating goodness-of-fit summary from individual result files...")
-    
-    # This flag indicates we need to create the summary file
     create_summary = true
 else
     println("Goodness-of-fit summary file exists: $gof_summary_file")
     println("Proceeding with RF recovery and updating existing summary...")
-    
-    # This flag indicates we're updating an existing file
     create_summary = false
 end
 
@@ -119,30 +123,52 @@ end
 #   Calculate RF distances to true species tree
 #-----------------------------------------------#
 
-# True species tree used in calculations
-true_species_tree = readnewick("(A,((((B,C),(D,E)),F),(G,H)));")
-
 #=
  If the estimated tree under H=0 or displayed trees under H=1 are 
- not the true species tree (A,((G,H),(F,((B,C),(D,E))))); 
- 
- Then, we want to understand if it could be the following alternatives 
+ not the true species tree, we want to understand if it could be one of
+ three alternatives, so we also compute RF distances to them.
+
+ Reptile tree (A,((G,H),(F,((B,C),(D,E))))); F sits on the shortest branches:
  1. alter1 (A,((G,H),(((B,C),F),(D,E)))); F is clustered with (B,C) 
  2. alter2 (A,((G,H),((B,C),(F,(D,E))))); F is clustered with (D,E) 
  3. alter3 (A,(((G,H),((D,E),(B,C))),F)); F is outside of (B,C),(D,E),(G,H)
-Therefore, not only we calculate RF distance to true species tree,
-    but also to these three alternatives. This will help us understand 
-    why the estimated tree is different from the true species tree. 
+
+ Plant tree (A,(B,((C,D),(E,(H,(F,G)))))); B sits on the 0.16 CU branch
+ between the ingroup crown and (B,A), and (F,G) vs H is the next shortest:
+ 1. alter1 (A,((B,(C,D)),(E,(H,(F,G))))); B is clustered with (C,D)
+ 2. alter2 (A,((C,D),(B,(E,(H,(F,G)))))); B is clustered with the E clade
+ 3. alter3 (A,(B,((C,D),(E,(F,(G,H)))))); H moved next to G
+
+ The "noF/noG/noH" columns drop one taxon before the RF comparison:
+ F, G, H for reptiles, B, F, G for plants (column names kept).
+ B is the hard one in the plant tree. With lineage rate variation,
+ the wrong findgraphs trees are alter2 (B and (C,D) exchanged)
+ and the wrong PhyNEST trees are alter2 + an E/H swap.
+ So "noF" means "without B" for the plant tree.
 =# 
-alter1 = readnewick("(A,((G,H),(((B,C),F),(D,E))));") # F with (B,C)
-alter2 = readnewick("(A,((G,H),((B,C),(F,(D,E)))));") # F with (D,E)
-alter3 = readnewick("(A,(((G,H),((D,E),(B,C))),F));") # F outside all
-species_tree_noF = readnewick("(A,((G,H),((B,C),(D,E))));") # no F
-species_tree_noG = readnewick("(A,((((B,C),(D,E)),F),H));") # no G
-species_tree_noH = readnewick("(A,((((B,C),(D,E)),F),G));") # no H
+if startswith(tree, "plant")
+  true_species_tree = readnewick("(A,(B,((C,D),(E,(H,(F,G))))));")
+  alter1 = readnewick("(A,((B,(C,D)),(E,(H,(F,G)))));")
+  alter2 = readnewick("(A,((C,D),(B,(E,(H,(F,G))))));")
+  alter3 = readnewick("(A,(B,((C,D),(E,(F,(G,H))))));")
+  taxon_noF, taxon_noG, taxon_noH = "B", "F", "G"
+else
+  true_species_tree = readnewick("(A,((((B,C),(D,E)),F),(G,H)));")
+  alter1 = readnewick("(A,((G,H),(((B,C),F),(D,E))));") # F with (B,C)
+  alter2 = readnewick("(A,((G,H),((B,C),(F,(D,E)))));") # F with (D,E)
+  alter3 = readnewick("(A,(((G,H),((D,E),(B,C))),F));") # F outside all
+  taxon_noF, taxon_noG, taxon_noH = "F", "G", "H"
+end
+species_tree_noF = deepcopy(true_species_tree)
+deleteleaf!(species_tree_noF, taxon_noF)
+species_tree_noG = deepcopy(true_species_tree)
+deleteleaf!(species_tree_noG, taxon_noG)
+species_tree_noH = deepcopy(true_species_tree)
+deleteleaf!(species_tree_noH, taxon_noH)
 
 """
-Calculate RF distances between estimated tree and alternative trees
+Input: est_tree (HybridNetwork): estimated tree
+Output: Tuple of the RF distances to alter1, alter2, alter3
 """
 function check_alternative_trees(est_tree::PhyloNetworks.HybridNetwork)
     rf_alt1 = mudistance_semidirected(est_tree, alter1, preorder=true)
@@ -162,17 +188,17 @@ for simulation_rep in rep_start:rep_end
     results1_file = joinpath(rep_folder_path,
         "snaqfolder", "H1_output", "snaq_gof_results_H1.csv")
     
-    # Calculate RF distance for H0
+    # H0
     if isfile(net0_file) && isfile(results0_file)
         df0 = CSV.read(results0_file, DataFrame; types=Dict(:value => String))
         net0 = readnewick(net0_file) 
         rf0 = mudistance_semidirected(net0, true_species_tree, preorder=true) 
 
-        # Check if estimated tree matches species tree with no F
+        # same without the taxon on the short branches (F or B)
         rf0_noF = NaN
         try
             net0_noF = deepcopy(net0)
-            deleteleaf!(net0_noF, "F") 
+            deleteleaf!(net0_noF, taxon_noF) 
             rf0_noF = mudistance_semidirected(
                 net0_noF, species_tree_noF, preorder=true)
         catch e
@@ -197,7 +223,7 @@ for simulation_rep in rep_start:rep_end
         if rf_row_idx === nothing || rf_alt1_idx === nothing ||
                 rf_alt2_idx === nothing || rf_alt3_idx === nothing ||
                 rf_true_noF_idx === nothing
-            # Add any missing rows
+            # add the missing rows, update the others
             if rf_row_idx === nothing
                 push!(df0, (type="RF_net0_true", value=string(rf0)))
             else
@@ -223,8 +249,7 @@ for simulation_rep in rep_start:rep_end
             else
                 df0[rf_true_noF_idx, :value] = string(rf0_noF)
             end
-        else
-            # All rows exist, just update them
+        else # all rows exist already
             df0[rf_row_idx, :value] = string(rf0)
             df0[rf_alt1_idx, :value] = string(rf_alt1)
             df0[rf_alt2_idx, :value] = string(rf_alt2)
@@ -234,11 +259,11 @@ for simulation_rep in rep_start:rep_end
         CSV.write(results0_file, df0)
     end
     
-    # Calculate RF distances for H1 displayed trees
+    # H1: the two displayed trees
     if isfile(net1_file) && isfile(results1_file)
         df1 = CSV.read(results1_file, DataFrame; types=Dict(:value => String))
         net1 = readnewick(net1_file)
-        # deepcopy to avoid mutating net1 before RF calculations
+        # deepcopy because get_hybrid_info reroots the network
         hybrid_info = get_hybrid_info(deepcopy(net1), "A")
         displayed_trees = displayedtrees(net1, 0.0)
         
@@ -252,7 +277,7 @@ for simulation_rep in rep_start:rep_end
         rf2 = mudistance_semidirected(
             displayed_trees[2], true_species_tree, preorder=true)
 
-        # Also check if either displayed tree matches species tree with no F
+        # same without one taxon (noF, noG, noH)
         rf1_noF = NaN
         rf2_noF = NaN
         rf1_noG = NaN
@@ -263,13 +288,13 @@ for simulation_rep in rep_start:rep_end
             displayed_tree1_noF = deepcopy(displayed_trees[1])
             displayed_tree1_noG = deepcopy(displayed_trees[1]) 
             displayed_tree1_noH = deepcopy(displayed_trees[1]) 
-            deleteleaf!(displayed_tree1_noF, "F") 
+            deleteleaf!(displayed_tree1_noF, taxon_noF) 
             rf1_noF = mudistance_semidirected(
                 displayed_tree1_noF, species_tree_noF, preorder=true)
-            deleteleaf!(displayed_tree1_noG, "G")
+            deleteleaf!(displayed_tree1_noG, taxon_noG)
             rf1_noG = mudistance_semidirected(
                 displayed_tree1_noG, species_tree_noG, preorder=true)
-            deleteleaf!(displayed_tree1_noH, "H")
+            deleteleaf!(displayed_tree1_noH, taxon_noH)
             rf1_noH = mudistance_semidirected(
                 displayed_tree1_noH, species_tree_noH, preorder=true)
         catch e
@@ -278,7 +303,7 @@ for simulation_rep in rep_start:rep_end
         end
         try
             displayed_tree2_noF = deepcopy(displayed_trees[2])
-            deleteleaf!(displayed_tree2_noF, "F")
+            deleteleaf!(displayed_tree2_noF, taxon_noF)
             rf2_noF = mudistance_semidirected(
                 displayed_tree2_noF, species_tree_noF, preorder=true)
         catch e
@@ -286,7 +311,7 @@ for simulation_rep in rep_start:rep_end
         end
         try
             displayed_tree2_noG = deepcopy(displayed_trees[2])
-            deleteleaf!(displayed_tree2_noG, "G")
+            deleteleaf!(displayed_tree2_noG, taxon_noG)
             rf2_noG = mudistance_semidirected(
                 displayed_tree2_noG, species_tree_noG, preorder=true)
         catch e
@@ -294,14 +319,15 @@ for simulation_rep in rep_start:rep_end
         end
         try
             displayed_tree2_noH = deepcopy(displayed_trees[2])
-            deleteleaf!(displayed_tree2_noH, "H")
+            deleteleaf!(displayed_tree2_noH, taxon_noH)
             rf2_noH = mudistance_semidirected(
                 displayed_tree2_noH, species_tree_noH, preorder=true)
         catch e
             println("Warning: RF_net1_2_noH failed rep $rep_number_string: $e")
         end
 
-        # two idx lookups done first so re-runs don't clobber existing RF values
+        # look up the rows first, so a re-run updates them instead of
+        # adding duplicates
         rf1_idx = findfirst(row -> row.type == "RF_net1_1_true", eachrow(df1))
         rf2_idx = findfirst(row -> row.type == "RF_net1_2_true", eachrow(df1))
 
@@ -324,7 +350,6 @@ for simulation_rep in rep_start:rep_end
         rf_true_noH_idx1  = findr("RF_net1_1_true_noH")
         rf_true_noH_idx2  = findr("RF_net1_2_true_noH")
 
-        # Check if any rows are missing and add/update accordingly
         if rf1_idx === nothing || rf2_idx === nothing || 
             rf_alt1_tree1_idx === nothing || rf_alt2_tree1_idx === nothing || 
             rf_alt3_tree1_idx === nothing || rf_alt1_tree2_idx === nothing || 
@@ -332,7 +357,6 @@ for simulation_rep in rep_start:rep_end
             rf_true_noF_idx1 === nothing || rf_true_noF_idx2 === nothing || 
             rf_true_noG_idx1 === nothing || rf_true_noG_idx2 === nothing || 
             rf_true_noH_idx1 === nothing || rf_true_noH_idx2 === nothing
-            # Add or update each row individually
             if rf1_idx === nothing
                 push!(df1, (type="RF_net1_1_true", value=string(rf1)))
             else
@@ -386,8 +410,7 @@ for simulation_rep in rep_start:rep_end
             else
                 df1[rf_true_noH_idx2, :value] = string(rf2_noH)
             end
-        else
-            # All rows exist, just update them
+        else # all rows exist already
             df1[rf1_idx, :value] = string(rf1)
             df1[rf2_idx, :value] = string(rf2)
             df1[rf_alt1_tree1_idx, :value] = string(rf_alt1_tree1)
@@ -403,7 +426,7 @@ for simulation_rep in rep_start:rep_end
             df1[rf_true_noH_idx1, :value] = string(rf1_noH)
             df1[rf_true_noH_idx2, :value] = string(rf2_noH)
         end
-        # Upsert hybrid_taxon / major_donor / minor_donor rows
+        # hybrid_taxon, major_donor, minor_donor rows
         for (rtype, rval) in [("hybrid_taxon", hybrid_info.hybrid_taxon),
                                ("major_donor",  hybrid_info.major_donor),
                                ("minor_donor",  hybrid_info.minor_donor)]
@@ -424,7 +447,6 @@ end
 
 println("Analyzing goodness-of-fit results from all replicates...")
 
-# Initialize arrays to store results
 rep_ids = String[]
 p_H0_values = Float64[]
 p_H1_values = Float64[]
@@ -459,18 +481,15 @@ hybrid_taxon_values = String[]
 major_donor_values = String[]
 minor_donor_values = String[]
 
-# Process each replicate
 for simulation_rep in rep_start:rep_end
     rep_number_string = pad_number(simulation_rep, n_reps)
     rep_folder_path = joinpath(outfolder, "rep$rep_number_string")
-    
-    # Construct paths to the goodness-of-fit result files
     gof_H0_file = joinpath(rep_folder_path, "snaqfolder", "H0_output", 
                             "snaq_gof_results_H0.csv")
     gof_H1_file = joinpath(rep_folder_path, "snaqfolder", "H1_output", 
                             "snaq_gof_results_H1.csv")
     
-    # Initialize values
+    # NaN / NA when a file or a row is missing
     p_H0, p_H1 = NaN, NaN
     z_uncorrected_H0, z_uncorrected_H1 = NaN, NaN
     sigma_H0, sigma_H1 = NaN, NaN
@@ -490,7 +509,7 @@ for simulation_rep in rep_start:rep_end
     rf_net1_2_alter1_values, rf_net1_2_alter2_values,
         rf_net1_2_alter3_values = NaN, NaN, NaN
     
-    # Parse H0 results
+    # H0
     if isfile(gof_H0_file)
         try
             df_H0 = CSV.read(gof_H0_file, DataFrame;
@@ -522,7 +541,7 @@ for simulation_rep in rep_start:rep_end
         end
     end
     
-    # Parse H1 results
+    # H1
     if isfile(gof_H1_file)
         try
             df_H1 = CSV.read(gof_H1_file, DataFrame;
@@ -578,8 +597,7 @@ for simulation_rep in rep_start:rep_end
                 end
             end
             
-            #= Ensure gamma_1 is always bigger than gamma_2 
-            This makes sure gamma1 is the major and gamma2 is the minor =# 
+            # gamma_1 = major, gamma_2 = minor
             if !isnan(gamma_1) && !isnan(gamma_2) && gamma_1 < gamma_2
                 gamma_1, gamma_2 = gamma_2, gamma_1
             end
@@ -590,7 +608,6 @@ for simulation_rep in rep_start:rep_end
         end
     end
     
-    # Store results
     push!(rep_ids, rep_number_string)
     push!(p_H0_values, p_H0)
     push!(p_H1_values, p_H1)
@@ -629,7 +646,6 @@ for simulation_rep in rep_start:rep_end
         "p_H0=$p_H0, p_H1=$p_H1, RF_H0=$rf_net0_true")
 end
 
-# Create comprehensive summary DataFrame
 summary_df = DataFrame(
     repID = rep_ids,
     p_H0 = p_H0_values,
@@ -666,7 +682,6 @@ summary_df = DataFrame(
     minor_donor = minor_donor_values
 )
 
-# Save updated summary results
 CSV.write(gof_summary_file, summary_df)
 
 if create_summary
@@ -681,10 +696,10 @@ println("  H1 files found: $(count(x -> !isnan(x), p_H1_values))")
 println("  RF calculations available:")
 println("    RF_net0_true: $(count(x -> !isnan(x), rf_net0_true_values))")
 
-#-----------------------------------------------#
+#---------------------------------------------------------#
 #   Build consensus trees/networks across replicates
 #   (treat each replicate as one bootstrap sample)
-#-----------------------------------------------#
+#----------------------------------------------------------#
 
 println("\nBuilding consensus trees/networks across replicates " *
     "(treating each rep as a bootstrap)...")
@@ -728,7 +743,7 @@ con_h0_nwk     = "$(con_h0_prefix).nwk"
 con_h0_sup_csv = "$(con_h0_prefix)_edge_support.csv"
 con_h1_prefix  = joinpath(consensus_dir, "SNaQ-$(paramname_root)-consensus_H1")
 
-# H=0: greedy consensus tree (unrooted, no outgroup specified)
+# H=0: greedy consensus tree
 if length(h0_consensus_trees) >= 2
     println("Computing H=0 consensus tree from " *
         "$(length(h0_consensus_trees)) trees...")
@@ -741,8 +756,7 @@ if length(h0_consensus_trees) >= 2
     )
     CSV.write(con_h0_sup_csv, esup_h0)
 
-    # Plot H=0 consensus tree while con_h0 is live
-    # (e.y is not preserved on file round-trip)
+    # plot now, while con_h0 is in memory: e.y is lost when written to file
     con_h0_plot = "$(con_h0_prefix)_plot.pdf"
     esup_h0_plot = DataFrame(
         number  = [e.number for e in con_h0.edge if !isexternal(e)],
@@ -758,7 +772,7 @@ if length(h0_consensus_trees) >= 2
              tipcex        = 1.5,
              edgecex       = 0.9,
              edgelabeladj  = [0.5, -0.3])
-        title_h0 = "H=0 consensus tree — SNaQ: $(paramname_root)"
+        title_h0 = "H=0 consensus tree - SNaQ: $(paramname_root)"
         R"title(main=$title_h0, cex.main=0.85)"
         R"dev.off()"
         println("H=0 plot saved: $con_h0_plot")
@@ -768,13 +782,13 @@ if length(h0_consensus_trees) >= 2
     end
 println("H=0 consensus tree computed.")
 else
-    println("Warning: Fewer than 2 H=0 trees available – " *
+    println("Warning: Fewer than 2 H=0 trees available, " *
         "skipping H=0 consensus (found $(length(h0_consensus_trees))).")
     con_h0_nwk = nothing
     con_h0_sup_csv = nothing
 end
 
-# H=1: consensus level-1 network (unrooted, no outgroup specified)
+# H=1: consensus level-1 network
 if length(h1_consensus_nets) >= 2
     println("Computing H=1 consensus level-1 network from " *
         "$(length(h1_consensus_nets))...")
@@ -783,8 +797,7 @@ if length(h1_consensus_nets) >= 2
             suppressinfo=true)
     consensus_level1network_save(res_h1, con_h1_prefix)
 
-    # Plot H=1 consensus network while res_h1 is live
-    # (blob/hybrid tables have :edge column)
+    # plot now, while res_h1 is in memory
     con_h1_plot = "$(con_h1_prefix)_plot.pdf"
     blb_df = DataFrame(res_h1[:blob_table],   copycols=false)
     hyb_df = DataFrame(res_h1[:hybrid_table], copycols=false)
@@ -800,7 +813,7 @@ if length(h1_consensus_nets) >= 2
              edgelabelcolor = "deepskyblue",
              nodelabel = select(blb_df, [:node, :support_partition]),
              edgelabel = select(hyb_df, [:edge, :support_hybrid]))
-        title_h1 = "H=1 consensus network — SNaQ: $(paramname_root)"
+        title_h1 = "H=1 consensus network - SNaQ: $(paramname_root)"
         R"title(main=$title_h1, cex.main=0.85)"
         R"dev.off()"
         println("H=1 plot saved: $con_h1_plot")
@@ -810,7 +823,7 @@ if length(h1_consensus_nets) >= 2
     end
     println("H=1 consensus network computed.")
 else
-    println("Warning: Fewer than 2 H=1 networks available – " *
+    println("Warning: Fewer than 2 H=1 networks available, " *
         "skipping H=1 consensus (found $(length(h1_consensus_nets))).")
 end
 
@@ -818,7 +831,7 @@ println()
 println("========================================")
 println("SNaQ Postprocessing: Output Files Summary")
 println("========================================")
-println("  GOF summary CSV       : $gof_summary_file")
+println("GOF summary csv: $gof_summary_file")
 if con_h0_nwk !== nothing 
     println("Saved to consensus directory: $consensus_dir") 
 end

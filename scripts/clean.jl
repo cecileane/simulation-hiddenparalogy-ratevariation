@@ -1,17 +1,8 @@
-# ============================================================================
-# scripts/clean.jl
-#
-# Purpose : Remove the per-replicate output/ directory (every parameter
-#           setting and replicate is wiped) plus any stray raxml-outfiles /
-#           astral-outfiles folders at the repo root. Use to reset a working
-#           tree before re-running the pipeline from scratch.
-# Inputs  : None.
-# Outputs : Removes output/ and matching folders if present.
-# Usage   : julia --project=. scripts/clean.jl
-# Warning : Destructive. Aggregated results in results/, simulation_summary/,
-#           snaq_summary/, and findgraph_summary/ are NOT deleted, but every
-#           per-replicate intermediate under output/ is.
-# ============================================================================
+# Remove output/ (all parameter settings and replicates) and the leftover
+# raxml-outfiles / astral-outfiles folders at the root, to start over.
+# Usage: julia scripts/clean.jl
+# Careful: everything under output/ is deleted. The summaries in results/,
+# simulation_summary/, snaq_summary/ and findgraph_summary/ are kept
 
 # Remove the single output folder
 rm("output", force=true, recursive=true)

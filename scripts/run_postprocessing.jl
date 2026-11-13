@@ -1,40 +1,27 @@
-#!/usr/bin/env julia
-#=
-Coordinator script to run postprocessing across all parameter sets in output/.
 
-Usage:
-    julia -p N scripts/run_postprocessing.jl \
-        --mode <simulation|snaq|findgraphs> [options]
-
-Options:
-    --mode          Postprocessing mode: simulation, snaq, or findgraphs
-    --n_reps        Number of replicates per parameter set (default: 100)
-    --output_dir    Directory with parameter folders (default: "output")
-    --saved_path    Directory to copy summary CSVs into after each run
-                    (default: <project_root>/<mode>_summary)
-    --n_procs       Workers to pass to each sub-script (default: nworkers())
-
-Example:
-    julia -p 10 scripts/run_postprocessing.jl --mode snaq
-    julia -p 4  scripts/run_postprocessing.jl --mode findgraphs --n_reps 10
-    julia       scripts/run_postprocessing.jl --mode simulation --n_procs 8
-=#
+# Runs one postprocessing script (<mode>_postprocess.jl) 
+# on every parameter set in output/
+# and copies each summary csv to <mode>_summary/ 
+# (for snaq and findgraphs, also the consensus plots
+# to <mode>_consensus_tree/)
+# Usage: julia -p N scripts/run_postprocessing.jl 
+# e.g. julia -p 10 scripts/run_postprocessing.jl --mode snaq
+#      julia scripts/run_postprocessing.jl --mode phynest 
+#      --output_dir Phynest_results
 
 using Distributed
 using ArgParse
 
-# ---------------------------------------------------------------------------
-# Argument parsing
-# ---------------------------------------------------------------------------
-
+#--------------- argument parsing ---------------#
 function parse_commandline()
     s = ArgParseSettings(
         description = "Run postprocessing for every parameter set in output/."
     )
 
-    @add_arg_table s begin
+    @add_arg_table s begin # see ArgParse package tutorial 
         "--mode"
-            help    = "Postprocessing mode: simulation, snaq, or findgraphs. " *
+            help    = "Postprocessing mode: simulation, snaq, findgraphs " *
+                      "or phynest. " *
                       "snaq and findgraphs also copy consensus results to " *
                       "<project_root>/snaq_consensus_tree or " *
                       "findgraphs_consensus_tree."
@@ -61,20 +48,26 @@ function parse_commandline()
             help    = "Workers to pass via -p to each sub-script. " *
                       "Defaults to nworkers() (-p N given to this script)."
             arg_type = Int
-            default = -1   # sentinel → auto-detect
+            default = -1   # sentinel -> auto-detect
+
+        "--tree"
+            help    = "Species tree of the runs: reptile or plant " *
+                      "(passed to every sub-script; plant results are kept " *
+                      "apart with _plant suffixes on the default folders)"
+            arg_type = String
+            default = "reptile"
     end
 
     return parse_args(s)
 end
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
+#--------------- functions ---------------#
 """
-Parse a parameter-folder name like
-    DUP0.0-LOS0.0-RVG-N_ind1-SF0.5-genelen1000
-into a NamedTuple.  Returns `nothing` when the name does not match.
+Input: dirname (String): name of a parameter folder, 
+e.g. DUP0.0-LOS0.0-RVG-N_ind1-SF0.5-genelen1000
+Output: NamedTuple (dup_rate, loss_rate, ratevar, n_inds, SF, gene_len)
+nothing if the name does not match the pattern 
+    (then it is not a parameter folder)
 """
 function parse_paramname(dirname::AbstractString)
     m = match(
@@ -94,8 +87,10 @@ function parse_paramname(dirname::AbstractString)
 end
 
 """
-Return the path to the summary CSV that the given postprocessing
-script is expected to produce for `paramname`.
+Input: output_dir, paramname, mode (Strings)
+Output: path of the summary csv that <mode>_postprocess.jl 
+    writes for this parameter set
+(each postprocess script names its csv differently)
 """
 function summary_file_path(output_dir::String, paramname::String, mode::String)
     if mode == "simulation"
@@ -104,16 +99,22 @@ function summary_file_path(output_dir::String, paramname::String, mode::String)
         return joinpath(output_dir, paramname, "SNaQ-$(paramname)-summary.csv")
     elseif mode == "findgraphs"
         return joinpath(output_dir, paramname, "findgraph-$(paramname).csv")
+    elseif mode == "phynest"
+        return joinpath(output_dir, paramname,
+                        "PhyNEST-$(paramname)-summary.csv")
     else
         error("Unknown mode: $mode")
     end
 end
 
 """
-Build the shell command that runs the appropriate sub-script.
+Input: mode, script_dir, params (from parse_paramname), 
+n_reps, n_procs, output_dir, tree
+Output: Cmd to run <mode>_postprocess.jl for this parameter set, 
+ with -p n_procs if n_procs > 0
 """
 function build_cmd(mode::String, script_dir::String, params,
-    n_reps::Int, n_procs::Int)
+    n_reps::Int, n_procs::Int, output_dir::String, tree::String)
     script = joinpath(script_dir, "$(mode)_postprocess.jl")
 
     julia_flags = n_procs > 0 ? ["-p", string(n_procs)] : String[]
@@ -127,14 +128,18 @@ function build_cmd(mode::String, script_dir::String, params,
         "--SF",        string(params.SF),
         "--gene_len",  string(params.gene_len),
     ]
+    # only phynest_postprocess.jl takes --output_dir, 
+    # the others read output/ or output_plant/
+    if mode == "phynest"
+        append!(args, ["--output_dir", output_dir])
+    end
+    # all of them need --tree: picks the reference trees and the output folder
+    append!(args, ["--tree", tree])
 
     return Cmd(vcat(["julia"], julia_flags, [script], args))
 end
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
+#--------------- main function here --------------#
 function main()
     parsed_args = parse_commandline()
 
@@ -143,50 +148,56 @@ function main()
     output_dir = parsed_args["output_dir"]
     saved_path = parsed_args["saved_path"]
     n_procs    = parsed_args["n_procs"]
+    tree       = parsed_args["tree"]
 
-    # Validate mode
-    valid_modes = ("simulation", "snaq", "findgraphs")
+    # check mode
+    valid_modes = ("simulation", "snaq", "findgraphs", "phynest")
     if !(mode in valid_modes)
         error("Invalid --mode '$mode'. Options: $(join(valid_modes, ", "))")
     end
 
     base_mode = mode
 
-    # Resolve worker count: prefer explicit --n_procs, then fall back to
-    # the workers already spawned via -p N on this process.
+    # workers: --n_procs if given, otherwise the -p N of this script
     if n_procs == -1
         n_procs = nworkers()   # equals N when launched as  julia -p N ...
-        # nworkers()==1 means no -p flag; pass 0 (no -p to child)
+        # nworkers() == 1 means no -p flag, then pass 0 (no -p for the sub-script)
         n_procs = n_procs == 1 ? 0 : n_procs
     end
 
-    # Determine project root (one level above this script)
+    # project root = one level above scripts/
     script_dir   = dirname(abspath(PROGRAM_FILE))
     project_root = normpath(joinpath(script_dir, ".."))
 
-    # Resolve output_dir relative to project root if not absolute
+    # plant runs: output_plant/ and a _plant suffix on the summary folder, unless given
+    suffix = (tree == "reptile" ? "" : "_$tree")
+    if tree != "reptile" && output_dir == "output"
+        output_dir = "output$suffix"
+    end
+
+    # relative paths are relative to the project root
     if !isabspath(output_dir)
         output_dir = joinpath(project_root, output_dir)
     end
 
-    # Resolve saved_path
+    # same for saved_path
     if isempty(saved_path)
-        saved_path = joinpath(project_root, "$(base_mode)_summary")
+        saved_path = joinpath(project_root, "$(base_mode)_summary$suffix")
     elseif !isabspath(saved_path)
         saved_path = joinpath(project_root, saved_path)
     end
 
-    # Ensure saved_path exists
+    # make sure saved_path exists
     mkpath(saved_path)
 
-    # Consensus collection dir (snaq and findgraphs collect consensus results)
+    # snaq and findgraphs also have consensus plots to collect
     consensus_collect_dir = (mode in ("snaq", "findgraphs")) ?
-        joinpath(project_root, "$(mode)_consensus_tree") : ""
+        joinpath(project_root, "$(mode)_consensus_tree$suffix") : ""
     if !isempty(consensus_collect_dir)
         mkpath(consensus_collect_dir)
     end
 
-    # Collect all matching parameter-set directories
+    # all parameter folders in output_dir
     if !isdir(output_dir)
         error("output_dir does not exist: $output_dir")
     end
@@ -206,24 +217,22 @@ function main()
     end
     println()
 
-    # -----------------------------------------------------------------------
-    # Run the postprocessing script for each parameter set
-    # -----------------------------------------------------------------------
-    successes             = String[]
-    failures              = String[]
-    consensus_plots_copied = String[]   # populated for snaq / findgraphs modes
+    # run the postprocess script for each parameter set
+    successes = String[]
+    failures = String[]
+    consensus_plots_copied = String[] # populated for snaq / findgraphs modes
 
     for paramname in param_dirs
-        params = parse_paramname(paramname)   # never nothing here
+        params = parse_paramname(paramname)# never nothing here
 
         println("-" ^ 60)
         println("Processing: $paramname")
 
-        cmd = build_cmd(base_mode, script_dir, params, n_reps, n_procs)
+        cmd = build_cmd(base_mode, script_dir, params, n_reps, n_procs,
+                        output_dir, tree)
         println("Running: $cmd\n")
 
-        # Run from the project root so relative paths inside the sub-script
-        # (e.g. "output/...") resolve correctly.
+        # run from the project root, so that relative paths (output/...) in the sub-script work
         success = true
         try
             run(setenv(cmd, dir = project_root))
@@ -238,25 +247,20 @@ function main()
             continue
         end
 
-        # -------------------------------------------------------------------
-        # Copy summary CSV to saved_path (force-overwrite)
-        # -------------------------------------------------------------------
+        # copy the summary csv to saved_path, overwrite if there
         src = summary_file_path(output_dir, paramname, base_mode)
 
         if isfile(src)
             dst = joinpath(saved_path, basename(src))
             cp(src, dst; force = true)
-            println("Copied summary → $dst")
+            println("Copied summary -> $dst")
             push!(successes, paramname)
         else
             @warn "Expected summary file not found after run: $src"
             push!(failures, paramname)
         end
 
-        # -------------------------------------------------------------------
-        # Copy consensus plot PDFs (flat) to central collection dir
-        # Only the _plot.pdf files are copied; no subdirectory is created.
-        # -------------------------------------------------------------------
+        # copy the consensus plot pdfs (only the _plot.pdf files, no subfolder) to one folder
         if !isempty(consensus_collect_dir)
             prefix      = base_mode == "snaq" ? "SNaQ" : "findgraphs"
             file_prefix = base_mode == "snaq" ? "SNaQ" : "findgraph"
@@ -271,7 +275,7 @@ function main()
                         dst_pdf = joinpath(consensus_collect_dir, pdf_name)
                         cp(src_pdf, dst_pdf; force = true)
                         push!(consensus_plots_copied, dst_pdf)
-                        println("Copied $(h) plot → $dst_pdf")
+                        println("Copied $(h) plot -> $dst_pdf")
                     else
                         @warn "Consensus plot not found (skipping): $src_pdf"
                     end
@@ -284,9 +288,7 @@ function main()
         println()
     end
 
-    # -----------------------------------------------------------------------
-    # Final report
-    # -----------------------------------------------------------------------
+    # final report
     println("=" ^ 60)
     println("POST-PROCESSING COMPLETE  (mode = $mode)")
     println("  Succeeded : $(length(successes)) / $(length(param_dirs))")

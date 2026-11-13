@@ -1,0 +1,133 @@
+tree,factor,level,n,statistic,value
+reptile,overall,all,3600,mean,0.06184395262881256
+reptile,overall,all,3600,median,0.0218816316412156
+reptile,overall,all,3600,sd,0.10301496437801728
+reptile,overall,all,3600,lt05,70.47222222222223
+reptile,overall,all,3600,lt10,85.91666666666666
+reptile,overall,all,3600,lt25,93.8611111111111
+reptile,rate variation,none,1200,mean,0.07362245687520187
+reptile,rate variation,none,1200,median,0.0194240597766829
+reptile,rate variation,none,1200,sd,0.1225604743113203
+reptile,rate variation,none,1200,lt05,65.41666666666667
+reptile,rate variation,none,1200,lt10,82.83333333333334
+reptile,rate variation,none,1200,lt25,90.91666666666667
+reptile,rate variation,across genes,1200,mean,0.06867653075109646
+reptile,rate variation,across genes,1200,median,0.02013896918421015
+reptile,rate variation,across genes,1200,sd,0.11172999380397995
+reptile,rate variation,across genes,1200,lt05,65.58333333333334
+reptile,rate variation,across genes,1200,lt10,83
+reptile,rate variation,across genes,1200,lt25,92.58333333333333
+reptile,rate variation,across lineages,1200,mean,0.04323287026013934
+reptile,rate variation,across lineages,1200,median,0.02314283267921225
+reptile,rate variation,across lineages,1200,sd,0.06178232460814046
+reptile,rate variation,across lineages,1200,lt05,80.41666666666667
+reptile,rate variation,across lineages,1200,lt10,91.91666666666667
+reptile,rate variation,across lineages,1200,lt25,98.08333333333333
+reptile,duplication/loss,none,1200,mean,0.05998925685885473
+reptile,duplication/loss,none,1200,median,0.02190857397098065
+reptile,duplication/loss,none,1200,sd,0.09901935841597723
+reptile,duplication/loss,none,1200,lt05,70.91666666666666
+reptile,duplication/loss,none,1200,lt10,86
+reptile,duplication/loss,none,1200,lt25,94.41666666666667
+reptile,duplication/loss,medium,1200,mean,0.06567321586258615
+reptile,duplication/loss,medium,1200,median,0.0218286364007163
+reptile,duplication/loss,medium,1200,sd,0.10858972083004384
+reptile,duplication/loss,medium,1200,lt05,69
+reptile,duplication/loss,medium,1200,lt10,84.58333333333333
+reptile,duplication/loss,medium,1200,lt25,93.08333333333333
+reptile,duplication/loss,high,1200,mean,0.059869385164996805
+reptile,duplication/loss,high,1200,median,0.02182415190848935
+reptile,duplication/loss,high,1200,sd,0.10117000040589233
+reptile,duplication/loss,high,1200,lt05,71.5
+reptile,duplication/loss,high,1200,lt10,87.16666666666667
+reptile,duplication/loss,high,1200,lt25,94.08333333333333
+reptile,ILS,high,1800,mean,0.06727205255707898
+reptile,ILS,high,1800,median,0.02497314960256285
+reptile,ILS,high,1800,sd,0.10103344540032096
+reptile,ILS,high,1800,lt05,67.33333333333333
+reptile,ILS,high,1800,lt10,81.5
+reptile,ILS,high,1800,lt25,93.61111111111111
+reptile,ILS,low,1800,mean,0.056415852700546144
+reptile,ILS,low,1800,median,0.01964559627103555
+reptile,ILS,low,1800,sd,0.10470599919283467
+reptile,ILS,low,1800,lt05,73.61111111111111
+reptile,ILS,low,1800,lt10,90.33333333333333
+reptile,ILS,low,1800,lt25,94.11111111111111
+reptile,individuals/taxon,1,1800,mean,0.06342538019077437
+reptile,individuals/taxon,1,1800,median,0.0216383328968327
+reptile,individuals/taxon,1,1800,sd,0.10617308393259489
+reptile,individuals/taxon,1,1800,lt05,69.88888888888889
+reptile,individuals/taxon,1,1800,lt10,85.16666666666667
+reptile,individuals/taxon,1,1800,lt25,93.61111111111111
+reptile,individuals/taxon,2,1800,mean,0.06026252506685075
+reptile,individuals/taxon,2,1800,median,0.0222635121872292
+reptile,individuals/taxon,2,1800,sd,0.09976139680259154
+reptile,individuals/taxon,2,1800,lt05,71.05555555555556
+reptile,individuals/taxon,2,1800,lt10,86.66666666666667
+reptile,individuals/taxon,2,1800,lt25,94.11111111111111
+plant,overall,all,3600,mean,0.13005726092630363
+plant,overall,all,3600,median,0.0653085185392148
+plant,overall,all,3600,sd,0.12507508996360037
+plant,overall,all,3600,lt05,46.97222222222222
+plant,overall,all,3600,lt10,52.77777777777778
+plant,overall,all,3600,lt25,81.47222222222223
+plant,rate variation,none,1200,mean,0.07806864708824077
+plant,rate variation,none,1200,median,0.0193527854284025
+plant,rate variation,none,1200,sd,0.12284284051595992
+plant,rate variation,none,1200,lt05,70.5
+plant,rate variation,none,1200,lt10,78.66666666666666
+plant,rate variation,none,1200,lt25,87.83333333333333
+plant,rate variation,across genes,1200,mean,0.07632429618183506
+plant,rate variation,across genes,1200,median,0.020896488080481848
+plant,rate variation,across genes,1200,sd,0.11969898618719463
+plant,rate variation,across genes,1200,lt05,70.41666666666667
+plant,rate variation,across genes,1200,lt10,79.66666666666666
+plant,rate variation,across genes,1200,lt25,88.25
+plant,rate variation,across lineages,1200,mean,0.23577883950883508
+plant,rate variation,across lineages,1200,median,0.2373245554474475
+plant,rate variation,across lineages,1200,sd,0.02753424147295144
+plant,rate variation,across lineages,1200,lt05,0
+plant,rate variation,across lineages,1200,lt10,0
+plant,rate variation,across lineages,1200,lt25,68.33333333333333
+plant,duplication/loss,none,1200,mean,0.1344089699458498
+plant,duplication/loss,none,1200,median,0.0806116573285026
+plant,duplication/loss,none,1200,sd,0.12799053383795905
+plant,duplication/loss,none,1200,lt05,45.58333333333333
+plant,duplication/loss,none,1200,lt10,51
+plant,duplication/loss,none,1200,lt25,80.58333333333333
+plant,duplication/loss,medium,1200,mean,0.1261776594106995
+plant,duplication/loss,medium,1200,median,0.0555925659054836
+plant,duplication/loss,medium,1200,sd,0.12321030071868244
+plant,duplication/loss,medium,1200,lt05,48.833333333333336
+plant,duplication/loss,medium,1200,lt10,54.333333333333336
+plant,duplication/loss,medium,1200,lt25,82
+plant,duplication/loss,high,1200,mean,0.1295851534223616
+plant,duplication/loss,high,1200,median,0.0697181335108472
+plant,duplication/loss,high,1200,sd,0.12393883186400093
+plant,duplication/loss,high,1200,lt05,46.5
+plant,duplication/loss,high,1200,lt10,53
+plant,duplication/loss,high,1200,lt25,81.83333333333334
+plant,ILS,high,1800,mean,0.12891967590660752
+plant,ILS,high,1800,median,0.06991883651145264
+plant,ILS,high,1800,sd,0.12239380865407096
+plant,ILS,high,1800,lt05,45.5
+plant,ILS,high,1800,lt10,53.388888888888886
+plant,ILS,high,1800,lt25,83.83333333333334
+plant,ILS,low,1800,mean,0.13119484594599976
+plant,ILS,low,1800,median,0.06049572024558405
+plant,ILS,low,1800,sd,0.1277239916490805
+plant,ILS,low,1800,lt05,48.44444444444444
+plant,ILS,low,1800,lt10,52.166666666666664
+plant,ILS,low,1800,lt25,79.11111111111111
+plant,individuals/taxon,1,1800,mean,0.13241989243410346
+plant,individuals/taxon,1,1800,median,0.06695478577457109
+plant,individuals/taxon,1,1800,sd,0.127958598360001
+plant,individuals/taxon,1,1800,lt05,46.88888888888889
+plant,individuals/taxon,1,1800,lt10,52.888888888888886
+plant,individuals/taxon,1,1800,lt25,78.66666666666666
+plant,individuals/taxon,2,1800,mean,0.1276946294185038
+plant,individuals/taxon,2,1800,median,0.06413719540391875
+plant,individuals/taxon,2,1800,sd,0.12211338551700913
+plant,individuals/taxon,2,1800,lt05,47.05555555555556
+plant,individuals/taxon,2,1800,lt10,52.666666666666664
+plant,individuals/taxon,2,1800,lt25,84.27777777777777

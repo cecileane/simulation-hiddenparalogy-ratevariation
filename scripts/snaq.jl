@@ -1,32 +1,38 @@
-# ============================================================================
-# scripts/snaq.jl
-#
-# Purpose : Entry point for SNaQ network inference across replicates of one
-#           parameter setting. For each replicate it launches snaq_1rep.jl,
-#           which runs SNaQ at h=0 (no reticulation) and h=1 (one reticulation)
-#           on the ASTRAL species tree + per-quartet concordance factors.
-# Inputs  : output/<paramname>/rep<id>/astralfolder/astral.tre
-#           output/<paramname>/rep<id>/iqtreefolder/CF_results.csv
-# Outputs : output/<paramname>/rep<id>/snaqfolder/H0_output/H0.out
-#           output/<paramname>/rep<id>/snaqfolder/H1_output/H1.out
-#           output/<paramname>/rep<id>/snaqfolder/snaq_gof_results_H0.csv
-# Usage   : julia -p 100 --project=. scripts/snaq.jl \
-#               --dup_rate 0.0003 --loss_rate 0.0003 \
-#               --ratevar G --n_reps 100 --n_inds 1 --runs 100
-#           --rep_start / --rep_end let you resume a partial run; seeds are
-#           deterministic regardless of order.
-# Note    : Steps 2 (SNaQ) and 3 (find_graphs) are independent and can run in
-#           parallel after Step 1 (simulation.jl).
-# ============================================================================
+# Run SNaQ on all the replicates of one parameter setting.
+# For each replicate, this calls snaq_1rep.jl, which runs SNaQ with h=0
+# (tree) and h=1 (one reticulation) starting from the ASTRAL tree,
+# with the quartet CFs from the IQ-TREE gene trees, then the GoF test.
+# Input, in output/<paramname>/rep<id>/: astralfolder/astral.tre and
+#   iqtreefolder/besttrees.tre
+# Output, in output/<paramname>/rep<id>/snaqfolder/: H0_output/H0.out,
+#   H1_output/H1.out and the snaq_gof_results_H*.csv
+# Usage: julia -p 100 scripts/snaq.jl --dup_rate 0.0003 --loss_rate 0.0003 \
+#        --ratevar G --n_reps 100 --n_inds 1 --runs 100
+# --rep_start / --rep_end to run or resume part of the replicates,
+# the seeds do not depend on that.
+# SNaQ (this script) and find_graphs (findgraphs.jl) are independent,
+# both only need the output of simulation.jl
+
+# activate the repo env on the master and on the workers, so this does not
+# depend on the default env of whoever runs it. Only the master instantiates
+using Distributed
+using Pkg
+repo_env = normpath(joinpath(@__DIR__, ".."))
+Pkg.activate(repo_env; io=devnull)
+Pkg.instantiate(; io=devnull)
+@everywhere begin
+    using Pkg
+    Pkg.activate($repo_env; io=devnull)
+end
 
 using ArgParse
-using TimerOutputs 
+using TimerOutputs
 using Dates
-using TimeZones 
+using TimeZones
 using CSV
 using DataFrames
-@everywhere using Printf 
-@everywhere using Distributed  
+@everywhere using Printf
+@everywhere using Distributed
 @everywhere include("utilities.jl")
 
 const to = TimerOutput()  
@@ -206,9 +212,10 @@ seed_array = seed_generator(
 
 @everywhere begin 
 """
-  run_snaq_for_replicate(ind)
-Run SNaQ for one replicate by shelling out to snaq_1rep.jl.
-Relies on globals broadcast to workers: seed_array, snaqfolder_list, etc.
+Run snaq_1rep.jl for one replicate
+Input: ind (Int): index of the replicate in snaqfolder_list (1 = rep_start)
+Notes: uses the globals sent to the workers above (seed_array,
+    snaqfolder_list, folder_path_list, runs, ...)
 """
   function run_snaq_for_replicate(ind)
 

@@ -1,6 +1,6 @@
 This license applies to the following file in this repository:
 
-    third_party/interop_admixtools.jl
+    third_party_scripts/interop_admixtools.jl
 
 Originally authored by JuliaPhylo (https://github.com/JuliaPhylo/PhyloUtilities?tab=MIT-1-ov-file)
 

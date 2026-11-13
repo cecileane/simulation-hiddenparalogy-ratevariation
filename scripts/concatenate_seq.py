@@ -98,42 +98,34 @@ def concatenate_nexus_to_fasta(nexus_dir, fasta_dir, rep_id):
 
 def reorder_sequences_alphabetically(sequences_dict):
     """
-    Reorder the sequences dict alphabetically by letter, then by number.
+    Reorder the sequences by taxon: by letter, then by number
     For example: A_0, A_1, B_0, B_1, B_2, C_0, etc.
-    Args:
-        sequences_dict (dict): taxon names as keys, sequences as values
-    Returns:
-        tuple: (reordered_dict, message)
+    Input: sequences_dict: taxon names as keys, sequences as values
+    Output: (reordered_dict, message), message is empty unless A is missing
     """
-    message = ""  # Initialize message string
+    message = ""
     
     def sort_key(taxon_name):
-        """
-        Create a sort key that separates letter and number parts.
-        Returns a tuple (letter_part, number_part) for proper sorting.
-        """
-        # Match pattern like A_0, B_1, etc.
+        # (letter, number) from a tip name like A_0 or B_1
         match = re.match(r'^([A-Za-z]+)_?(\d+)?', taxon_name)
         if match:
             letter_part = match.group(1)
             number_part = int(match.group(2)) if match.group(2) else 0
             return (letter_part, number_part)
         else:
-            # If pattern doesn't match, sort by the original name
             return (taxon_name, 0)
     
-    # Sort all taxa alphabetically by letter first, then by number
     sorted_taxa = sorted(sequences_dict.keys(), key=sort_key)
     
     reordered_dict = {}
     for taxon in sorted_taxa:
         reordered_dict[taxon] = sequences_dict[taxon]
     
-    # Create a message if there is no "A_" in the keys 
+    # warn if the outgroup A is not there
     if not any(taxon.startswith("A_") for taxon in sorted_taxa):
         message = "No 'A_' taxon found. No outgroup for follow-up analyses."
     else: 
-        pass # If trees are starting with "A_", no message is needed 
+        pass
 
     return reordered_dict, message
 
@@ -144,9 +136,6 @@ if __name__ == "__main__":
     fasta_dir = sys.argv[2] 
     rep_id = sys.argv[3] # replicate ID
     
-    # Call the function and get the message
     message = concatenate_nexus_to_fasta(nexus_dir, fasta_dir, rep_id)
-    
-    # Print only the message (this will be captured by Julia)
-    print(message)
+    print(message) # simulation.jl reads this message
 

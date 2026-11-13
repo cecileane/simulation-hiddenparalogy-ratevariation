@@ -1,0 +1,111 @@
+tree,factor,level,n,statistic,value
+reptile,overall,all,3600,major,86.75
+reptile,overall,all,3600,minor,0
+reptile,overall,all,3600,neither,13.25
+reptile,overall,all,3600,gamma_yes,0.0186971135841214
+reptile,overall,all,3600,gamma_no,0.112336828958118
+reptile,rate variation,none,1200,major,80.75
+reptile,rate variation,none,1200,minor,0
+reptile,rate variation,none,1200,neither,19.25
+reptile,rate variation,none,1200,gamma_yes,0.013531202059945
+reptile,rate variation,none,1200,gamma_no,0.112137381325103
+reptile,rate variation,across genes,1200,major,82.41666666666667
+reptile,rate variation,across genes,1200,minor,0
+reptile,rate variation,across genes,1200,neither,17.583333333333336
+reptile,rate variation,across genes,1200,gamma_yes,0.0146872876130661
+reptile,rate variation,across genes,1200,gamma_no,0.100954683041514
+reptile,rate variation,across lineages,1200,major,97.08333333333333
+reptile,rate variation,across lineages,1200,minor,0
+reptile,rate variation,across lineages,1200,neither,2.9166666666666665
+reptile,rate variation,across lineages,1200,gamma_yes,0.0228328058324533
+reptile,rate variation,across lineages,1200,gamma_no,0.185064230674106
+reptile,duplication/loss,none,1200,major,86.75
+reptile,duplication/loss,none,1200,minor,0
+reptile,duplication/loss,none,1200,neither,13.25
+reptile,duplication/loss,none,1200,gamma_yes,0.0187348228915618
+reptile,duplication/loss,none,1200,gamma_no,0.106173460297021
+reptile,duplication/loss,medium,1200,major,85.58333333333333
+reptile,duplication/loss,medium,1200,minor,0
+reptile,duplication/loss,medium,1200,neither,14.416666666666666
+reptile,duplication/loss,medium,1200,gamma_yes,0.0185890530478647
+reptile,duplication/loss,medium,1200,gamma_no,0.114030299562929
+reptile,duplication/loss,high,1200,major,87.91666666666667
+reptile,duplication/loss,high,1200,minor,0
+reptile,duplication/loss,high,1200,neither,12.083333333333334
+reptile,duplication/loss,high,1200,gamma_yes,0.0189287299965628
+reptile,duplication/loss,high,1200,gamma_no,0.114556109674653
+reptile,ILS,high,1800,major,86.94444444444444
+reptile,ILS,high,1800,minor,0
+reptile,ILS,high,1800,neither,13.055555555555557
+reptile,ILS,high,1800,gamma_yes,0.0210801947405856
+reptile,ILS,high,1800,gamma_no,0.122899363257833
+reptile,ILS,low,1800,major,86.55555555555556
+reptile,ILS,low,1800,minor,0
+reptile,ILS,low,1800,neither,13.444444444444445
+reptile,ILS,low,1800,gamma_yes,0.016394970208050502
+reptile,ILS,low,1800,gamma_no,0.09907519971723515
+reptile,individuals/taxon,1,1800,major,86.27777777777777
+reptile,individuals/taxon,1,1800,minor,0
+reptile,individuals/taxon,1,1800,neither,13.722222222222221
+reptile,individuals/taxon,1,1800,gamma_yes,0.0175362120561471
+reptile,individuals/taxon,1,1800,gamma_no,0.115341806468252
+reptile,individuals/taxon,2,1800,major,87.22222222222223
+reptile,individuals/taxon,2,1800,minor,0
+reptile,individuals/taxon,2,1800,neither,12.777777777777777
+reptile,individuals/taxon,2,1800,gamma_yes,0.0192433331604214
+reptile,individuals/taxon,2,1800,gamma_no,0.10702440258000101
+plant,overall,all,3600,major,73.97222222222221
+plant,overall,all,3600,minor,0.027777777777777776
+plant,overall,all,3600,neither,26
+plant,overall,all,3600,gamma_yes,0.028820693337438
+plant,overall,all,3600,gamma_no,0.251505400921256
+plant,rate variation,none,1200,major,77.16666666666666
+plant,rate variation,none,1200,minor,0.08333333333333334
+plant,rate variation,none,1200,neither,22.75
+plant,rate variation,none,1200,gamma_yes,0.010733779641341049
+plant,rate variation,none,1200,gamma_no,0.29884415973081047
+plant,rate variation,across genes,1200,major,76.75
+plant,rate variation,across genes,1200,minor,0
+plant,rate variation,across genes,1200,neither,23.25
+plant,rate variation,across genes,1200,gamma_yes,0.0111998945130575
+plant,rate variation,across genes,1200,gamma_no,0.23839071166698
+plant,rate variation,across lineages,1200,major,68
+plant,rate variation,across lineages,1200,minor,0
+plant,rate variation,across lineages,1200,neither,32
+plant,rate variation,across lineages,1200,gamma_yes,0.22988825614831299
+plant,rate variation,across lineages,1200,gamma_no,0.2512830622798205
+plant,duplication/loss,none,1200,major,72.91666666666666
+plant,duplication/loss,none,1200,minor,0.08333333333333334
+plant,duplication/loss,none,1200,neither,27
+plant,duplication/loss,none,1200,gamma_yes,0.0279311558073386
+plant,duplication/loss,none,1200,gamma_no,0.252972529265885
+plant,duplication/loss,medium,1200,major,76.08333333333334
+plant,duplication/loss,medium,1200,minor,0
+plant,duplication/loss,medium,1200,neither,23.916666666666668
+plant,duplication/loss,medium,1200,gamma_yes,0.0301737326294064
+plant,duplication/loss,medium,1200,gamma_no,0.251305331820532
+plant,duplication/loss,high,1200,major,72.91666666666666
+plant,duplication/loss,high,1200,minor,0
+plant,duplication/loss,high,1200,neither,27.083333333333332
+plant,duplication/loss,high,1200,gamma_yes,0.0284524931139606
+plant,duplication/loss,high,1200,gamma_no,0.248133479763327
+plant,ILS,high,1800,major,74.3888888888889
+plant,ILS,high,1800,minor,0
+plant,ILS,high,1800,neither,25.61111111111111
+plant,ILS,high,1800,gamma_yes,0.0355561499054204
+plant,ILS,high,1800,gamma_no,0.245274032703801
+plant,ILS,low,1800,major,73.55555555555556
+plant,ILS,low,1800,minor,0.05555555555555555
+plant,ILS,low,1800,neither,26.38888888888889
+plant,ILS,low,1800,gamma_yes,0.02101032590788685
+plant,ILS,low,1800,gamma_no,0.2533170920043645
+plant,individuals/taxon,1,1800,major,73.77777777777777
+plant,individuals/taxon,1,1800,minor,0.05555555555555555
+plant,individuals/taxon,1,1800,neither,26.166666666666664
+plant,individuals/taxon,1,1800,gamma_yes,0.02434111929570535
+plant,individuals/taxon,1,1800,gamma_no,0.25706687989847155
+plant,individuals/taxon,2,1800,major,74.16666666666667
+plant,individuals/taxon,2,1800,minor,0
+plant,individuals/taxon,2,1800,neither,25.833333333333336
+plant,individuals/taxon,2,1800,gamma_yes,0.0305289579503203
+plant,individuals/taxon,2,1800,gamma_no,0.243843059760551

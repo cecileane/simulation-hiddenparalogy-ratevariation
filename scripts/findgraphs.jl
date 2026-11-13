@@ -1,21 +1,18 @@
-# ============================================================================
-# scripts/findgraphs.jl
-#
-# Purpose : Entry point for find_graphs (admixture-graph) inference across
-#           replicates of one parameter setting. For each replicate it
-#           launches findgraphs_1rep.R, which (1) extracts SNPs via snp-sites,
-#           (2) converts to eigenstrat, and (3) runs find_graphs() at h=0
-#           and h=1 from the admixtools R package.
-# Inputs  : output/<paramname>/rep<id>/iqtreefolder/concatenated.fasta
-#           (and per-rep ancillary files written by simulation.jl)
-# Outputs : output/<paramname>/rep<id>/findgraph/rep<id>_admix{0,1}_*.{rds,txt}
-#           output/<paramname>/rep<id>/findgraph/rep<id>.vcf, eigenstrat_*.*
-# Usage   : julia -p 100 --project=. scripts/findgraphs.jl \
-#               --dup_rate 0.0003 --loss_rate 0.0003 \
-#               --ratevar G --n_reps 100 --n_inds 1 --runs 100 --block 1000
-# Note    : Steps 2 (SNaQ) and 3 (find_graphs) are independent and can run in
-#           parallel after Step 1 (simulation.jl).
-# ============================================================================
+#= 
+find_graphs (admixtools) on all the replicates of one parameter setting.
+For each replicate, this calls snp-sites on the concatenated alignment,
+converts the vcf to eigenstrat, then calls findgraphs_1rep.R which runs
+find_graphs() with 0 and 1 admixture event.
+
+Input: output/<paramname>/rep<id>/seqgenfolder/concate_alignment_rep<id>.fasta
+Output, in output/<paramname>/rep<id>/findgraph/: rep<id>.vcf, eigenstrat_*,
+  rep<id>_admix{0,1}_unique_graphs.rds, rep<id>_admix{0,1}_summary_table.txt
+  and rep<id>_f2.rds
+Usage: julia -p 100 scripts/findgraphs.jl --dup_rate 0.0003 \
+       --loss_rate 0.0003 --ratevar G --n_reps 100 --n_inds 1 --runs 100
+find_graphs (this script) and SNaQ (snaq.jl) are independent,
+both only need the output of simulation.jl
+=# 
 
 using ArgParse
 using TimerOutputs 
@@ -24,10 +21,8 @@ using Dates, TimeZones
 using PhyloNetworks
 using RCall
 
-# Set R environment for all workers to avoid R_HOME conflicts
-# This is important when using RCall in a distributed setting 
+# R_HOME on all workers, otherwise RCall can pick different R installs
 @everywhere begin
-    # Get R_HOME if not already set
     if !haskey(ENV, "R_HOME") || ENV["R_HOME"] == ""
         try
             r_home = strip(read(`R RHOME`, String))
@@ -54,7 +49,7 @@ function parse_commandline()
     s = ArgParseSettings() 
     @add_arg_table s begin 
       
-      # Specify which rep and which parameter sets to run SnaQ: 
+      # which parameter set and which reps to run findgraphs on
       "--dup_rate"
         help = "Paramater setting (duplication rate) to run findgraph"
         arg_type = Float64
@@ -80,7 +75,7 @@ function parse_commandline()
         arg_type = Int
         default = -1 # temporary default. 
       "--n_inds"
-        help = "Paramater setting (gene loss rate) to run findgraph"
+        help = "Parameter setting (number of individuals) to run findgraph"
         arg_type = Int
         default = 1
       "--processors"
@@ -92,6 +87,10 @@ function parse_commandline()
         (Default = 1.0, no scaling)"
         arg_type = Float64
         default = 1.0
+      "--tree"
+        help = "Species tree used in the simulation: reptile or plant"
+        arg_type = String
+        default = "reptile"
       "--debug_mode" 
         help = "Debugging mode: Keep all temporary folders"
         default = false
@@ -109,7 +108,7 @@ function parse_commandline()
       "--outgroup"
         help = "Outgroup population name used in findgraphs (default: A)"
         arg_type = String
-        default = "A" # Homo, see speciestree.jl 
+        default = "A" # Homo, see speciestree_reptile.jl 
       "--block"
         help = "Number of blocks (approximate) used in find_graphs" 
         arg_type = Int
@@ -172,19 +171,21 @@ outgroup = parsed_args["outgroup"]
 block = parsed_args["block"] 
 selection_method = parsed_args["selection_method"]  
 SF = parsed_args["SF"]
+tree = parsed_args["tree"]
 gene_len = parsed_args["gene_len"] 
 debug_mode = parsed_args["debug_mode"]
 log_output = parsed_args["log"]
 vcf_transfer_scripts = parsed_args["vcf_transfer_scripts"] 
 
 
-#= This threshold is used to select graphs within Δ LL of the best graph
+#= This threshold is used to select graphs within delta LL of the best graph
 Under the same complexity (same num_admix), 
-LRT = -2log(L0/L1) ~ χ² with df = difference in number of parameters 
+LRT = -2log(L0/L1) ~ chi-square with df = difference in number of parameters 
 Because complexity difference = 0 when under the same num_admix 
-LRT = 2 * Δ LL which is the same as AIC or BIC difference 
-Because differences of Δ ≤ 2 in AIC/BIC are widely regarded as 
-indicating that models have essentially the same level of empirical support, 
+LRT = 2 * delta LL which is the same as AIC or BIC difference 
+
+Because differences of <= 2 in AIC/BIC are widely regarded as 
+indicating that models have about the same level of empirical support, 
 we use default threshold = 2 here (although the threshold can be configured).
 =# 
 threshold = parsed_args["threshold"]
@@ -198,16 +199,17 @@ output_graph_suffix = "_unique_graphs.rds"
 output_f2_suffix = "_f2.rds" 
 output_summary_table_suffix = "_summary_table.txt"
 
-# Define true species tree in Newick format
-true_tree_newick = "(A,((((B,C),(D,E)),F),(G,H)));" 
+# Define true species tree in Newick format (reptile or plant, as simulated)
+true_tree_newick = (startswith(tree, "plant") ?
+    "(A,(B,((C,D),(E,(H,(F,G))))));" :
+    "(A,((((B,C),(D,E)),F),(G,H)));")
 
 #--------------- Set up folders ----------------# 
 paramname_root = set_up_paramname_root(dup_rate, loss_rate, ratevar, 
                                       n_inds, SF, gene_len)  
 outfolder = "output/$paramname_root"
 
-# Ensure outfolder exists for log files
-mkpath(outfolder) 
+mkpath(outfolder) # for the log files
 
 #--------------- Set up seeds -------------------#
 params_dict_for_seed_setting = get_dict_for_seed_setting(paramname_root)
@@ -335,23 +337,17 @@ check_existing_dir(findgraph_folderlist) # see utilies.jl.
     fasta_file = joinpath(seqgenfolder, fasta_file_name) 
     vcf_file = joinpath(findgraph_folder, "rep$(rep_id).vcf")
 
-    # Analyze alignment length using utility function
     alignment_length = get_alignment_length(fasta_file)
     worker_println("Rep$rep_id: Alignment length is $alignment_length bp")
     
-    # estimate the blgsize based on alignment length 
-    # blgsize should be the size of each individual gene locus 
-    # block is the number of blocks (approximate) used in find_graphs 
-    # blgsize = alignment_length / block = average block size
-    blgsize = Int(floor(alignment_length / block)) 
+    # jackknife block size: one block per gene locus (gene length, 1000 bp)
+    blgsize = 1000
 
     if debug_mode 
       println("="^60)
       println("DEBUG INFO for Rep$rep_id:")
       println("Alignment length: $alignment_length bp")
-      println("Block parameter: $block") 
-      println("$alignment_length / $block = $(alignment_length / block)")
-      println("Calculated blgsize: $blgsize")
+      println("Block size: $blgsize")
       println("="^60)
     end
 
@@ -386,9 +382,9 @@ check_existing_dir(findgraph_folderlist) # see utilies.jl.
     # since we might have multiple individual from one pop (eg. A_0, A_1) 
     run(`sh -c "rm $eigenstrat_ind_file && \
         mv $modified_ind_file $eigenstrat_ind_file"`)
-    worker_println("Rep$rep_id: vcf → eigenstrat conversion done")
+    worker_println("Rep$rep_id: vcf -> eigenstrat conversion done")
 
-    return blgsize # return the estimated blgsize 
+    return blgsize
 end 
 
 #-----------------------------------------------#       
@@ -416,7 +412,7 @@ end
 
   prefix = "eigenstrat_rep$rep_id"
 
-  # Construct command arguments as a vector to avoid shell escaping issues
+  # arguments as a vector, so no problem with shell escaping
   cmd_args = [
     "Rscript", "./scripts/findgraphs_1rep.R",
     "-i", findgraph_folder,
@@ -436,7 +432,6 @@ end
     "--selection_method", selection_method,
     "--threshold", string(threshold)
   ]
-  # All things passed to Rscript should be in a vector 
   run(Cmd(cmd_args)) 
   
 end 
@@ -491,13 +486,11 @@ end
 #-----------------------------------------------# 
 function main()
   
-  # Initialize worker logs if logging is enabled
   if log_output
     @everywhere open_worker_log()
   end
 
-  # Store blgsize for each replicate
-  blgsize_list = Int[]
+  blgsize_list = Int[] # one per replicate
   
   @timeit to "Variant Calling + Convert VCF to eigenstrat" begin 
     blgsize_list = pmap(simulation_rep -> callVariant_convertVCF_1rep(
@@ -566,7 +559,6 @@ function main()
     CSV.write(output_file, results)
   end
   
-  # Close worker logs if logging is enabled
   if log_output
     @everywhere close_worker_log()
   end

@@ -1,17 +1,12 @@
-#!/usr/bin/env julia
-# ============================================================================
-# scripts/summary_simulation.jl
-#
-# Purpose : Concatenate per-parameter simulation summary CSVs into one
-#           cross-setting table covering gene-tree counts, hidden-paralogy
-#           categories, RF distances, and branch-length statistics.
-# Inputs  : simulation_summary/summary_<paramname>.csv     (one per setting)
-# Outputs : results/summary_concatenated.csv               (cross-setting table)
-# Usage   : julia --project=. scripts/summary_simulation.jl
-#           (optional overrides: --input_dir, --output_file)
-# Note    : Run after simulation_postprocess.jl has produced per-setting CSVs
-#           and run_postprocessing.jl has staged them under simulation_summary/.
-# ============================================================================
+
+#= Concatenate the per-setting simulation summaries into one table:
+simulation_summary/summary_<paramname>.csv -> results/summary_concatenated.csv
+(gene tree counts, hidden paralogy categories, RF distances, branch lengths)
+Usage: julia scripts/summary_simulation.jl [--tree plant] [--input_dir ...]
+       [--output_file ...]. --tree plant adds _plant to the two defaults
+Run after simulation_postprocess.jl and run_postprocessing.jl, which put
+the per-setting csv in simulation_summary/
+=# 
 
 using CSV
 using DataFrames
@@ -29,6 +24,10 @@ function parse_arguments()
         "--output_file"
             help = "Output file path for concatenated results"
             default = "./results/summary_concatenated.csv"
+        "--tree"
+            help = "reptile (default) or plant; with plant, the " *
+                   "defaults of the other options get a _plant suffix"
+            default = "reptile"
     end
     return ArgParse.parse_args(s)
 end
@@ -63,6 +62,14 @@ function main()
     
     input_dir = get(args, "input_dir", ".") 
     output_path = get(args, "output_file", "./summary_concatenated.csv") 
+    # plant results are kept in folders and files with a _plant suffix
+    if args["tree"] != "reptile"
+        sfx = "_" * args["tree"]
+        input_dir == "./simulation_summary" &&
+            (input_dir = "./simulation_summary$sfx")
+        output_path == "./results/summary_concatenated.csv" &&
+            (output_path = "./results/summary_concatenated$sfx.csv")
+    end
     
     summary_files = find_summary_files(input_dir)
     
@@ -90,7 +97,7 @@ function main()
     
     if nrow(all_data) > 0
         CSV.write(output_path, all_data)
-        println("Concatenated $(length(summary_files)) files → $output_path")
+        println("Concatenated $(length(summary_files)) files -> $output_path")
         println("Total rows in output: $(nrow(all_data))")
     else
         println("No data to write to output file.")

@@ -1,0 +1,153 @@
+tree,factor,level,n,statistic,value
+reptile,overall,all,3600,SNaQ_h1,1.1666666666666667
+reptile,overall,all,3600,SNaQ_hgt1,0.1111111111111111
+reptile,rate variation,none,1200,SNaQ_h1,0.5
+reptile,rate variation,none,1200,SNaQ_hgt1,0
+reptile,rate variation,across genes,1200,SNaQ_h1,2.5833333333333335
+reptile,rate variation,across genes,1200,SNaQ_hgt1,0.33333333333333337
+reptile,rate variation,across lineages,1200,SNaQ_h1,0.4166666666666667
+reptile,rate variation,across lineages,1200,SNaQ_hgt1,0
+reptile,duplication/loss,none,1200,SNaQ_h1,1
+reptile,duplication/loss,none,1200,SNaQ_hgt1,0.33333333333333337
+reptile,duplication/loss,medium,1200,SNaQ_h1,1.3333333333333335
+reptile,duplication/loss,medium,1200,SNaQ_hgt1,0
+reptile,duplication/loss,high,1200,SNaQ_h1,1.1666666666666667
+reptile,duplication/loss,high,1200,SNaQ_hgt1,0
+reptile,ILS,high,1800,SNaQ_h1,0.8333333333333334
+reptile,ILS,high,1800,SNaQ_hgt1,0
+reptile,ILS,low,1800,SNaQ_h1,1.5
+reptile,ILS,low,1800,SNaQ_hgt1,0.2222222222222222
+reptile,individuals/taxon,1,1800,SNaQ_h1,1.5555555555555556
+reptile,individuals/taxon,1,1800,SNaQ_hgt1,0.1111111111111111
+reptile,individuals/taxon,2,1800,SNaQ_h1,0.7777777777777778
+reptile,individuals/taxon,2,1800,SNaQ_hgt1,0.1111111111111111
+plant,overall,all,3600,SNaQ_h1,1.4444444444444444
+plant,overall,all,3600,SNaQ_hgt1,0.05555555555555555
+plant,rate variation,none,1200,SNaQ_h1,1.1666666666666667
+plant,rate variation,none,1200,SNaQ_hgt1,0
+plant,rate variation,across genes,1200,SNaQ_h1,2
+plant,rate variation,across genes,1200,SNaQ_hgt1,0.08333333333333334
+plant,rate variation,across lineages,1200,SNaQ_h1,1.1666666666666667
+plant,rate variation,across lineages,1200,SNaQ_hgt1,0.08333333333333334
+plant,duplication/loss,none,1200,SNaQ_h1,1.7500000000000002
+plant,duplication/loss,none,1200,SNaQ_hgt1,0.08333333333333334
+plant,duplication/loss,medium,1200,SNaQ_h1,1
+plant,duplication/loss,medium,1200,SNaQ_hgt1,0.08333333333333334
+plant,duplication/loss,high,1200,SNaQ_h1,1.5833333333333335
+plant,duplication/loss,high,1200,SNaQ_hgt1,0
+plant,ILS,high,1800,SNaQ_h1,0.7777777777777778
+plant,ILS,high,1800,SNaQ_hgt1,0.05555555555555555
+plant,ILS,low,1800,SNaQ_h1,2.111111111111111
+plant,ILS,low,1800,SNaQ_hgt1,0.05555555555555555
+plant,individuals/taxon,1,1800,SNaQ_h1,1.6666666666666667
+plant,individuals/taxon,1,1800,SNaQ_hgt1,0.1111111111111111
+plant,individuals/taxon,2,1800,SNaQ_h1,1.2222222222222223
+plant,individuals/taxon,2,1800,SNaQ_hgt1,0
+reptile,overall,all,3600,fg30_h1,24.555555555555557
+reptile,overall,all,3600,fg30_hgt1,24.416666666666668
+reptile,rate variation,none,1200,fg30_h1,21.333333333333336
+reptile,rate variation,none,1200,fg30_hgt1,2
+reptile,rate variation,across genes,1200,fg30_h1,23.916666666666668
+reptile,rate variation,across genes,1200,fg30_hgt1,4
+reptile,rate variation,across lineages,1200,fg30_h1,28.416666666666668
+reptile,rate variation,across lineages,1200,fg30_hgt1,67.25
+reptile,duplication/loss,none,1200,fg30_h1,24.833333333333332
+reptile,duplication/loss,none,1200,fg30_hgt1,24.166666666666668
+reptile,duplication/loss,medium,1200,fg30_h1,23.666666666666668
+reptile,duplication/loss,medium,1200,fg30_hgt1,25
+reptile,duplication/loss,high,1200,fg30_h1,25.166666666666664
+reptile,duplication/loss,high,1200,fg30_hgt1,24.083333333333336
+reptile,ILS,high,1800,fg30_h1,37
+reptile,ILS,high,1800,fg30_hgt1,14.888888888888888
+reptile,ILS,low,1800,fg30_h1,12.11111111111111
+reptile,ILS,low,1800,fg30_hgt1,33.94444444444444
+reptile,individuals/taxon,1,1800,fg30_h1,24.61111111111111
+reptile,individuals/taxon,1,1800,fg30_hgt1,23.61111111111111
+reptile,individuals/taxon,2,1800,fg30_h1,24.5
+reptile,individuals/taxon,2,1800,fg30_hgt1,25.222222222222225
+plant,overall,all,3600,fg30_h1,10.833333333333334
+plant,overall,all,3600,fg30_hgt1,34.52777777777778
+plant,rate variation,none,1200,fg30_h1,16
+plant,rate variation,none,1200,fg30_hgt1,2.166666666666667
+plant,rate variation,across genes,1200,fg30_h1,16.416666666666664
+plant,rate variation,across genes,1200,fg30_hgt1,1.5
+plant,rate variation,across lineages,1200,fg30_h1,0.08333333333333334
+plant,rate variation,across lineages,1200,fg30_hgt1,99.91666666666667
+plant,duplication/loss,none,1200,fg30_h1,11.916666666666668
+plant,duplication/loss,none,1200,fg30_hgt1,35
+plant,duplication/loss,medium,1200,fg30_h1,11.25
+plant,duplication/loss,medium,1200,fg30_hgt1,34.333333333333336
+plant,duplication/loss,high,1200,fg30_h1,9.333333333333334
+plant,duplication/loss,high,1200,fg30_hgt1,34.25
+plant,ILS,high,1800,fg30_h1,12.444444444444445
+plant,ILS,high,1800,fg30_hgt1,34.88888888888889
+plant,ILS,low,1800,fg30_h1,9.222222222222221
+plant,ILS,low,1800,fg30_hgt1,34.166666666666664
+plant,individuals/taxon,1,1800,fg30_h1,10.444444444444445
+plant,individuals/taxon,1,1800,fg30_hgt1,34.333333333333336
+plant,individuals/taxon,2,1800,fg30_h1,11.222222222222221
+plant,individuals/taxon,2,1800,fg30_hgt1,34.72222222222222
+reptile,overall,all,3600,fg37_h1,13.86111111111111
+reptile,overall,all,3600,fg37_hgt1,15.916666666666668
+reptile,rate variation,none,1200,fg37_h1,3.0833333333333335
+reptile,rate variation,none,1200,fg37_hgt1,0.08333333333333334
+reptile,rate variation,across genes,1200,fg37_h1,5.583333333333333
+reptile,rate variation,across genes,1200,fg37_hgt1,0.25
+reptile,rate variation,across lineages,1200,fg37_h1,32.916666666666664
+reptile,rate variation,across lineages,1200,fg37_hgt1,47.41666666666667
+reptile,duplication/loss,none,1200,fg37_h1,13.333333333333334
+reptile,duplication/loss,none,1200,fg37_hgt1,15.75
+reptile,duplication/loss,medium,1200,fg37_h1,12.75
+reptile,duplication/loss,medium,1200,fg37_hgt1,16.916666666666664
+reptile,duplication/loss,high,1200,fg37_h1,15.5
+reptile,duplication/loss,high,1200,fg37_hgt1,15.083333333333334
+reptile,ILS,high,1800,fg37_h1,20.944444444444443
+reptile,ILS,high,1800,fg37_hgt1,3.7777777777777777
+reptile,ILS,low,1800,fg37_h1,6.777777777777779
+reptile,ILS,low,1800,fg37_hgt1,28.055555555555557
+reptile,individuals/taxon,1,1800,fg37_h1,14.888888888888888
+reptile,individuals/taxon,1,1800,fg37_hgt1,14.722222222222223
+reptile,individuals/taxon,2,1800,fg37_h1,12.833333333333332
+reptile,individuals/taxon,2,1800,fg37_hgt1,17.11111111111111
+plant,overall,all,3600,fg37_h1,2.833333333333333
+plant,overall,all,3600,fg37_hgt1,32.083333333333336
+plant,rate variation,none,1200,fg37_h1,2.166666666666667
+plant,rate variation,none,1200,fg37_hgt1,0
+plant,rate variation,across genes,1200,fg37_h1,2.4166666666666665
+plant,rate variation,across genes,1200,fg37_hgt1,0.16666666666666669
+plant,rate variation,across lineages,1200,fg37_h1,3.916666666666667
+plant,rate variation,across lineages,1200,fg37_hgt1,96.08333333333333
+plant,duplication/loss,none,1200,fg37_h1,2.666666666666667
+plant,duplication/loss,none,1200,fg37_hgt1,32.5
+plant,duplication/loss,medium,1200,fg37_h1,2.9166666666666665
+plant,duplication/loss,medium,1200,fg37_hgt1,32.25
+plant,duplication/loss,high,1200,fg37_h1,2.9166666666666665
+plant,duplication/loss,high,1200,fg37_hgt1,31.5
+plant,ILS,high,1800,fg37_h1,4.111111111111112
+plant,ILS,high,1800,fg37_hgt1,30.777777777777775
+plant,ILS,low,1800,fg37_h1,1.5555555555555556
+plant,ILS,low,1800,fg37_hgt1,33.38888888888889
+plant,individuals/taxon,1,1800,fg37_h1,2.833333333333333
+plant,individuals/taxon,1,1800,fg37_hgt1,32.111111111111114
+plant,individuals/taxon,2,1800,fg37_h1,2.833333333333333
+plant,individuals/taxon,2,1800,fg37_hgt1,32.05555555555556
+reptile,overall,all,1800,phynest_h1,32.166666666666664
+reptile,rate variation,none,600,phynest_h1,0
+reptile,rate variation,across genes,600,phynest_h1,10
+reptile,rate variation,across lineages,600,phynest_h1,86.5
+reptile,duplication/loss,none,600,phynest_h1,30.166666666666668
+reptile,duplication/loss,medium,600,phynest_h1,32.83333333333333
+reptile,duplication/loss,high,600,phynest_h1,33.5
+reptile,ILS,high,900,phynest_h1,28.000000000000004
+reptile,ILS,low,900,phynest_h1,36.333333333333336
+reptile,individuals/taxon,1,1800,phynest_h1,32.166666666666664
+plant,overall,all,1800,phynest_h1,23
+plant,rate variation,none,600,phynest_h1,0
+plant,rate variation,across genes,600,phynest_h1,10
+plant,rate variation,across lineages,600,phynest_h1,59
+plant,duplication/loss,none,600,phynest_h1,22.833333333333332
+plant,duplication/loss,medium,600,phynest_h1,23.166666666666664
+plant,duplication/loss,high,600,phynest_h1,23
+plant,ILS,high,900,phynest_h1,22.333333333333332
+plant,ILS,low,900,phynest_h1,23.666666666666668
+plant,individuals/taxon,1,1800,phynest_h1,23
